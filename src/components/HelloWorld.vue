@@ -3,8 +3,27 @@ import { ref } from 'vue'
 import viteLogo from '../assets/vite.svg'
 import heroImg from '../assets/hero.png'
 import vueLogo from '../assets/vue.svg'
+import Button from 'primevue/button';
+import {
+  ChartLegend,
+  ChartLine,
+  ChartSvg,
+  ChartTooltip,
+  ChartXAxis,
+  ChartYAxis,
+  ChartScatter,
+} from "@primeui/vue-chart";
 
 const count = ref(0)
+
+const data = [
+  { month: "Jan", revenue: 42, expenses: 31 },
+  { month: "Feb", revenue: 55, expenses: 38 },
+  { month: "Mar", revenue: 48, expenses: 35 },
+  { month: "Apr", revenue: 63, expenses: 44 },
+  { month: "May", revenue: 58, expenses: 40 },
+  { month: "Jun", revenue: 72, expenses: 51 },
+];
 </script>
 
 <template>
@@ -22,6 +41,33 @@ const count = ref(0)
       Count is {{ count }}
     </button>
   </section>
+
+  <div class="flex justify-center">
+    <Button severity="help">Verify</Button>
+  </div>
+
+  <ChartSvg :height="400">
+    <ChartLine
+      :data="data"
+      category-x-field="month"
+      value-y-field="revenue"
+      name="Revenue"
+      curve="smooth"
+      :show-markers="true"
+    />
+    <ChartLine
+      :data="data"
+      category-x-field="month"
+      value-y-field="expenses"
+      name="Expenses"
+      curve="smooth"
+      :show-markers="true"
+    />
+    <ChartXAxis />
+    <ChartYAxis />
+    <ChartLegend />
+    <ChartTooltip />
+  </ChartSvg>
 
   <div class="ticks"></div>
 
