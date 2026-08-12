@@ -1,7 +1,8 @@
 <script setup>
-import HelloWorld from './components/HelloWorld.vue'
+// App.vue sengaja dibuat minim -- semua kerangka visual (sidebar/navbar)
+// ada di layouts/, bukan di sini. Jangan tambahkan markup di file ini.
 </script>
 
 <template>
-  <HelloWorld />
+  <router-view />
 </template>
