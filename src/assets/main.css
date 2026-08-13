@@ -1,0 +1,109 @@
+@import "tailwindcss";
+/*
+ * Tailwind v4: warna custom didaftarkan lewat @theme (bukan tailwind.config.js
+ * lagi). Semua token ini otomatis jadi class Tailwind biasa:
+ * bg-primary-500, text-secondary-700, border-accent-300, text-neutral-900, dst.
+ *
+ * Ramp ini diturunkan dari Color Palette Sleman yang sudah dibuat sebelumnya:
+ * - primary  = Biru utama  (#1F6FA6) -> brand/CTA utama
+ * - secondary= Hijau utama (#2E7D53) -> brand sekunder
+ * - accent   = Teal, jembatan antara primary & secondary, dipakai untuk highlight
+ * - neutral  = skala dari Off-white (#F6F9F8) ke Teks gelap (#20302E)
+ * Stop 500 pada primary & secondary sengaja dibuat SAMA PERSIS dengan hex asli
+ * di palet, supaya warna brand yang dipakai di halaman lain tetap konsisten.
+ */
+@theme {
+  --color-primary-50: #f2f6fa;
+  --color-primary-100: #dbe8f1;
+  --color-primary-200: #aecbdf;
+  --color-primary-300: #82aecd;
+  --color-primary-400: #508fba;
+  --color-primary-500: #1f6fa6;
+  --color-primary-600: #1c618e;
+  --color-primary-700: #195074;
+  --color-primary-800: #164059;
+  --color-primary-900: #133241;
+
+  --color-secondary-50: #f2f7f5;
+  --color-secondary-100: #deeae3;
+  --color-secondary-200: #b4d0c1;
+  --color-secondary-300: #8ab69f;
+  --color-secondary-400: #5c9a79;
+  --color-secondary-500: #2e7d53;
+  --color-secondary-600: #296c49;
+  --color-secondary-700: #235a3d;
+  --color-secondary-800: #1d4731;
+  --color-secondary-900: #183627;
+
+  --color-accent-50: #f3f8f8;
+  --color-accent-100: #e0edec;
+  --color-accent-200: #b9d6d5;
+  --color-accent-300: #92bfbd;
+  --color-accent-400: #67a5a4;
+  --color-accent-500: #3c8c8a;
+  --color-accent-600: #347977;
+  --color-accent-700: #2c6461;
+  --color-accent-800: #244e4c;
+  --color-accent-900: #1c3b38;
+
+  --color-neutral-50: #f6f9f8;
+  --color-neutral-100: #e1e5e4;
+  --color-neutral-200: #c3c9c8;
+  --color-neutral-300: #a5adab;
+  --color-neutral-400: #87908f;
+  --color-neutral-500: #6d7877;
+  --color-neutral-600: #566260;
+  --color-neutral-700: #404e4c;
+  --color-neutral-800: #2f3e3c;
+  --color-neutral-900: #20302e;
+
+  /* Status: hijau (kemakmuran) = success, kuning (keluhuran) = warning, merah (keberanian) = danger */
+  --color-success-50: #eef4f0;
+  --color-success-100: #d6e6da;
+  --color-success-200: #aeceb6;
+  --color-success-300: #85b591;
+  --color-success-400: #5f9c6e;
+  --color-success-500: #488250;
+  --color-success-600: #3a6941;
+  --color-success-700: #2e5233;
+  --color-success-800: #233d27;
+  --color-success-900: #182a1b;
+
+  --color-warning-50: #fbf7e6;
+  --color-warning-100: #f5ecc0;
+  --color-warning-200: #ebdd8c;
+  --color-warning-300: #dcc95c;
+  --color-warning-400: #c7b23e;
+  --color-warning-500: #ab982f;
+  --color-warning-600: #8b7b26;
+  --color-warning-700: #6e621e;
+  --color-warning-800: #524917;
+  --color-warning-900: #383210;
+
+  --color-danger-50: #fdf1f1;
+  --color-danger-100: #f8dddd;
+  --color-danger-200: #efb8b8;
+  --color-danger-300: #e29494;
+  --color-danger-400: #d07575;
+  --color-danger-500: #b85c5c;
+  --color-danger-600: #9c4a4a;
+  --color-danger-700: #7d3b3b;
+  --color-danger-800: #5e2c2c;
+  --color-danger-900: #421f1f;
+}
+:root {
+  --sibimo-sidebar-width: 260px;
+}
+body {
+  @apply bg-neutral-50 text-neutral-900;
+}
+/* Kelas utility kecil yang dipakai berulang di banyak halaman modul */
+.page-title {
+  @apply text-xl font-semibold text-neutral-900 mb-1;
+}
+.page-subtitle {
+  @apply text-sm text-neutral-500 mb-6;
+}
+.card {
+  @apply bg-white rounded-xl border border-neutral-200 shadow-sm p-5;
+}
