@@ -34,25 +34,24 @@ function toggleMenu(event) {
   >
     <div class="flex items-center gap-3 min-w-0">
       <!-- Hanya tampil di layar kecil, buka Sidebar sebagai Drawer -->
-      <Button
-        icon="pi pi-bars"
-        text
-        rounded
-        severity="secondary"
-        class="md:hidden"
-        aria-label="Buka menu"
-        @click="uiStore.toggleMobileSidebar()"
+       <Button
+       icon="pi pi-bars"
+       text
+       rounded
+       class="md:hidden !text-primary-600 hover:!bg-primary-50 hover:!text-primary-700"
+       aria-label="Buka menu"
+       @click="uiStore.toggleMobileSidebar()"/>
+      <Breadcrumb class="min-w-0" 
       />
-      <Breadcrumb class="min-w-0" />
     </div>
 
     <div class="flex items-center gap-3">
       <Button
-        icon="pi pi-bell"
-        text
-        rounded
-        severity="secondary"
-        aria-label="Notifikasi"
+      icon="pi pi-bell"
+      text
+      rounded
+      class="!text-primary-600 hover:!bg-primary-50 hover:!text-primary-700"
+      aria-label="Notifikasi"
       />
 
       <span class="w-px h-6 bg-neutral-100" />
