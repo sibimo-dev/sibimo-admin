@@ -8,6 +8,9 @@
  * Contoh pakai:
  *   <AppButton label="Simpan" variant="primary" @click="save" />
  *   <AppButton label="Hapus" variant="danger" icon="pi pi-trash" />
+ *
+ * Icon-only bulat (mis. tombol kembali, aksi di atas thumbnail foto):
+ *   <AppButton icon="pi pi-arrow-left" variant="ghost" rounded aria-label="Kembali" />
  */
 import { computed } from 'vue'
 import Button from 'primevue/button'
@@ -23,6 +26,11 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
   size: { type: String, default: null }, // small | large
   type: { type: String, default: 'button' },
+  // Tombol icon-only berbentuk lingkaran penuh (dipetakan langsung ke
+  // prop `rounded` PrimeVue Button). Dipakai supaya tombol bulat di atas
+  // gambar/kartu tidak perlu di-hand-roll pakai <button> + class manual.
+  rounded: { type: Boolean, default: false },
+  ariaLabel: { type: String, default: null },
 })
 
 defineEmits(['click'])
@@ -47,6 +55,8 @@ const severity = computed(() => severityMap[props.variant])
     :icon="icon"
     :severity="severity"
     :text="text"
+    :rounded="rounded"
+    :aria-label="ariaLabel"
     :loading="loading"
     :disabled="disabled"
     :size="size"
