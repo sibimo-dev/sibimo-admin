@@ -1,0 +1,43 @@
+<script setup>
+/**
+ * AppTextarea - pasangan AppInput untuk field teks panjang (deskripsi,
+ * keterangan, dll). Sama seperti komponen common lain: label + error
+ * konsisten, tinggal pasang di form manapun.
+ *
+ * Contoh pakai:
+ *   <AppTextarea v-model="form.deskripsi" label="Deskripsi" :rows="4" />
+ */
+import Textarea from 'primevue/textarea'
+
+defineProps({
+  modelValue: { type: String, default: '' },
+  label: { type: String, default: '' },
+  placeholder: { type: String, default: '' },
+  rows: { type: Number, default: 4 },
+  error: { type: String, default: '' },
+  required: { type: Boolean, default: false },
+  disabled: { type: Boolean, default: false },
+})
+
+defineEmits(['update:modelValue'])
+</script>
+
+<template>
+  <div class="flex flex-col gap-1">
+    <label v-if="label" class="text-sm font-medium text-neutral-700">
+      {{ label }}
+      <span v-if="required" class="text-danger-500">*</span>
+    </label>
+    <Textarea
+      :modelValue="modelValue"
+      :rows="rows"
+      :placeholder="placeholder"
+      :disabled="disabled"
+      :invalid="!!error"
+      class="w-full"
+      autoResize
+      @update:modelValue="(val) => $emit('update:modelValue', val)"
+    />
+    <span v-if="error" class="text-xs text-danger-500">{{ error }}</span>
+  </div>
+</template>
