@@ -91,6 +91,7 @@ const menuGroups = [
         label: 'Kelola Perpustakaan',
         icon: 'pi pi-book',
         items: [
+          { label: 'Katalog Buku', route: '/perpustakaan/katalog' },
           { label: 'Peminjaman', route: '/perpustakaan/peminjaman' },
           { label: 'Pengembalian', route: '/perpustakaan/pengembalian' },
         ],
@@ -162,7 +163,6 @@ function handleNavigate(navigate, event) {
                   : 'text-neutral-700 hover:bg-neutral-50'
               "
               @click="handleNavigate(navigate, $event)"
-              "
             >
               <i v-if="item.icon" :class="item.icon" class="text-base shrink-0" />
               <span v-if="!collapsed" class="flex-1">{{ item.label }}</span>

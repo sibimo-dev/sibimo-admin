@@ -7,6 +7,7 @@ import dashboardRoute from './modules/dashboard.routes'
 import suratRoutes from './modules/surat.routes'
 import beritaRoutes from './modules/berita.routes'
 import galeriRoutes from './modules/galeri.routes'
+import perpustakaanRoutes from './modules/perpustakaan.routes'
 
 // Tambahkan import modul baru di sini
 // import agendaRoutes from './modules/agenda.routes'
@@ -33,6 +34,7 @@ const protectedRoutes = {
     ...suratRoutes,   
     ...beritaRoutes,
     ...galeriRoutes,
+    ...perpustakaanRoutes,
     
     // ...tambahkan modul baru di sini juga, dengan pola yang sama
   ],

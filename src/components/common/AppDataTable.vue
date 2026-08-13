@@ -41,6 +41,10 @@ defineProps({
   rowsPerPage: { type: Number, default: 10 },
   emptyMessage: { type: String, default: 'Belum ada data' },
   hasActions: { type: Boolean, default: true },
+  // Nama field primary key tiap baris. Default 'id' supaya modul yang
+  // sudah ada tetap jalan tanpa perubahan; modul dengan PK berbeda
+  // (mis. tabel `books` pakai `book_id`) tinggal set prop ini.
+  dataKey: { type: String, default: 'id' },
 })
 </script>
 
@@ -52,7 +56,7 @@ defineProps({
       paginator
       :rows="rowsPerPage"
       :rowsPerPageOptions="[10, 25, 50]"
-      dataKey="id"
+      :dataKey="dataKey"
       stripedRows
       responsiveLayout="scroll"
     >
