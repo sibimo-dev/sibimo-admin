@@ -1,18 +1,8 @@
 <script setup>
 /**
- * Galeri Foto - halaman list.
- * Beda dari modul lain (tipe surat, dll) yang pakai AppDataTable,
- * di sini pakai grid kartu + AppPagination -- lebih pas untuk foto
- * (lihat catatan di AppPagination.vue).
- *
- * Field mengikuti tabel `galleries`: gallery_id (PK), title, description,
- * image, uploaded_by, uploaded_at. TIDAK ada kolom kategori di skema --
- * jadi field itu sengaja tidak ada di sini (lihat catatan di
- * GaleriFormView.vue kalau memang butuh kategori, kolomnya perlu
- * ditambahkan dulu di migrasi/ERD).
- *
- * TODO: ganti dummy `allPhotos` dengan panggilan ke galeri.service.js
- * begitu backend siap (fetchGaleri({ search, offset, limit })).
+
+ * TODO: ganti dummy `allPhotos` dengan panggilan ke gallery.service.js
+ * begitu backend siap (fetchGalleries({ search, offset, limit })).
  */
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
@@ -49,16 +39,16 @@ const filtered = computed(() => {
 
 const paged = computed(() => filtered.value.slice(first.value, first.value + rowsPerPage))
 
-function formatTanggal(iso) {
+function formatDate(iso) {
   return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-function goTambah() {
-  router.push({ name: 'galeri-tambah' })
+function goCreate() {
+  router.push({ name: 'gallery-create' })
 }
 
 function goEdit(item) {
-  router.push({ name: 'galeri-edit', params: { id: item.gallery_id } })
+  router.push({ name: 'gallery-edit', params: { id: item.gallery_id } })
 }
 
 function handleDelete(item) {
@@ -84,7 +74,7 @@ function handleDelete(item) {
         <h1 class="page-title">Galeri Foto</h1>
         <p class="page-subtitle mb-0">Kelola foto kegiatan &amp; dokumentasi desa</p>
       </div>
-      <AppButton label="Tambah Foto" icon="pi pi-plus" variant="primary" @click="goTambah" />
+      <AppButton label="Tambah Foto" icon="pi pi-plus" variant="primary" @click="goCreate" />
     </div>
 
     <!-- Search bar -->
@@ -145,7 +135,7 @@ function handleDelete(item) {
         <!-- Info -->
         <div class="p-3">
           <p class="text-sm font-semibold text-neutral-900 truncate">{{ item.title }}</p>
-          <p class="text-xs text-neutral-400 mt-1">{{ formatTanggal(item.uploaded_at) }}</p>
+          <p class="text-xs text-neutral-400 mt-1">{{ formatDate(item.uploaded_at) }}</p>
         </div>
       </div>
     </div>
