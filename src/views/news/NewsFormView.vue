@@ -1,9 +1,4 @@
 <script setup>
-/**
- * Sama seperti file Citizen sebelumnya: PrimeVue diasumsikan terpasang
- * dengan `unstyled: true` + plugin `tailwindcss-primeui`, jadi seluruh
- * tampilan murni dikendalikan Tailwind, bukan tema bawaan PrimeVue.
- */
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
