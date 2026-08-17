@@ -63,10 +63,10 @@ function toggleMenu(event) {
         <div
           class="w-7 h-7 rounded-full flex items-center justify-center bg-primary-600 text-white text-xs font-semibold shrink-0"
         >
-          {{ (authStore.user?.nama || 'Admin').charAt(0).toUpperCase() }}
+          {{ (authStore.user?.nama || 'Super Admin').charAt(0).toUpperCase() }}
         </div>
         <span class="font-medium text-neutral-900">{{
-          authStore.user?.nama || 'Admin'
+          authStore.user?.nama || 'Super Admin'
         }}</span>
         <i class="pi pi-chevron-down text-xs text-neutral-400" />
       </button>

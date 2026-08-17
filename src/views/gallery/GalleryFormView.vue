@@ -1,22 +1,13 @@
 <script setup>
 /**
- * Form Galeri - dipakai untuk 2 route sekaligus:
- *   - /galeri/tambah      (galeri-tambah) -> mode tambah, route.params.id kosong
- *   - /galeri/:id/edit    (galeri-edit)   -> mode edit, ambil data dari id
+ * Form Gallery - dipakai untuk 2 route sekaligus:
+ *   - /gallery/create   (gallery-create) -> mode tambah, route.params.id kosong
+ *   - /gallery/:id/edit (gallery-edit)   -> mode edit, ambil data dari id
  *
- * Field mengikuti tabel `galleries`: gallery_id (PK), title, description,
- * image, uploaded_by, uploaded_at.
- * - TIDAK ada kolom kategori di skema, jadi field itu sengaja dihapus dari
- *   form ini. Kalau memang dibutuhkan, kolomnya perlu ditambahkan dulu di
- *   migrasi/ERD sebelum dipakai di UI.
- * - `uploaded_at` adalah timestamp otomatis saat upload, bukan input manual
- *   -- di sini cuma ditampilkan (read-only) waktu mode edit.
- * - `uploaded_by` diambil dari admin yang sedang login (authStore), bukan
- *   field yang diisi manual.
- *
- * TODO: ganti dummy `dummyPhoto` & handleSubmit dengan panggilan asli ke
- * galeri.service.js (fetchGaleriById, createGaleri, updateGaleri). Untuk
- * createGaleri/updateGaleri, kirim sebagai FormData karena ada file gambar.
+
+ * TODO: ganti dummy `dummyGalleryPhoto` & handleSubmit dengan panggilan asli ke
+ * gallery.service.js (fetchGalleryById, createGallery, updateGallery). Untuk
+ * createGallery/updateGallery, kirim sebagai FormData karena ada file gambar.
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -46,7 +37,7 @@ const form = reactive({
 const errors = reactive({ title: '' })
 
 // Data dummy -- ganti dengan fetch API asli berdasarkan route.params.id
-const dummyPhoto = {
+const dummyGalleryPhoto = {
   gallery_id: 1,
   title: 'Kerja Bakti Balai Desa',
   description: 'Kegiatan kerja bakti rutin warga dusun dalam rangka persiapan HUT Desa.',
@@ -58,10 +49,10 @@ const dummyPhoto = {
 onMounted(() => {
   if (isEdit.value) {
     // TODO: fetchGaleriById(route.params.id)
-    form.title = dummyPhoto.title
-    form.description = dummyPhoto.description
-    form.uploaded_at = dummyPhoto.uploaded_at
-    preview.value = dummyPhoto.image
+    form.title = dummyGalleryPhoto.title
+    form.description = dummyGalleryPhoto.description
+    form.uploaded_at = dummyGalleryPhoto.uploaded_at
+    preview.value = dummyGalleryPhoto.image
   }
 })
 
@@ -111,14 +102,14 @@ async function handleSubmit() {
       summary: isEdit.value ? 'Foto berhasil diperbarui' : 'Foto berhasil ditambahkan',
       life: 2000,
     })
-    router.push({ name: 'galeri-list' })
+    router.push({ name: 'gallery-list' })
   } finally {
     saving.value = false
   }
 }
 
 function handleCancel() {
-  router.push({ name: 'galeri-list' })
+  router.push({ name: 'gallery-list' })
 }
 </script>
 
