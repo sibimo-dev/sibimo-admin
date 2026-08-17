@@ -51,9 +51,6 @@ async function handleLogin() {
       <AppButton label="Masuk" variant="primary" type="submit" :loading="loading" class="w-full" />
     </form>
 
-    <p class="text-center text-sm text-neutral-500 mt-4">
-      Belum punya akun?
-      <router-link to="/register" class="text-primary-600 font-medium">Daftar</router-link>
-    </p>
+   
   </div>
 </template>

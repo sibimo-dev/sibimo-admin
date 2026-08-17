@@ -8,19 +8,21 @@
  * dengan #item template kustom mengikuti pola resmi PrimeVue untuk integrasi
  * vue-router (item.route -> router-link) + highlight halaman aktif.
  *
- 
+ * Styling PanelMenu (panel/header/content bawaan) dikustom lewat prop `pt`
+ * (Pass Through) berisi class Tailwind, bukan CSS scoped — supaya semua
+ * styling konsisten satu sumber (Tailwind) dan tetap "resmi" ala PrimeVue.
  */
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import PanelMenu from 'primevue/panelmenu'
 
-defineProps({
+const props = defineProps({
   // Saat collapsed, cuma icon yang tampil (dipakai versi desktop saja).
   collapsed: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['navigate'])
 const route = useRoute()
-
 
 const menuGroups = [
   {
@@ -36,10 +38,10 @@ const menuGroups = [
         label: 'Persuratan',
         icon: 'pi pi-file',
         items: [
-          { label: 'Pengelolaan Surat', route: '/surat' },
-          { label: 'Verifikasi Surat', route: '/surat/verifikasi' },
-          { label: 'Otorisasi Surat', route: '/surat/otorisasi' },
-          { label: 'Tipe Surat', route: '/tipe-surat' },
+          { label: 'Pengelolaan Surat', route: '/letter' },
+          { label: 'Verifikasi Surat', route: '/letter/verification' },
+          { label: 'Otorisasi Surat', route: '/letter/authorization' },
+          { label: 'Tipe Surat', route: '/letter-type' },
         ],
       },
     ],
@@ -52,8 +54,8 @@ const menuGroups = [
         label: 'Pengaduan',
         icon: 'pi pi-comments',
         items: [
-          { label: 'Daftar Aduan', route: '/aduan' },
-          { label: 'Tanggapan Aduan', route: '/aduan/tanggapan' },
+          { label: 'Daftar Aduan', route: '/complaint' },
+          { label: 'Tanggapan Aduan', route: '/complaint/response' },
         ],
       },
     ],
@@ -62,16 +64,16 @@ const menuGroups = [
     label: 'Konten Publik', // Dev B
     showLabel: false,
     items: [
-      { label: 'Berita & Pengumuman', icon: 'pi pi-megaphone', route: '/berita' },
+      { label: 'Berita & Pengumuman', icon: 'pi pi-megaphone', route: '/news' },
       {
         label: 'Kelola Agenda',
         icon: 'pi pi-calendar',
         items: [
           { label: 'List Agenda', route: '/agenda' },
-          { label: 'Kalender Agenda', route: '/agenda/kalender' },
+          { label: 'Kalender Agenda', route: '/agenda/calendar' },
         ],
       },
-      { label: 'Kelola Potensi', icon: 'pi pi-star', route: '/potensi' },
+      { label: 'Kelola Potensi', icon: 'pi pi-star', route: '/village-potential' },
     ],
   },
   {
@@ -79,21 +81,21 @@ const menuGroups = [
     showLabel: false,
     items: [
       { label: 'Data Wilayah', icon: 'pi pi-globe', route: '/wilayah' },
-      { label: 'Kelola Data Warga', icon: 'pi pi-users', route: '/warga' },
+      { label: 'Kelola Data Warga', icon: 'pi pi-users', route: '/citizen' },
     ],
   },
   {
     label: 'Galeri & Perpustakaan', // Dev C
     showLabel: false,
     items: [
-      { label: 'Kelola Gallery', icon: 'pi pi-images', route: '/galeri' },
+      { label: 'Kelola Gallery', icon: 'pi pi-images', route: '/gallery' },
       {
         label: 'Kelola Perpustakaan',
         icon: 'pi pi-book',
         items: [
-          { label: 'Katalog Buku', route: '/perpustakaan/katalog' },
-          { label: 'Peminjaman', route: '/perpustakaan/peminjaman' },
-          { label: 'Pengembalian', route: '/perpustakaan/pengembalian' },
+          { label: 'Katalog Buku', route: '/library/catalog' },
+          { label: 'Peminjaman', route: '/library/loan' },
+          { label: 'Pengembalian', route: '/library/return' },
         ],
       },
     ],
@@ -106,10 +108,10 @@ const menuGroups = [
         label: 'Profile Desa',
         icon: 'pi pi-building',
         items: [
-          { label: 'Sejarah', route: '/profil-desa/sejarah' },
-          { label: 'Visi & Misi', route: '/profil-desa/visi-misi' },
-          { label: 'Struktur Organisasi', route: '/profil-desa/struktur' },
-          { label: 'Data Wilayah', route: '/wilayah' },
+          { label: 'Sejarah', route: '/village-profile/history' },
+          { label: 'Visi & Misi', route: '/village-profile/vision-mission' },
+          { label: 'Struktur Organisasi', route: '/village-profile/organizational-structure' },
+          { label: 'Data Wilayah', route: '/region' },
         ],
       },
     ],
@@ -134,6 +136,26 @@ function handleNavigate(navigate, event) {
   navigate(event)
   emit('navigate')
 }
+
+// Semua override tampilan bawaan PanelMenu (panel/header/content) lewat
+// Pass Through, isinya murni class Tailwind — tidak ada CSS terpisah.
+const panelMenuPt = computed(() => ({
+  root: { class: 'flex flex-col w-full' },
+  panel: { class: 'relative border-0 bg-transparent mb-0 shadow-none' },
+  header: { class: 'relative border-0 bg-transparent shadow-none p-0' },
+  headerContent: { class: 'border-0 bg-transparent shadow-none p-0' },
+  contentContainer: { class: 'border-0 bg-transparent shadow-none overflow-hidden' },
+  content: {
+    class: [
+      'border-y-0 border-r-0 bg-transparent shadow-none pb-0 overflow-hidden',
+      props.collapsed ? 'pl-0 ml-0 border-l-0 pt-0' : 'pl-6 ml-3 border-l border-neutral-200 pt-1.5',
+    ],
+  },
+  rootList: { class: 'p-0 m-0 gap-1 flex flex-col' },
+  item: { class: 'border-0 bg-transparent shadow-none' },
+  itemContent: { class: 'border-0 bg-transparent shadow-none p-0' },
+  submenu: { class: props.collapsed ? 'hidden' : 'p-0 m-0 flex flex-col gap-0.5' },
+}))
 </script>
 
 <template>
@@ -141,12 +163,12 @@ function handleNavigate(navigate, event) {
     <div v-for="group in menuGroups" :key="group.label" class="mb-1">
       <p
         v-if="group.showLabel && !collapsed"
-        class="px-3 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-400"
+        class="px-3 pt-4 pb-1 text-[11px] font-bold uppercase tracking-wide text-neutral-500"
       >
         {{ group.label }}
       </p>
 
-      <PanelMenu :model="group.items" class="sidebar-panelmenu" :class="{ 'is-collapsed': collapsed }">
+      <PanelMenu :model="group.items" :pt="panelMenuPt" unstyled>
         <template #item="{ item, hasSubmenu }">
           <router-link
             v-if="item.route"
@@ -156,59 +178,45 @@ function handleNavigate(navigate, event) {
           >
             <a
               :href="href"
-              class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors"
+              class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[15px] font-semibold border-l-[3px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-1"
               :class="
                 linkActive
-                  ? 'bg-primary-50 text-primary-700 font-medium'
-                  : 'text-neutral-700 hover:bg-neutral-50'
+                  ? 'bg-blue-50 text-blue-800 border-blue-700'
+                  : 'text-neutral-700 border-transparent hover:bg-neutral-100 hover:border-neutral-300'
               "
               @click="handleNavigate(navigate, $event)"
             >
-              <i v-if="item.icon" :class="item.icon" class="text-base shrink-0" />
+              <i
+                v-if="item.icon"
+                :class="[item.icon, linkActive ? 'text-blue-700' : 'text-neutral-500']"
+                class="text-[20px] shrink-0"
+              ></i>
               <span v-if="!collapsed" class="flex-1">{{ item.label }}</span>
             </a>
           </router-link>
 
           <a
             v-else
-            class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors"
+            class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[15px] font-semibold cursor-pointer border-l-[3px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-1"
             :class="
               groupHasActiveChild(item)
-                ? 'bg-primary-50 text-primary-700 font-medium'
-                : 'text-neutral-700 hover:bg-neutral-50'
+                ? 'bg-blue-50 text-blue-800 border-blue-700'
+                : 'text-neutral-700 border-transparent hover:bg-neutral-100 hover:border-neutral-300'
             "
           >
-            <i v-if="item.icon" :class="item.icon" class="text-base shrink-0" />
+            <i
+              v-if="item.icon"
+              :class="[item.icon, groupHasActiveChild(item) ? 'text-blue-700' : 'text-neutral-500']"
+              class="text-[20px] shrink-0"
+            ></i>
             <span v-if="!collapsed" class="flex-1 text-left">{{ item.label }}</span>
             <i
               v-if="hasSubmenu && !collapsed"
-              class="pi pi-angle-down text-xs text-neutral-400"
-            />
+              class="pi pi-angle-down text-sm text-neutral-500 transition-transform"
+            ></i>
           </a>
         </template>
       </PanelMenu>
     </div>
   </nav>
 </template>
-
-<style scoped>
-/* PanelMenu bawaan punya padding/border sendiri; kita rapikan supaya
-   menyatu visual dengan sidebar custom (bukan tampil sebagai "panel" terpisah). */
-.sidebar-panelmenu :deep(.p-panelmenu-panel) {
-  border: none;
-  background: transparent;
-}
-.sidebar-panelmenu :deep(.p-panelmenu-header-content) {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-}
-.sidebar-panelmenu :deep(.p-panelmenu-content) {
-  background: transparent;
-  border: none;
-  padding-left: 1.75rem;
-}
-.sidebar-panelmenu.is-collapsed :deep(.p-panelmenu-submenu) {
-  display: none;
-}
-</style>
