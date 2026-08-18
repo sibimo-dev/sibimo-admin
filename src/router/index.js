@@ -3,35 +3,36 @@ import AdminLayout from '@/layouts/AdminLayout.vue'
 import { useAuthStore } from '@/stores/auth.store'
 import authRoutes from './modules/auth.routes'
 import dashboardRoute from './modules/dashboard.routes'
-// import letterRoutes from './modules/letter.routes'
-// import letterTypeRoutes from './modules/letter-type.routes'
-// import newsRoutes from './modules/news.routes'
+import letterRoutes from './modules/letter.routes'
+import letterTypeRoutes from './modules/letter-type.routes'
+import newsRoutes from './modules/news.routes'
 import galleryRoutes from './modules/gallery.routes'
 import libraryRoutes from './modules/library.routes'
-// import agendaRoutes from './modules/agenda.routes'
-// import complaintRoutes from './modules/complaint.routes'
-// import villagePotentialRoutes from './modules/village-potential.routes'
-// import citizenRoutes from './modules/citizen.routes'
+import agendaRoutes from './modules/agenda.routes'
+import complaintRoutes from './modules/complaint.routes'
+import villagePotentialRoutes from './modules/village-potential.routes'
+import citizenRoutes from './modules/citizen.routes'
 import villageProfileRoutes from './modules/village-profile.routes'
-// import userRoutes from './modules/user.routes'
+import userManagementRoutes from './modules/user-management.routes'
 
- */
+
 const protectedRoutes = {
   path: '/',
   component: AdminLayout,
   meta: { requiresAuth: true },
   children: [
     dashboardRoute,
-    // ...letterRoutes,
-    // ...letterTypeRoutes,
-    // ...newsRoutes,
+    ...letterRoutes,
+    ...letterTypeRoutes,
+    ...newsRoutes,
     ...galleryRoutes,
     ...libraryRoutes,
-    // ...agendaRoutes,
-    // ...complaintRoutes,
-    // ...villagePotentialRoutes,
-    // ...citizenRoutes,
+    ...agendaRoutes,
+    ...complaintRoutes,
+    ...villagePotentialRoutes,
+    ...citizenRoutes,
     ...villageProfileRoutes,
+    ...userManagementRoutes
     // ...tambahkan modul baru di sini juga, dengan pola yang sama
   ],
 }
