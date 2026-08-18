@@ -121,8 +121,8 @@ function cancelForm() {
   <div>
     <!-- Konten normal, disembunyikan otomatis saat mode cetak (print:hidden) -->
     <div class="print:hidden">
-      <h1 class="page-title">Peminjaman Buku</h1>
-      <p class="page-subtitle">Catat transaksi peminjaman buku perpustakaan desa (1 buku per transaksi)</p>
+      <h1 class="m-0 mb-1 text-[22px] font-bold text-slate-900">Peminjaman Buku</h1>
+      <p class="mb-5 text-sm text-slate-500">Catat transaksi peminjaman buku perpustakaan desa (1 buku per transaksi)</p>
 
       <div class="card max-w-2xl">
         <h2 class="font-semibold text-neutral-800 mb-4">Form Peminjaman Buku</h2>

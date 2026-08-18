@@ -117,8 +117,8 @@ function cancelForm() {
   <div>
     <!-- Konten normal, disembunyikan otomatis saat mode cetak (print:hidden) -->
     <div class="print:hidden">
-      <h1 class="page-title">Pengembalian Buku</h1>
-      <p class="page-subtitle">Catat transaksi pengembalian buku perpustakaan desa</p>
+      <h1 class="m-0 mb-1 text-[22px] font-bold text-slate-900">Pengembalian Buku</h1>
+      <p class="mb-5 text-sm text-slate-500">Catat transaksi pengembalian buku perpustakaan desa</p>
 
       <div class="card mb-4">
         <h2 class="font-semibold text-neutral-800 mb-3">Daftar Peminjaman Belum Dikembalikan</h2>

@@ -1,19 +1,17 @@
 <script setup>
-/**
- * CRUD Katalog Buku -- field sesuai tabel `books` (book_id, category_id FK,
- * title, author, isbn, stock). Kategori (`book_categories`) SENGAJA tidak
- * dibuat halaman terpisah -- dikelola langsung dari dalam form ini lewat
- * opsi "+ Tambah kategori baru" di dropdown kategori.
- *
- * Pola mengikuti TipeSuratListView.vue (AppDataTable + AppModal + useConfirm)
- * supaya konsisten dengan modul CRUD lain.
- */
 import { ref, reactive, computed } from 'vue'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
+
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
+import InputText from 'primevue/inputtext'
+import IconField from 'primevue/iconfield'
+import InputIcon from 'primevue/inputicon'
+import Button from 'primevue/button'
 import Tag from 'primevue/tag'
-import AppDataTable from '@/components/common/AppDataTable.vue'
-import AppButton from '@/components/common/AppButton.vue'
+import Card from 'primevue/card'
+
 import AppModal from '@/components/common/AppModal.vue'
 import AppInput from '@/components/common/AppInput.vue'
 import AppSelect from '@/components/common/AppSelect.vue'
@@ -40,20 +38,19 @@ function namaKategori(categoryId) {
   return kategoriList.value.find((k) => k.category_id === categoryId)?.category_name || '-'
 }
 
-const columns = [
-  { field: 'title', header: 'Judul Buku' },
-  { field: 'author', header: 'Penulis' },
-  { field: 'isbn', header: 'ISBN' },
-  { field: 'category_id', header: 'Kategori' },
-  { field: 'stock', header: 'Stok' },
-]
-
 // Dummy data -- ganti dengan panggilan ke book.service.js
 const rows = ref([
   { book_id: 1, category_id: 1, title: 'Sejarah Perjuangan Kemerdekaan', author: 'Ahmad Wibowo', isbn: '978-602-1234-56-7', stock: 3 },
   { book_id: 2, category_id: 2, title: 'Teknik Pertanian Modern', author: 'Siti Rahayu', isbn: '978-602-9876-54-3', stock: 5 },
   { book_id: 3, category_id: 3, title: 'Laskar Pelangi', author: 'Andrea Hirata', isbn: '978-979-1227-78-0', stock: 0 },
 ])
+
+const selected = ref([])
+const filters = ref({
+  global: { value: null },
+})
+
+const rowsPerPage = ref(10)
 
 const showModal = ref(false)
 const saving = ref(false)
@@ -69,6 +66,10 @@ const form = reactive({
 
 // Tampil/sembunyi field kategori baru, tergantung pilihan di dropdown
 const sedangBuatKategoriBaru = computed(() => form.category_id === TAMBAH_KATEGORI_BARU)
+
+function stockSeverity(stock) {
+  return stock > 0 ? 'success' : 'danger'
+}
 
 function openTambah() {
   form.book_id = null
@@ -135,6 +136,11 @@ async function handleSave() {
   }
 }
 
+function deleteBook(bookId) {
+  rows.value = rows.value.filter((r) => r.book_id !== bookId)
+  selected.value = selected.value.filter((item) => item.book_id !== bookId)
+}
+
 function handleDelete(data) {
   confirm.require({
     message: `Hapus buku "${data.title}"? Buku yang masih ada riwayat peminjaman aktif sebaiknya jangan dihapus.`,
@@ -144,7 +150,26 @@ function handleDelete(data) {
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
     accept: () => {
-      rows.value = rows.value.filter((r) => r.book_id !== data.book_id)
+      deleteBook(data.book_id)
+      toast.add({ severity: 'success', summary: 'Berhasil dihapus', life: 2000 })
+    },
+  })
+}
+
+function deleteSelected() {
+  if (selected.value.length === 0) return
+
+  confirm.require({
+    message: `Hapus ${selected.value.length} buku yang dipilih?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: () => {
+      const selectedIds = new Set(selected.value.map((item) => item.book_id))
+      rows.value = rows.value.filter((r) => !selectedIds.has(r.book_id))
+      selected.value = []
       toast.add({ severity: 'success', summary: 'Berhasil dihapus', life: 2000 })
     },
   })
@@ -152,30 +177,145 @@ function handleDelete(data) {
 </script>
 
 <template>
-  <div>
-    <div class="flex items-center justify-between mb-4">
-      <div>
-        <h1 class="page-title">Katalog Buku</h1>
-        <p class="page-subtitle mb-0">Kelola daftar buku perpustakaan desa</p>
-      </div>
-      <AppButton label="Tambah Buku" icon="pi pi-plus" variant="primary" @click="openTambah" />
-    </div>
+  <div class="min-h-full text-slate-800">
+    <h1 class="m-0 mb-1 text-[22px] font-bold text-slate-900">
+      Katalog Buku
+    </h1>
 
-    <AppDataTable :columns="columns" :rows="rows" data-key="book_id">
-      <template #category_id="{ data }">
-        {{ namaKategori(data.category_id) }}
+    <p class="mb-5 text-sm text-slate-500">
+      Kelola daftar buku perpustakaan desa.
+    </p>
+
+    <Card>
+      <template #content>
+        <div class="flex flex-col gap-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <Button
+                label="Tambah Buku"
+                icon="pi pi-plus"
+                @click="openTambah"
+              />
+
+              <Button
+                label="Hapus"
+                icon="pi pi-trash"
+                severity="secondary"
+                outlined
+                :disabled="selected.length === 0"
+                @click="deleteSelected"
+              />
+            </div>
+
+            <IconField>
+              <InputIcon class="pi pi-search" />
+
+              <InputText
+                v-model="filters.global.value"
+                placeholder="Cari judul, penulis, atau ISBN"
+              />
+            </IconField>
+          </div>
+
+          <DataTable
+            v-model:selection="selected"
+            v-model:filters="filters"
+            :value="rows"
+            dataKey="book_id"
+            :paginator="true"
+            :rows="rowsPerPage"
+            :rowsPerPageOptions="[10, 25, 50]"
+            :globalFilterFields="['title', 'author', 'isbn']"
+            sortField="title"
+            :sortOrder="1"
+            removableSort
+            stripedRows
+            currentPageReportTemplate="Menampilkan {first}–{last} dari {totalRecords} buku"
+            paginatorTemplate="CurrentPageReport FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown"
+            class="w-full"
+          >
+            <template #empty>
+              <div class="py-8 text-center text-slate-400">
+                Tidak ada buku yang cocok dengan pencarian.
+              </div>
+            </template>
+
+            <Column selectionMode="multiple" headerStyle="width: 3rem" />
+
+            <Column
+              field="title"
+              header="Judul Buku"
+              sortable
+              class="min-w-64"
+            />
+
+            <Column
+              field="author"
+              header="Penulis"
+              sortable
+            />
+
+            <Column
+              field="isbn"
+              header="ISBN"
+            />
+
+            <Column
+              header="Kategori"
+              sortable
+              sortField="category_id"
+            >
+              <template #body="{ data }">
+                {{ namaKategori(data.category_id) }}
+              </template>
+            </Column>
+
+            <Column
+              field="stock"
+              header="Stok"
+              sortable
+            >
+              <template #body="{ data }">
+                <Tag
+                  :value="data.stock > 0 ? `${data.stock} tersedia` : 'Stok habis'"
+                  :severity="stockSeverity(data.stock)"
+                  rounded
+                />
+              </template>
+            </Column>
+
+            <Column
+              header="Aksi"
+              headerStyle="width: 7rem"
+            >
+              <template #body="{ data }">
+                <div class="flex items-center gap-1">
+                  <Button
+                    icon="pi pi-pencil"
+                    text
+                    rounded
+                    severity="secondary"
+                    aria-label="Edit buku"
+                    title="Edit"
+                    @click="openEdit(data)"
+                  />
+
+                  <Button
+                    icon="pi pi-trash"
+                    text
+                    rounded
+                    severity="danger"
+                    aria-label="Hapus buku"
+                    title="Hapus"
+                    @click="handleDelete(data)"
+                  />
+                </div>
+              </template>
+            </Column>
+          </DataTable>
+        </div>
       </template>
-      <template #stock="{ data }">
-        <Tag
-          :value="data.stock > 0 ? `${data.stock} tersedia` : 'Stok habis'"
-          :severity="data.stock > 0 ? 'success' : 'danger'"
-        />
-      </template>
-      <template #actions="{ data }">
-        <AppButton icon="pi pi-pencil" variant="ghost" size="small" @click="openEdit(data)" />
-        <AppButton icon="pi pi-trash" variant="ghost" size="small" @click="handleDelete(data)" />
-      </template>
-    </AppDataTable>
+    </Card>
 
     <AppModal
       v-model="showModal"
