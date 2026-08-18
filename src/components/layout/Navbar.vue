@@ -33,14 +33,6 @@ function toggleMenu(event) {
     class="h-16 bg-white border-b border-neutral-100 flex items-center justify-between px-4 md:px-6 gap-3"
   >
     <div class="flex items-center gap-3 min-w-0">
-      <!-- Hanya tampil di layar kecil, buka Sidebar sebagai Drawer -->
-       <Button
-       icon="pi pi-bars"
-       text
-       rounded
-       class="md:hidden !text-primary-600 hover:!bg-primary-50 hover:!text-primary-700"
-       aria-label="Buka menu"
-       @click="uiStore.toggleMobileSidebar()"/>
       <Breadcrumb class="min-w-0" 
       />
     </div>
