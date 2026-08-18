@@ -1,81 +1,50 @@
 <script setup>
 /**
  * Halaman Manajemen Pengguna.
- * Ganti dummyData dengan data asli dari userManagement.service.js begitu backend siap.
+ *
+ * Data sekarang berasal dari composable singleton `useAdminRoles` --
+ * SUMBER YANG SAMA dipakai oleh AdminRoleManagementView.vue (List Admin).
+ * Karena itu, toggle status Active/Deactive di tabel ini langsung
+ * kelihatan berubah juga di sidebar List Admin, tanpa reload dan tanpa
+ * perlu sinkronisasi manual -- keduanya baca dari ref yang sama persis.
  *
  * Catatan alur (sesuai kebutuhan produk):
  * - Tombol "Add New" -> diarahkan ke halaman Kelola Admin (RBAC) untuk
  *   super admin mengatur peran & hak akses, BUKAN form tambah user biasa.
  * - Icon pensil (edit) di tiap baris -> diarahkan ke halaman yang sama
- *   (Kelola Admin), bukan form edit user terpisah.
+ *   (Kelola Admin), sekalian bawa konteks peran (RBAC) user ini lewat
+ *   query ?role=... (dicocokkan ke `role.name`, bukan `positionTitle`).
+ * - Badge Status bisa langsung diklik di sini untuk toggle Active/Deactive.
+ * - Kalau halaman ini dibuka dari tombol "Kelola" di List Admin
+ *   (?role=Admin Berita, dst), tabel otomatis ke-filter ke peran itu.
  */
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import Tag from 'primevue/tag'
 import Checkbox from 'primevue/checkbox'
 import AppButton from '@/components/common/AppButton.vue'
 import AppInput from '@/components/common/AppInput.vue'
+import { useAdminRoles } from '@/composables/useAdminRoles'
 
+const route = useRoute()
 const router = useRouter()
 const confirm = useConfirm()
 const toast = useToast()
 
-// Dummy data -- hapus setelah integrasi API
-const users = ref([
-  {
-    id: 1,
-    name: 'User Name',
-    role: 'Super Admin',
-    department: 'Sekretaris Desa',
-    accessLevel: 'Full Access',
-    status: 'Active',
-  },
-  {
-    id: 2,
-    name: 'User Name',
-    role: 'Kaur Berita',
-    department: 'Administrasi Umum',
-    accessLevel: 'Berita Access only',
-    status: 'Deactive',
-  },
-  {
-    id: 3,
-    name: 'User Name',
-    role: 'Kaur Perpustakaan',
-    department: 'Pelayanan',
-    accessLevel: 'Perpustakaan Access only',
-    status: 'Deactive',
-  },
-  {
-    id: 4,
-    name: 'User Name',
-    role: 'Kaur Gallery',
-    department: 'Pelayanan',
-    accessLevel: 'Gallery Access only',
-    status: 'Deactive',
-  },
-  {
-    id: 5,
-    name: 'User Name',
-    role: 'Kaur Potensi Desa',
-    department: 'Administrasi Umum',
-    accessLevel: 'Potensi Desa Access only',
-    status: 'Deactive',
-  },
-  {
-    id: 6,
-    name: 'User Name',
-    role: 'Kaur Agenda',
-    department: 'Administrasi',
-    accessLevel: 'Agenda Access only',
-    status: 'Active',
-  },
-])
+const { roles, toggleRoleStatus, removeRole } = useAdminRoles()
 
 // --- Search ---
 const searchQuery = ref('')
+
+// Kalau datang dari List Admin lewat tombol "Kelola" (?role=Admin Berita),
+// auto-filter tabel ke peran tersebut.
+onMounted(() => {
+  if (route.query.role) {
+    searchQuery.value = String(route.query.role)
+  }
+})
 
 // --- Sort ---
 const sortField = ref(null)
@@ -90,23 +59,34 @@ function toggleSort(field) {
   }
 }
 
+// Field yang dipakai untuk sort per kolom (menyesuaikan nama field di roles)
+const sortAccessor = {
+  name: (r) => r.userName,
+  role: (r) => r.positionTitle,
+  department: (r) => r.department,
+  accessLevel: (r) => r.accessLabel,
+  status: (r) => r.status,
+}
+
 const filteredUsers = computed(() => {
-  let result = [...users.value]
+  let result = [...roles.value]
 
   const query = searchQuery.value.trim().toLowerCase()
   if (query) {
     result = result.filter(
-      (u) =>
-        u.name.toLowerCase().includes(query) ||
-        u.role.toLowerCase().includes(query) ||
-        u.department.toLowerCase().includes(query),
+      (r) =>
+        r.userName.toLowerCase().includes(query) ||
+        r.name.toLowerCase().includes(query) ||
+        r.positionTitle.toLowerCase().includes(query) ||
+        r.department.toLowerCase().includes(query),
     )
   }
 
   if (sortField.value) {
+    const accessor = sortAccessor[sortField.value]
     result.sort((a, b) => {
-      const valA = String(a[sortField.value]).toLowerCase()
-      const valB = String(b[sortField.value]).toLowerCase()
+      const valA = String(accessor(a)).toLowerCase()
+      const valB = String(accessor(b)).toLowerCase()
       if (valA < valB) return sortDirection.value === 'asc' ? -1 : 1
       if (valA > valB) return sortDirection.value === 'asc' ? 1 : -1
       return 0
@@ -121,14 +101,31 @@ const selectedIds = ref([])
 const allSelected = computed({
   get: () => filteredUsers.value.length > 0 && selectedIds.value.length === filteredUsers.value.length,
   set: (value) => {
-    selectedIds.value = value ? filteredUsers.value.map((u) => u.id) : []
+    selectedIds.value = value ? filteredUsers.value.map((r) => r.id) : []
   },
 })
 
 // --- Status badge ---
 const statusColor = {
-  Active: 'success',
-  Deactive: 'secondary',
+  active: 'success',
+  inactive: 'secondary',
+}
+const statusLabel = {
+  active: 'Active',
+  inactive: 'Deactive',
+}
+
+// Klik badge status untuk toggle. Super Admin (isProtected) dikunci.
+function handleToggleStatus(role) {
+  if (role.isProtected) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Super Admin harus selalu aktif',
+      life: 2000,
+    })
+    return
+  }
+  toggleRoleStatus(role)
 }
 
 // --- Navigasi ---
@@ -137,22 +134,26 @@ function goToAddNew() {
   router.push({ name: 'admin-role-management' })
 }
 
-function goToEdit(user) {
-  // Edit (pensil) -> halaman Kelola Admin juga, sekalian bawa konteks role user ini
-  router.push({ name: 'admin-role-management', query: { role: user.role } })
+function goToEdit(role) {
+  // Edit (pensil) -> halaman Kelola Admin juga, bawa konteks peran RBAC-nya
+  router.push({ name: 'admin-role-management', query: { role: role.name } })
 }
 
-function handleDelete(user) {
+function handleDelete(role) {
+  if (role.isProtected) {
+    toast.add({ severity: 'warn', summary: 'Super Admin tidak bisa dihapus', life: 2000 })
+    return
+  }
   confirm.require({
-    message: `Hapus pengguna "${user.name}" dengan peran "${user.role}"?`,
+    message: `Hapus pengguna "${role.userName}" dengan peran "${role.positionTitle}"?`,
     header: 'Konfirmasi Hapus',
     icon: 'pi pi-exclamation-triangle',
     acceptLabel: 'Hapus',
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
     accept: () => {
-      // TODO: panggil userManagement.service.js -> deleteUser(user.id)
-      users.value = users.value.filter((u) => u.id !== user.id)
+      // TODO: panggil userManagement.service.js -> deleteUser(role.id)
+      removeRole(role.id)
       toast.add({ severity: 'success', summary: 'Berhasil dihapus', life: 2000 })
     },
   })
@@ -208,31 +209,38 @@ function handleDelete(user) {
         </thead>
         <tbody>
           <tr
-            v-for="user in filteredUsers"
-            :key="user.id"
+            v-for="role in filteredUsers"
+            :key="role.id"
             class="border-b border-neutral-50"
           >
             <td class="py-3">
-              <Checkbox v-model="selectedIds" :value="user.id" />
+              <Checkbox v-model="selectedIds" :value="role.id" />
             </td>
             <td class="py-3">
               <div class="flex items-center gap-2">
                 <div class="avatar-placeholder"></div>
-                <span class="font-medium text-neutral-800">{{ user.name }}</span>
+                <span class="font-medium text-neutral-800">{{ role.userName }}</span>
               </div>
             </td>
-            <td class="py-3 text-primary-600 font-medium">{{ user.role }}</td>
-            <td class="py-3 text-neutral-600">{{ user.department }}</td>
-            <td class="py-3 text-neutral-600">{{ user.accessLevel }}</td>
+            <td class="py-3 text-primary-600 font-medium">{{ role.positionTitle }}</td>
+            <td class="py-3 text-neutral-600">{{ role.department }}</td>
+            <td class="py-3 text-neutral-600">{{ role.accessLabel }}</td>
             <td class="py-3">
-              <Tag :value="user.status" :severity="statusColor[user.status]" />
+              <button
+                class="status-toggle"
+                :class="{ 'status-toggle-locked': role.isProtected }"
+                :title="role.isProtected ? 'Super Admin selalu aktif' : 'Klik untuk mengubah status'"
+                @click="handleToggleStatus(role)"
+              >
+                <Tag :value="statusLabel[role.status]" :severity="statusColor[role.status]" />
+              </button>
             </td>
             <td class="py-3">
               <div class="flex items-center justify-end gap-2">
-                <button class="icon-btn" title="Edit" @click="goToEdit(user)">
+                <button class="icon-btn" title="Edit" @click="goToEdit(role)">
                   <i class="pi pi-pencil"></i>
                 </button>
-                <button class="icon-btn icon-btn-danger" title="Hapus" @click="handleDelete(user)">
+                <button class="icon-btn icon-btn-danger" title="Hapus" @click="handleDelete(role)">
                   <i class="pi pi-trash"></i>
                 </button>
               </div>
@@ -257,6 +265,18 @@ function handleDelete(user) {
   border-radius: 50%;
   background: var(--color-neutral-200, #e5e7eb);
   flex-shrink: 0;
+}
+
+.status-toggle {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  line-height: 0;
+}
+.status-toggle-locked {
+  cursor: not-allowed;
+  opacity: 0.85;
 }
 
 .icon-btn {
