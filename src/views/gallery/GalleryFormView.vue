@@ -1,18 +1,14 @@
 <script setup>
 /**
- * Form Gallery - dipakai untuk 2 route sekaligus:
- *   - /gallery/create   (gallery-create) -> mode tambah, route.params.id kosong
- *   - /gallery/:id/edit (gallery-edit)   -> mode edit, ambil data dari id
- *
 
- * TODO: ganti dummy `dummyGalleryPhoto` & handleSubmit dengan panggilan asli ke
- * gallery.service.js (fetchGalleryById, createGallery, updateGallery). Untuk
- * createGallery/updateGallery, kirim sebagai FormData karena ada file gambar.
+ * TODO saat backend siap: ganti actions di gallery.store.js (create/update)
+ * agar memanggil gallery.service.js. File form ini tidak perlu diubah lagi.
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import { useAuthStore } from '@/stores/auth.store'
+import { useGalleryStore } from '@/stores/gallery.store'
 import AppButton from '@/components/common/AppButton.vue'
 import AppInput from '@/components/common/AppInput.vue'
 import AppTextarea from '@/components/common/AppTextarea.vue'
@@ -21,6 +17,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const authStore = useAuthStore()
+const galleryStore = useGalleryStore()
 
 const isEdit = computed(() => !!route.params.id)
 const saving = ref(false)
@@ -36,23 +33,16 @@ const form = reactive({
 
 const errors = reactive({ title: '' })
 
-// Data dummy -- ganti dengan fetch API asli berdasarkan route.params.id
-const dummyGalleryPhoto = {
-  gallery_id: 1,
-  title: 'Kerja Bakti Balai Desa',
-  description: 'Kegiatan kerja bakti rutin warga dusun dalam rangka persiapan HUT Desa.',
-  image: null,
-  uploaded_by: 4,
-  uploaded_at: '2026-07-02T08:00:00',
-}
-
 onMounted(() => {
   if (isEdit.value) {
-    // TODO: fetchGaleriById(route.params.id)
-    form.title = dummyGalleryPhoto.title
-    form.description = dummyGalleryPhoto.description
-    form.uploaded_at = dummyGalleryPhoto.uploaded_at
-    preview.value = dummyGalleryPhoto.image
+    // TODO: ganti dengan fetch API asli begitu backend siap
+    const existing = galleryStore.getById(route.params.id)
+    if (existing) {
+      form.title = existing.title
+      form.description = existing.description
+      form.uploaded_at = existing.uploaded_at
+      preview.value = existing.image
+    }
   }
 })
 
@@ -87,16 +77,21 @@ async function handleSubmit() {
   saving.value = true
   try {
     // Kolom `image` di DB isinya path/URL hasil upload, bukan base64 --
-    // jadi file aslinya (form.image_file) dikirim lewat FormData, dan
-    // uploaded_by diambil dari admin yang sedang login, bukan dari form.
-    const payload = new FormData()
-    payload.append('title', form.title)
-    payload.append('description', form.description)
-    payload.append('uploaded_by', authStore.user?.id ?? '')
-    if (form.image_file) payload.append('image', form.image_file)
+    // jadi file aslinya (form.image_file) yang dikirim, dan uploaded_by
+    // diambil dari admin yang sedang login, bukan dari form.
+    const payload = {
+      title: form.title,
+      description: form.description,
+      uploaded_by: authStore.user?.id ?? '',
+      image_file: form.image_file,
+    }
 
-    // TODO: panggil createGaleri(payload) atau updateGaleri(route.params.id, payload)
-    await new Promise((r) => setTimeout(r, 500))
+    if (isEdit.value) {
+      await galleryStore.update(route.params.id, payload)
+    } else {
+      await galleryStore.create(payload)
+    }
+
     toast.add({
       severity: 'success',
       summary: isEdit.value ? 'Foto berhasil diperbarui' : 'Foto berhasil ditambahkan',
