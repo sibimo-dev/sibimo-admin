@@ -1,16 +1,14 @@
 <script setup>
-/**
- * VillageProfileFormView - form tambah/edit generik, dipakai bertiga
- * oleh Sejarah, Visi & Misi, Struktur Organisasi (lihat penjelasan
- * di VillageProfileListView.vue kenapa dibuat reusable).
- */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
-import AppButton from '@/components/common/AppButton.vue'
-import AppInput from '@/components/common/AppInput.vue'
-import AppSelect from '@/components/common/AppSelect.vue'
-import AppTextarea from '@/components/common/AppTextarea.vue'
+
+import InputText from 'primevue/inputtext'
+import Editor from 'primevue/editor'
+import Select from 'primevue/select'
+import Button from 'primevue/button'
+import Card from 'primevue/card'
+
 import { SECTION_MAP, profileContents } from './villageProfileData'
 
 const route = useRoute()
@@ -21,9 +19,17 @@ const section = computed(() => SECTION_MAP[route.meta.sectionSlug])
 const isEdit = computed(() => !!route.params.id)
 const saving = ref(false)
 
+const pageTitle = computed(() => (
+  isEdit.value ? `Edit ${section.value.label}` : `Tambah ${section.value.label}`
+))
+
+const mainButtonLabel = computed(() => (
+  isEdit.value ? 'Perbarui' : 'Terbitkan'
+))
+
 const statusOptions = [
   { label: 'Draft', value: 'Draft' },
-  { label: 'Terbitkan', value: 'Published' },
+  { label: 'Terbit', value: 'Published' },
 ]
 
 const form = reactive({
@@ -34,6 +40,17 @@ const form = reactive({
   published_at: null,
   photo_file: null, // File asli yang dipilih user (opsional) -- ini yang dikirim ke API, bukan `photoPreview`
 })
+
+const statusOpen = ref(true)
+const statusDisplay = computed(() => (
+  statusOptions.find((item) => item.value === form.status)?.label ?? form.status
+))
+
+// Class pass-through untuk area konten Editor -- fix bug bawaan PrimeVue Editor
+// (Quill v2) di mana bullet list ikut tampil sebagai angka. Ditangani lewat
+// Tailwind arbitrary variant, bukan <style> terpisah.
+const editorContentClass =
+  "[&_.ql-editor_ol_li[data-list='bullet']]:list-none [&_.ql-editor_ol_li[data-list='bullet']]:before:content-['•']"
 
 // --- Upload Foto (opsional) ---
 const photoPreview = ref(null) // data URL untuk preview gambar
@@ -62,26 +79,31 @@ function removePhoto() {
 // --- end Upload Foto ---
 
 onMounted(() => {
-  if (isEdit.value) {
-    const existing = profileContents.value.find(
-      (c) => c.profile_content_id === Number(route.params.id),
-    )
-    if (existing) {
-      Object.assign(form, existing)
-      // kalau data lama sudah punya foto, tampilkan sebagai preview
-      if (existing.photo_url) {
-        photoPreview.value = existing.photo_url
-      }
+  if (!isEdit.value) return
+
+  const existing = profileContents.value.find(
+    (c) => c.profile_content_id === Number(route.params.id),
+  )
+  if (existing) {
+    Object.assign(form, existing)
+    // kalau data lama sudah punya foto, tampilkan sebagai preview
+    if (existing.photo_url) {
+      photoPreview.value = existing.photo_url
     }
   }
 })
 
-async function handleSave() {
+function goBack() {
+  router.push({ name: `village-profile-${route.meta.sectionSlug}-list` })
+}
+
+async function persist(nextStatus) {
   if (!form.title.trim()) {
     toast.add({ severity: 'error', summary: 'Judul wajib diisi', life: 2500 })
     return
   }
 
+  form.status = nextStatus
   saving.value = true
   try {
     // Kalau status diubah ke Published dan belum ada published_at, isi otomatis hari ini.
@@ -117,84 +139,212 @@ async function handleSave() {
     }
 
     toast.add({ severity: 'success', summary: 'Berhasil disimpan', life: 2000 })
-    router.push({ name: `village-profile-${route.meta.sectionSlug}-list` })
+    goBack()
   } finally {
     saving.value = false
   }
 }
 
-function batal() {
-  router.push({ name: `village-profile-${route.meta.sectionSlug}-list` })
+function saveDraft() {
+  persist('Draft')
+}
+
+function saveMain() {
+  persist(isEdit.value ? form.status : 'Published')
 }
 </script>
 
 <template>
-  <div>
-    <h1 class="page-title">{{ isEdit ? 'Edit' : 'Tambah' }} {{ section.label }}</h1>
-    <p class="page-subtitle">Isi konten {{ section.label.toLowerCase() }} desa</p>
+  <div class="min-h-full px-6 py-6 text-slate-800 lg:px-8">
+    <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <h1 class="m-0 text-[22px] font-bold text-slate-900">
+        {{ pageTitle }}
+      </h1>
+    </div>
 
-    <div class="card max-w-3xl">
-      <div class="flex flex-col gap-4">
-        <AppInput v-model="form.title" label="Judul" required />
-        <AppTextarea v-model="form.content" label="Isi Konten" :rows="8" />
-
-        <!-- Upload Foto (opsional).
-             Markup & class SAMA PERSIS dengan dropzone di form Gallery. -->
-        <div>
-          <label class="text-sm font-medium text-neutral-700 block mb-1">Foto (opsional)</label>
-
-          <input
-            ref="fileInput"
-            type="file"
-            accept="image/*"
-            class="hidden"
-            @change="handleFileChange"
-          />
-
-          <div
-            v-if="!photoPreview"
-            class="border-2 border-dashed border-primary-200 bg-primary-50/40 rounded-xl flex flex-col items-center justify-center py-10 cursor-pointer hover:bg-primary-50 transition-colors"
-            @click="pickFile"
-          >
-            <i class="pi pi-cloud-upload text-3xl text-primary-400 mb-2" />
-            <p class="text-sm text-neutral-600">
-              <span class="text-primary-600 font-medium">Klik untuk unggah</span> atau seret foto ke sini
-            </p>
-            <p class="text-xs text-neutral-400 mt-1">PNG, JPG, maks. 5MB</p>
-          </div>
-
-          <div v-else class="relative rounded-xl overflow-hidden border border-neutral-200 group">
-            <img :src="photoPreview" alt="Preview foto" class="w-full max-h-64 object-cover" />
-            <div
-              class="absolute inset-0 bg-primary-900/0 group-hover:bg-primary-900/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100"
-            >
-              <AppButton
-                type="button"
-                icon="pi pi-refresh"
-                variant="secondary"
-                rounded
-                aria-label="Ganti foto"
-                @click="pickFile"
-              />
-              <AppButton
-                type="button"
-                icon="pi pi-trash"
-                variant="danger"
-                rounded
-                aria-label="Hapus foto"
-                @click="removePhoto"
+    <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <Card>
+        <template #content>
+          <div class="flex flex-col gap-5">
+            <div class="flex flex-col gap-2">
+              <label for="title" class="text-[13px] font-semibold text-slate-700">
+                Judul
+              </label>
+              <InputText
+                id="title"
+                v-model="form.title"
+                placeholder="Judul"
+                fluid
               />
             </div>
+
+            <div class="flex flex-col gap-2">
+              <label class="text-[13px] font-semibold text-slate-700">
+                Isi Konten
+              </label>
+
+              <Editor
+                v-model="form.content"
+                editorStyle="height: 220px"
+                :pt="{
+                  toolbar: { class: 'border-b border-neutral-200 bg-neutral-50' },
+                  content: { class: editorContentClass },
+                }"
+              >
+                <template #toolbar>
+                  <span class="ql-formats">
+                    <select class="ql-header" defaultValue="0">
+                      <option value="1">Heading</option>
+                      <option value="0">Paragraf</option>
+                    </select>
+                    <select class="ql-font">
+                      <option value="sans-serif" selected>Sans Serif</option>
+                      <option value="serif">Serif</option>
+                      <option value="monospace">Monospace</option>
+                    </select>
+                  </span>
+
+                  <span class="ql-formats">
+                    <button class="ql-bold" title="Bold" />
+                    <button class="ql-italic" title="Italic" />
+                    <button class="ql-underline" title="Underline" />
+                  </span>
+
+                  <span class="ql-formats">
+                    <button class="ql-list" value="ordered" title="List bernomor" />
+                    <button class="ql-list" value="bullet" title="List poin" />
+                  </span>
+
+                  <span class="ql-formats">
+                    <button class="ql-align" value="" title="Rata Kiri" />
+                    <button class="ql-align" value="center" title="Rata Tengah" />
+                    <button class="ql-align" value="right" title="Rata Kanan" />
+                    <button class="ql-align" value="justify" title="Rata Kanan-Kiri" />
+                  </span>
+
+                  <span class="ql-formats">
+                    <button class="ql-image" title="Sisipkan gambar" />
+                    <button class="ql-link" title="Sisipkan tautan" />
+                    <button class="ql-clean" title="Hapus format" />
+                  </span>
+                </template>
+              </Editor>
+            </div>
+
+            <div class="flex flex-col gap-2">
+              <span class="text-[13px] font-semibold text-slate-700">
+                Foto (opsional)
+              </span>
+
+              <input
+                ref="fileInput"
+                type="file"
+                accept="image/*"
+                class="hidden"
+                @change="handleFileChange"
+              />
+
+              <div
+                v-if="!photoPreview"
+                class="rounded-xl border-2 border-dashed border-primary-200 bg-primary-50/40 flex flex-col items-center justify-center py-10 cursor-pointer hover:bg-primary-50 transition-colors"
+                @click="pickFile"
+              >
+                <i class="pi pi-cloud-upload text-3xl text-primary-400 mb-2" />
+                <p class="text-sm text-slate-600 m-0">
+                  <span class="text-primary-600 font-medium">Klik untuk unggah</span> atau seret foto ke sini
+                </p>
+                <p class="text-xs text-slate-400 mt-1">PNG, JPG, maks. 5MB</p>
+              </div>
+
+              <div v-else class="relative overflow-hidden rounded-xl border border-slate-200 group">
+                <img :src="photoPreview" alt="Preview foto" class="h-48 w-full object-cover" />
+                <div
+                  class="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100"
+                >
+                  <Button
+                    icon="pi pi-refresh"
+                    severity="secondary"
+                    rounded
+                    aria-label="Ganti foto"
+                    @click="pickFile"
+                  />
+                  <Button
+                    icon="pi pi-trash"
+                    severity="danger"
+                    rounded
+                    aria-label="Hapus foto"
+                    @click="removePhoto"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        </template>
+      </Card>
 
-        <AppSelect v-model="form.status" label="Status" :options="statusOptions" required />
-      </div>
+      <aside class="flex flex-col gap-3.5">
+        <Card>
+          <template #content>
+            <div class="flex gap-2.5">
+              <Button
+                label="Simpan Draft"
+                severity="secondary"
+                outlined
+                class="flex-1"
+                :loading="saving"
+                @click="saveDraft"
+              />
 
-      <div class="flex justify-end gap-3 mt-6">
-        <AppButton label="Batal" variant="ghost" @click="batal" />
-        <AppButton label="Simpan" variant="primary" :loading="saving" @click="handleSave" />
-      </div>
+              <Button
+                :label="mainButtonLabel"
+                class="flex-1"
+                :loading="saving"
+                @click="saveMain"
+              />
+            </div>
+          </template>
+        </Card>
+
+        <Card>
+          <template #content>
+            <div class="flex flex-col gap-3">
+              <button
+                type="button"
+                class="flex items-center justify-between text-left text-[13px] text-slate-700"
+                @click="statusOpen = !statusOpen"
+              >
+                <span>
+                  Status:
+                  <strong>{{ statusDisplay }}</strong>
+                </span>
+
+                <i
+                  class="pi pi-chevron-down text-xs text-slate-400 transition-transform"
+                  :class="{ 'rotate-180': statusOpen }"
+                />
+              </button>
+
+              <Select
+                v-show="statusOpen"
+                v-model="form.status"
+                :options="statusOptions"
+                optionLabel="label"
+                optionValue="value"
+                fluid
+              />
+            </div>
+          </template>
+        </Card>
+
+        <Button
+          label="Batal"
+          icon="pi pi-arrow-left"
+          severity="secondary"
+          outlined
+          class="w-full"
+          @click="goBack"
+        />
+      </aside>
     </div>
   </div>
 </template>
