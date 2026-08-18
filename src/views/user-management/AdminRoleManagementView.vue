@@ -1,181 +1,36 @@
 <script setup>
 /**
  * Halaman Kelola Admin (Role-Based Access Control).
- * Ganti dummyData dengan data asli dari userManagement.service.js begitu backend siap.
+ * Ganti dummyData di useAdminRoles.js dengan data asli dari
+ * userManagement.service.js begitu backend siap.
  * Diakses dari UserManagementListView.vue lewat tombol "Add New" atau icon pensil.
+ *
+ * Data roles sekarang berasal dari composable singleton `useAdminRoles`,
+ * BUKAN local ref lagi -- supaya perubahan status yang dilakukan di
+ * UserManagementListView.vue (Manajemen Pengguna) langsung kelihatan di
+ * sini juga, dan sebaliknya, tanpa perlu reload atau lewat query param.
  */
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import Checkbox from 'primevue/checkbox'
 import ToggleSwitch from 'primevue/toggleswitch'
 import AppButton from '@/components/common/AppButton.vue'
+import { useAdminRoles } from '@/composables/useAdminRoles'
 
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
-// Daftar modul yang bisa diatur hak aksesnya per peran
-const modules = [
-  { key: 'villageProfile', label: 'Profile Desa' },
-  { key: 'agenda', label: 'Kelola Agenda' },
-  { key: 'news', label: 'Berita & Pengumuman' },
-  { key: 'library', label: 'Kelola Perpustakaan' },
-  { key: 'letterService', label: 'Kelola Layanan' },
-  { key: 'villagePotential', label: 'Kelola Potensi' },
-  { key: 'gallery', label: 'Kelola Gallery' },
-  { key: 'userManagement', label: 'Manajemen Admin' },
-]
-
-const permissionKeys = ['view', 'create', 'edit', 'delete']
-const permissionLabels = { view: 'LIHAT', create: 'BUAT', edit: 'EDIT', delete: 'HAPUS' }
-
-// Helper bikin permission penuh (semua true) atau kosong (semua false)
-function fullAccess() {
-  return { view: true, create: true, edit: true, delete: true }
-}
-function noAccess() {
-  return { view: false, create: false, edit: false, delete: false }
-}
-function viewOnly() {
-  return { view: true, create: false, edit: false, delete: false }
-}
-
-// Dummy data -- hapus setelah integrasi API
-// permissions: { [moduleKey]: { view, create, edit, delete } }
-const roles = ref([
-  {
-    id: 'super-admin',
-    name: 'Super Admin',
-    description: 'Akses Sistem Penuh dan Konfigurasi.',
-    status: 'active',
-    // Super Admin tidak boleh dinonaktifkan lewat toggle -- selalu active.
-    isProtected: true,
-    permissions: {
-      villageProfile: fullAccess(),
-      agenda: fullAccess(),
-      news: fullAccess(),
-      library: fullAccess(),
-      letterService: fullAccess(),
-      villagePotential: fullAccess(),
-      gallery: fullAccess(),
-      // Manajemen Admin: super admin tidak bisa hapus dirinya sendiri/role lain lewat sini
-      userManagement: { view: true, create: true, edit: true, delete: false },
-    },
-  },
-  {
-    id: 'admin-desa',
-    name: 'Admin Desa',
-    description: 'Mengelola data umum profil dan layanan desa.',
-    status: 'active',
-    permissions: {
-      villageProfile: fullAccess(),
-      agenda: viewOnly(),
-      news: viewOnly(),
-      library: noAccess(),
-      letterService: fullAccess(),
-      villagePotential: viewOnly(),
-      gallery: noAccess(),
-      userManagement: noAccess(),
-    },
-  },
-  {
-    id: 'admin-agenda',
-    name: 'Admin Agenda',
-    description: 'Mengelola jadwal dan agenda kegiatan desa.',
-    status: 'active',
-    permissions: {
-      villageProfile: noAccess(),
-      agenda: fullAccess(),
-      news: noAccess(),
-      library: noAccess(),
-      letterService: noAccess(),
-      villagePotential: noAccess(),
-      gallery: noAccess(),
-      userManagement: noAccess(),
-    },
-  },
-  {
-    id: 'admin-berita',
-    name: 'Admin Berita',
-    description: 'Mengelola berita dan pengumuman desa.',
-    status: 'inactive',
-    permissions: {
-      villageProfile: noAccess(),
-      agenda: noAccess(),
-      news: fullAccess(),
-      library: noAccess(),
-      letterService: noAccess(),
-      villagePotential: noAccess(),
-      gallery: noAccess(),
-      userManagement: noAccess(),
-    },
-  },
-  {
-    id: 'admin-perpustakaan',
-    name: 'Admin Perpustakaan',
-    description: 'Mengelola koleksi dan data perpustakaan desa.',
-    status: 'active',
-    permissions: {
-      villageProfile: noAccess(),
-      agenda: noAccess(),
-      news: noAccess(),
-      library: fullAccess(),
-      letterService: noAccess(),
-      villagePotential: noAccess(),
-      gallery: noAccess(),
-      userManagement: noAccess(),
-    },
-  },
-  {
-    id: 'admin-layanan',
-    name: 'Admin Layanan',
-    description: 'Mengelola pengajuan dan verifikasi surat layanan.',
-    status: 'active',
-    permissions: {
-      villageProfile: noAccess(),
-      agenda: noAccess(),
-      news: noAccess(),
-      library: noAccess(),
-      letterService: fullAccess(),
-      villagePotential: noAccess(),
-      gallery: noAccess(),
-      userManagement: noAccess(),
-    },
-  },
-  {
-    id: 'admin-potensi',
-    name: 'Admin Potensi',
-    description: 'Mengelola data potensi dan UMKM desa.',
-    status: 'active',
-    permissions: {
-      villageProfile: noAccess(),
-      agenda: noAccess(),
-      news: noAccess(),
-      library: noAccess(),
-      letterService: noAccess(),
-      villagePotential: fullAccess(),
-      gallery: noAccess(),
-      userManagement: noAccess(),
-    },
-  },
-  {
-    id: 'admin-gallery',
-    name: 'Admin Gallery',
-    description: 'Mengelola galeri foto dan dokumentasi kegiatan.',
-    status: 'active',
-    permissions: {
-      villageProfile: noAccess(),
-      agenda: noAccess(),
-      news: noAccess(),
-      library: noAccess(),
-      letterService: noAccess(),
-      villagePotential: noAccess(),
-      gallery: fullAccess(),
-      userManagement: noAccess(),
-    },
-  },
-])
+const {
+  roles,
+  modules,
+  permissionKeys,
+  permissionLabels,
+  findRoleByName,
+  toggleRoleStatus,
+  addRole,
+} = useAdminRoles()
 
 // --- Peran yang sedang dipilih ---
 const activeRoleId = ref(roles.value[0].id)
@@ -185,9 +40,7 @@ const activeRole = computed(() => roles.value.find((r) => r.id === activeRoleId.
 onMounted(() => {
   const roleFromQuery = route.query.role
   if (roleFromQuery) {
-    const matched = roles.value.find(
-      (r) => r.name.toLowerCase() === String(roleFromQuery).toLowerCase(),
-    )
+    const matched = findRoleByName(roleFromQuery)
     if (matched) activeRoleId.value = matched.id
   }
 })
@@ -196,24 +49,16 @@ function selectRole(roleId) {
   activeRoleId.value = roleId
 }
 
-// --- Tambah peran baru ---
-function addRole() {
-  const newRole = {
-    id: `role-${Date.now()}`,
-    name: 'Peran Baru',
-    description: 'Deskripsi peran belum diatur.',
-    status: 'active',
-    permissions: Object.fromEntries(modules.map((m) => [m.key, noAccess()])),
-  }
-  roles.value.push(newRole)
-  activeRoleId.value = newRole.id
+// --- Pindah ke Manajemen Pengguna, terfilter ke role tertentu ---
+// Dipanggil dari tombol "Kelola Admin" per baris peran, atau dari panel kanan.
+function goToUserManagement(role) {
+  router.push({ name: 'user-management-list', query: { role: role.name } })
 }
 
-// --- Toggle status active/inactive per role ---
-// Super Admin (isProtected) tidak boleh dinonaktifkan.
-function toggleRoleStatus(role) {
-  if (role.isProtected) return
-  role.status = role.status === 'active' ? 'inactive' : 'active'
+// --- Tambah peran baru ---
+function handleAddRole() {
+  const newRole = addRole()
+  activeRoleId.value = newRole.id
 }
 
 // --- Simpan / Batal ---
@@ -268,29 +113,41 @@ function cancel() {
       <div class="card p-4">
         <div class="flex items-center justify-between mb-3">
           <span class="role-title">PERAN</span>
-          <button class="icon-btn" title="Tambah peran" @click="addRole">
+          <button class="icon-btn" title="Tambah peran" @click="handleAddRole">
             <i class="pi pi-plus"></i>
           </button>
         </div>
 
         <div class="flex flex-col">
-          <button
+          <div
             v-for="role in roles"
             :key="role.id"
             class="role-item"
             :class="{ 'role-item-active': role.id === activeRoleId }"
-            @click="selectRole(role.id)"
           >
-            <span class="flex items-center gap-2">
-              <span
-                v-if="!role.isProtected"
-                class="w-1.5 h-1.5 rounded-full shrink-0"
-                :class="role.status === 'active' ? 'bg-success-500' : 'bg-neutral-300'"
-              ></span>
-              {{ role.name }}
-            </span>
-            <i v-if="role.id === activeRoleId" class="pi pi-chevron-right text-xs"></i>
-          </button>
+            <button class="role-item-select" @click="selectRole(role.id)">
+              <span class="flex items-center gap-2">
+                <span
+                  v-if="!role.isProtected"
+                  class="w-1.5 h-1.5 rounded-full shrink-0"
+                  :class="role.status === 'active' ? 'bg-success-500' : 'bg-neutral-300'"
+                ></span>
+                {{ role.name }}
+              </span>
+            </button>
+
+            <div class="flex items-center gap-1 shrink-0">
+              <button
+                class="manage-btn"
+                title="Kelola Admin ini di Manajemen Pengguna"
+                @click.stop="goToUserManagement(role)"
+              >
+                <i class="pi pi-users"></i>
+                Kelola
+              </button>
+              <i v-if="role.id === activeRoleId" class="pi pi-chevron-right text-xs"></i>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -303,18 +160,20 @@ function cancel() {
               <p class="text-sm text-neutral-500 mb-0">{{ activeRole.description }}</p>
             </div>
 
-            <!-- Toggle status active/inactive -- disembunyikan untuk Super Admin -->
-            <div v-if="!activeRole.isProtected" class="flex items-center gap-2 shrink-0">
-              <span
-                class="text-xs font-semibold"
-                :class="activeRole.status === 'active' ? 'text-success-600' : 'text-neutral-400'"
-              >
-                {{ activeRole.status === 'active' ? 'Active' : 'Deactive' }}
-              </span>
-              <ToggleSwitch
-                :model-value="activeRole.status === 'active'"
-                @update:model-value="toggleRoleStatus(activeRole)"
-              />
+            <div class="flex items-center gap-3 shrink-0">
+              <!-- Toggle status active/inactive -- disembunyikan untuk Super Admin -->
+              <div v-if="!activeRole.isProtected" class="flex items-center gap-2">
+                <span
+                  class="text-xs font-semibold"
+                  :class="activeRole.status === 'active' ? 'text-success-600' : 'text-neutral-400'"
+                >
+                  {{ activeRole.status === 'active' ? 'Active' : 'Deactive' }}
+                </span>
+                <ToggleSwitch
+                  :model-value="activeRole.status === 'active'"
+                  @update:model-value="toggleRoleStatus(activeRole)"
+                />
+              </div>
             </div>
           </div>
 
@@ -404,8 +263,6 @@ function cancel() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  text-align: left;
-  padding: 10px 12px;
   border-radius: 8px;
   font-size: 0.875rem;
   color: var(--color-neutral-600, #4b5563);
@@ -419,5 +276,31 @@ function cancel() {
   color: var(--color-neutral-900, #111827);
   font-weight: 600;
   border-left: 3px solid var(--color-neutral-800, #1f2937);
+}
+
+.role-item-select {
+  flex: 1;
+  text-align: left;
+  padding: 10px 12px;
+  background: transparent;
+}
+
+.manage-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.6875rem;
+  padding: 3px 6px;
+  border-radius: 6px;
+  color: var(--color-neutral-400, #9ca3af);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.role-item:hover .manage-btn {
+  opacity: 1;
+}
+.manage-btn:hover {
+  background: var(--color-neutral-200, #e5e7eb);
+  color: var(--color-neutral-700, #374151);
 }
 </style>
