@@ -65,23 +65,81 @@ function kirimNotifikasi() {
   alert('Notifikasi berhasil dikirim ke pemohon.')
 }
 
-// ====== Unduh draft (print area dokumen -> Save as PDF) ======
-function unduhDraft() {
-  window.print()
+// ====== Unduh draft sebagai PDF ======
+// SENGAJA tidak pakai window.print() -- itu mencetak SELURUH halaman
+// browser (navbar, breadcrumb, sidebar dari AdminLayout ikut kebawa),
+// karena elemen-elemen itu ada di komponen layout terpisah dan class
+// "print:hidden" di file ini tidak menjangkau ke sana.
+//
+// Solusinya: capture HANYA elemen pratinjau dokumen (previewRef) pakai
+// html2canvas, lalu convert jadi PDF pakai jsPDF. Dengan begini yang
+// ter-download murni isi suratnya saja, apapun struktur layout di luar
+// komponen ini.
+//
+// Butuh 2 package tambahan -- install dulu:
+//   npm install html2canvas jspdf
+const previewRef = ref(null)
+const downloading = ref(false)
+
+async function unduhDraft() {
+  if (!previewRef.value) return
+
+  downloading.value = true
+  try {
+    const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+      import('html2canvas-pro'),
+      import('jspdf'),
+    ])
+
+    const canvas = await html2canvas(previewRef.value, {
+      scale: 2, // resolusi lebih tinggi biar teks tidak buram
+      useCORS: true,
+      backgroundColor: '#ffffff',
+    })
+
+    const imgData = canvas.toDataURL('image/png')
+
+    // Halaman A4 potret dalam satuan mm
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const pageWidth = pdf.internal.pageSize.getWidth()
+    const pageHeight = pdf.internal.pageSize.getHeight()
+
+    const imgWidth = pageWidth
+    const imgHeight = (canvas.height * imgWidth) / canvas.width
+
+    let heightLeft = imgHeight
+    let position = 0
+
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+    heightLeft -= pageHeight
+
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight
+      pdf.addPage()
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      heightLeft -= pageHeight
+    }
+
+    pdf.save(`Draft-${suratId.value}.pdf`)
+  } catch (err) {
+    console.error('Gagal membuat PDF draft:', err)
+  } finally {
+    downloading.value = false
+  }
 }
 </script>
 
 <template>
   <div class="p-4 md:p-6">
     <!-- Header -->
-    <div class="flex items-center gap-3 mb-5 print:hidden">
+    <div class="flex items-center gap-3 mb-5">
       <h1 class="text-xl font-bold text-gray-800 m-0">ID: {{ suratId }}</h1>
       <Tag :value="statusMeta[status].label" :severity="statusMeta[status].severity" rounded />
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-5 items-start">
       <!-- ==================== KOLOM KIRI ==================== -->
-      <div class="flex flex-col gap-5 print:hidden">
+      <div class="flex flex-col gap-5">
         <!-- Hasil Verifikasi -->
         <Card>
           <template #title>
@@ -118,33 +176,39 @@ function unduhDraft() {
           </template>
         </Card>
 
-        <!-- Detail Otorisasi -->
-        <Card class="bg-gray-800 text-gray-50 [&_.p-card-body]:text-gray-50">
-          <template #title>
-            <span class="flex items-center gap-2 text-base font-semibold text-gray-50">
-              <i class="pi pi-key text-gray-300"></i> Detail Otorisasi
-            </span>
-          </template>
-          <template #content>
-            <div class="mb-4">
-              <div class="text-[11px] uppercase tracking-wide text-gray-400 mb-1">
-                Otorisator (Authorized By)
-              </div>
-              <div class="text-sm font-semibold">{{ otorisasi.otorisatorOleh }}</div>
-              <div class="text-sm text-gray-400">{{ otorisasi.jabatan }}</div>
-            </div>
+        <!--
+          Detail Otorisasi -- SENGAJA pakai <div> polos, BUKAN <Card>.
+          PrimeVue <Card> merender title/content di elemen internal yang
+          punya CSS variable warna sendiri (--p-card-title-color, dst)
+          dengan spesifisitas lebih tinggi daripada class Tailwind yang
+          dikirim dari luar, sehingga "text-gray-50" tidak selalu nyampe
+          ke title & sebagian teks -- jadi nyaris tak kelihatan di atas
+          background gelap. Pakai <div> biasa supaya semua warna murni
+          dikontrol Tailwind tanpa ketiban tema bawaan PrimeVue.
+        -->
+        <div class="bg-gray-800 text-gray-50 rounded-xl p-5 shadow-sm">
+          <span class="flex items-center gap-2 text-base font-semibold text-gray-50">
+            <i class="pi pi-key text-gray-300"></i> Detail Otorisasi
+          </span>
 
-            <div>
-              <div class="text-[11px] uppercase tracking-wide text-gray-400 mb-1">
-                Tipe Tanda Tangan
-              </div>
-              <div class="text-sm flex items-center gap-1.5">
-                <i class="pi pi-verified text-green-400"></i>
-                {{ otorisasi.tipeTandaTangan }}
-              </div>
+          <div class="mt-4 mb-4">
+            <div class="text-[11px] uppercase tracking-wide text-gray-400 mb-1">
+              Otorisator (Authorized By)
             </div>
-          </template>
-        </Card>
+            <div class="text-sm font-semibold text-gray-50">{{ otorisasi.otorisatorOleh }}</div>
+            <div class="text-sm text-gray-400">{{ otorisasi.jabatan }}</div>
+          </div>
+
+          <div>
+            <div class="text-[11px] uppercase tracking-wide text-gray-400 mb-1">
+              Tipe Tanda Tangan
+            </div>
+            <div class="text-sm flex items-center gap-1.5 text-gray-50">
+              <i class="pi pi-verified text-green-400"></i>
+              {{ otorisasi.tipeTandaTangan }}
+            </div>
+          </div>
+        </div>
 
         <!-- Status & Tindakan -->
         <Card>
@@ -185,25 +249,30 @@ function unduhDraft() {
       </div>
 
       <!-- ==================== KOLOM KANAN ==================== -->
-      <div class="print:col-span-full">
-        <Card class="print:shadow-none print:border-none">
+      <div>
+        <Card>
           <template #title>
-            <div class="flex items-center justify-between print:hidden">
+            <div class="flex items-center justify-between">
               <span class="flex items-center gap-2 text-base font-semibold">
                 <i class="pi pi-file text-gray-500"></i> Pratinjau Dokumen
               </span>
               <Button
-                label="Unduh Draft"
-                icon="pi pi-download"
+                :label="downloading ? 'Menyiapkan PDF...' : 'Unduh Draft'"
+                :icon="downloading ? 'pi pi-spin pi-spinner' : 'pi pi-download'"
                 text
                 size="small"
                 severity="secondary"
+                :disabled="downloading"
                 @click="unduhDraft"
               />
             </div>
           </template>
           <template #content>
-            <div class="bg-white border border-gray-200 rounded-lg px-10 py-10 text-[13.5px] leading-relaxed text-gray-800 print:border-none print:px-4">
+            <!-- previewRef: HANYA div ini yang di-capture jadi PDF -->
+            <div
+              ref="previewRef"
+              class="bg-white border border-gray-200 rounded-lg px-10 py-10 text-[13.5px] leading-relaxed text-gray-800"
+            >
               <div class="text-center text-2xl mb-2">
                 <i class="pi pi-shield text-gray-400"></i>
               </div>
@@ -259,7 +328,7 @@ function unduhDraft() {
                 <p class="m-0">{{ dokumen.tempatTanggal }}</p>
                 <p class="m-0">Kepala Desa</p>
 
-                <div class="ml-auto mt-3 mb-3 w-[200px] h-[90px] border border-dashed border-indigo-300 bg-indigo-50 rounded-lg flex items-center justify-center text-center text-[11px] text-indigo-500 print:border-solid">
+                <div class="ml-auto mt-3 mb-3 w-[200px] h-[90px] border border-dashed border-indigo-300 bg-indigo-50 rounded-lg flex items-center justify-center text-center text-[11px] text-indigo-500">
                   Area Tanda Tangan Digital
                 </div>
 
