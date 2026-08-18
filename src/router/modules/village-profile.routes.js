@@ -1,14 +1,7 @@
-/**
- * Route module untuk Profil Desa (village-profile). Mengikuti tabel
- * `profile_sections` + `profile_contents` di ERD backend.
- *
- * Sejarah, Visi & Misi, dan Struktur Organisasi SEMUA memakai 2 komponen
- * yang sama (VillageProfileListView.vue, VillageProfileFormView.vue) --
- * yang membedakan cuma `meta.sectionSlug`. Ini supaya tidak perlu bikin
- * 6 file nyaris identik untuk 3 section yang skemanya sama persis.
- */
+
 import VillageProfileListView from '@/views/village-profile/VillageProfileListView.vue'
 import VillageProfileFormView from '@/views/village-profile/VillageProfileFormView.vue'
+import RegionDataView from '@/views/village-profile/RegionDataView.vue'
 
 function buildSectionRoutes(slug, breadcrumbLabel) {
   return [
@@ -30,6 +23,12 @@ function buildSectionRoutes(slug, breadcrumbLabel) {
       component: VillageProfileFormView,
       meta: { sectionSlug: slug, breadcrumb: ['Profil Desa', breadcrumbLabel, 'Edit'] },
     },
+    {
+    path: 'village-profile/region',
+    name: 'village-profile-region',
+    component: RegionDataView,
+    meta: { breadcrumb: ['Profil Desa', 'Data Wilayah'] },
+    }
   ]
 }
 
@@ -37,4 +36,5 @@ export default [
   ...buildSectionRoutes('history', 'Sejarah'),
   ...buildSectionRoutes('vision-mission', 'Visi & Misi'),
   ...buildSectionRoutes('organizational-structure', 'Struktur Organisasi'),
+  
 ]
