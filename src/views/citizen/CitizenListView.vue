@@ -1,10 +1,12 @@
 <script setup>
 
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import * as XLSX from 'xlsx'
 import { FilterMatchMode } from '@primevue/core/api'
+import { useConfirm } from 'primevue/useconfirm'
 
+import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import InputText from 'primevue/inputtext'
@@ -16,8 +18,8 @@ import FileUpload from 'primevue/fileupload'
 import Message from 'primevue/message'
 
 const router = useRouter()
+const confirm = useConfirm()
 
-// Data dummy — tidak diubah dari versi sebelumnya
 const residents = ref([
   {
     id: 1,
@@ -91,15 +93,35 @@ function editResident(id) {
   router.push({ name: 'citizen-edit', params: { id } })
 }
 
-function deleteResident(id) {
-  residents.value = residents.value.filter(resident => resident.id !== id)
-  selectedResidents.value = selectedResidents.value.filter(resident => resident.id !== id)
+function deleteResident(data) {
+  confirm.require({
+    message: `Hapus data warga "${data.name}" dengan NIK "${data.nationalId}"?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: () => {
+      residents.value = residents.value.filter(resident => resident.id !== data.id)
+      selectedResidents.value = selectedResidents.value.filter(resident => resident.id !== data.id)
+    },
+  })
 }
 
 function deleteSelected() {
-  const idsToDelete = new Set(selectedResidents.value.map(resident => resident.id))
-  residents.value = residents.value.filter(resident => !idsToDelete.has(resident.id))
-  selectedResidents.value = []
+  confirm.require({
+    message: `Hapus ${selectedResidents.value.length} data warga terpilih?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: () => {
+      const idsToDelete = new Set(selectedResidents.value.map(resident => resident.id))
+      residents.value = residents.value.filter(resident => !idsToDelete.has(resident.id))
+      selectedResidents.value = []
+    },
+  })
 }
 
 function normalizeKey(key) {
@@ -183,83 +205,80 @@ function handleFileSelect(event) {
 </script>
 
 <template>
-  <div class="min-h-full px-6 py-6 text-neutral-800 lg:px-8">
+  <div>
 
-    <h1 class="m-0 mb-1 text-[22px] font-bold text-primary-900">
-      Kelola Data Warga
-    </h1>
+    <div class="mb-6">
+      <h1 class="m-0 text-2xl font-bold text-primary-900">
+        Kelola Data Warga
+      </h1>
 
-    <p class="m-0 mb-5 text-sm text-neutral-500">
-      Kelola data kependudukan warga desa.
-    </p>
+      <p class="m-0 mt-1 text-sm text-neutral-500">
+        Kelola data kependudukan warga desa.
+      </p>
+    </div>
 
-    <div class="rounded-xl border border-neutral-200 bg-white shadow-sm">
+    <Card>
+      <template #content>
 
-      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 px-6 py-4">
-
-        <h2 class="m-0 text-base font-semibold text-primary-900">
-          Data Warga
-        </h2>
-
-        <div class="flex flex-wrap items-center gap-2">
-
-          <IconField>
+        <div class="mb-4 flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
+          <IconField class="w-full sm:w-72">
             <InputIcon class="pi pi-search text-neutral-400" />
             <InputText
               v-model="filters.global.value"
               placeholder="Cari nama, NIK, atau alamat"
-              class="w-[220px] rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
+              class="w-full rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
             />
           </IconField>
 
-          <Button
-            label="Hapus"
-            icon="pi pi-trash"
-            severity="secondary"
-            outlined
-            :disabled="selectedResidents.length === 0"
-            class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
-            @click="deleteSelected"
-          />
+          <div class="flex flex-wrap items-center gap-2">
 
-          <FileUpload
-            mode="basic"
-            accept=".xlsx,.xls,.csv"
-            chooseLabel="Import Data Warga"
-            chooseIcon="pi pi-upload"
-            :auto="false"
-            customUpload
-            :pt="{
-              root: { class: 'inline-flex' },
-              chooseButton: {
-                class:
-                  'inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100',
-              },
-            }"
-            @select="handleFileSelect"
-          />
+            <Button
+              label="Hapus"
+              icon="pi pi-trash"
+              severity="secondary"
+              outlined
+              :disabled="selectedResidents.length === 0"
+              class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
+              @click="deleteSelected"
+            />
 
-          <Button
-            label="Tambah Warga"
-            icon="pi pi-plus"
-            class="rounded-lg border border-transparent bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
-            @click="createResident"
-          />
+            <FileUpload
+              mode="basic"
+              accept=".xlsx,.xls,.csv"
+              chooseLabel="Import Data Warga"
+              chooseIcon="pi pi-upload"
+              :auto="false"
+              customUpload
+              :pt="{
+                root: { class: 'inline-flex' },
+                chooseButton: {
+                  class:
+                    'inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100',
+                },
+              }"
+              @select="handleFileSelect"
+            />
 
+            <Button
+              label="Tambah Warga"
+              icon="pi pi-plus"
+              class="rounded-lg border border-transparent bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
+              @click="createResident"
+            />
+
+          </div>
         </div>
-      </div>
 
-      <div v-if="importError || importSuccess" class="px-6 pt-4">
-        <Message v-if="importError" severity="error" :closable="false" class="text-[13px]">
-          {{ importError }}
-        </Message>
+        <div v-if="importError || importSuccess" class="mb-4">
+          <Message v-if="importError" severity="error" :closable="false" class="text-[13px]">
+            {{ importError }}
+          </Message>
 
-        <Message v-if="importSuccess" severity="success" :closable="false" class="text-[13px]">
-          {{ importSuccess }}
-        </Message>
-      </div>
+          <Message v-if="importSuccess" severity="success" :closable="false" class="text-[13px]">
+            {{ importSuccess }}
+          </Message>
+        </div>
 
-      <div class="px-6 py-4">
         <DataTable
           v-model:selection="selectedResidents"
           :value="residents"
@@ -326,14 +345,14 @@ function handleFileSelect(event) {
                   severity="danger"
                   class="h-8 w-8 text-neutral-500 hover:bg-danger-50 hover:text-danger-600"
                   title="Hapus"
-                  @click="deleteResident(data.id)"
+                  @click="deleteResident(data)"
                 />
               </div>
             </template>
           </Column>
         </DataTable>
-      </div>
 
-    </div>
+      </template>
+    </Card>
   </div>
 </template>
