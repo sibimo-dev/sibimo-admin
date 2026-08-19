@@ -72,12 +72,12 @@ function kirimNotifikasi() {
 // "print:hidden" di file ini tidak menjangkau ke sana.
 //
 // Solusinya: capture HANYA elemen pratinjau dokumen (previewRef) pakai
-// html2canvas, lalu convert jadi PDF pakai jsPDF. Dengan begini yang
+// html2canvas-pro, lalu convert jadi PDF pakai jsPDF. Dengan begini yang
 // ter-download murni isi suratnya saja, apapun struktur layout di luar
 // komponen ini.
 //
 // Butuh 2 package tambahan -- install dulu:
-//   npm install html2canvas jspdf
+//   npm install html2canvas-pro jspdf
 const previewRef = ref(null)
 const downloading = ref(false)
 
@@ -132,8 +132,10 @@ async function unduhDraft() {
 <template>
   <div class="p-4 md:p-6">
     <!-- Header -->
+    <!-- font judul disamakan ke text-2xl font-bold, konsisten dengan
+         h1 di LetterTypeListView.vue ("Pengelolaan Tipe Surat") -->
     <div class="flex items-center gap-3 mb-5">
-      <h1 class="text-xl font-bold text-gray-800 m-0">ID: {{ suratId }}</h1>
+      <h1 class="text-2xl font-bold text-gray-800 m-0">ID: {{ suratId }}</h1>
       <Tag :value="statusMeta[status].label" :severity="statusMeta[status].severity" rounded />
     </div>
 

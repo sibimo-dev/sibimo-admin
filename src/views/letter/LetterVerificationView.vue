@@ -76,7 +76,9 @@ async function tolakPermohonan() {
 
 <template>
   <div class="min-h-screen bg-slate-50">
-    <h1 class="text-2xl font-semibold text-slate-800 mb-5">Verifikasi Dokumen #{{ requestId }}</h1>
+    <!-- font judul disamakan ke font-bold, konsisten dengan h1 di
+         LetterTypeListView.vue ("Pengelolaan Tipe Surat") -->
+    <h1 class="text-2xl font-bold text-slate-800 mb-5">Verifikasi Dokumen #{{ requestId }}</h1>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <!-- Kolom kiri: info pemohon + dokumen + preview -->
@@ -176,13 +178,13 @@ async function tolakPermohonan() {
           </div>
 
           <div v-if="activePreview" class="absolute top-3 right-3">
-  <AppButton
-    :label="`Pratinjau ${activePreview.nama.split('_')[0]}`"
-    icon="pi pi-search"
-    variant="light"
-    size="small"
-  />
-</div>
+            <AppButton
+              :label="`Pratinjau ${activePreview.nama.split('_')[0]}`"
+              icon="pi pi-search"
+              variant="light"
+              size="small"
+            />
+          </div>
         </div>
       </div>
 
