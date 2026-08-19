@@ -24,12 +24,12 @@ const authStore = useAuthStore()
 const filterPopoverRef = ref()
 const activeFilterCount = ref(0)
 
-const periodeOptions = [
-  { label: 'Bulan Ini', value: 'bulan_ini' },
-  { label: '3 Bulan Terakhir', value: '3_bulan' },
-  { label: 'Tahun Ini', value: 'tahun_ini' },
+const periodOptions = [
+  { label: 'Bulan Ini', value: 'this_month' },
+  { label: '3 Bulan Terakhir', value: 'last_3_months' },
+  { label: 'Tahun Ini', value: 'this_year' },
 ]
-const periode = ref('bulan_ini')
+const period = ref('this_month')
 
 // === Ringkasan utama ===
 const stats = [
@@ -39,7 +39,7 @@ const stats = [
   { label: 'Tercetak', value: 200, delta: '+15 Surat', up: true, icon: 'pi pi-print' },
 ]
 
-const targetVerifikasi = 85 // persen, dummy
+const verificationTarget = 85 // persen, dummy
 
 
 // === Tabel pengajuan surat ===
@@ -51,25 +51,25 @@ const statusTabs = [
 ]
 const activeTab = ref('semua')
 
-const allPengajuan = ref([
-  { id: 1, nama: 'Ana Amelia Revalina', jenis: 'Surat Permohonan Nikah', tanggal: '26 Agu 2026', status: 'Menunggu' },
-  { id: 2, nama: 'Budi Santoso', jenis: 'Surat Keterangan Domisili', tanggal: '25 Agu 2026', status: 'Terverifikasi' },
-  { id: 3, nama: 'Siti Aminah', jenis: 'Surat Pengantar KTP', tanggal: '25 Agu 2026', status: 'Menunggu' },
-  { id: 4, nama: 'Rudi Hartono', jenis: 'Surat Keterangan Usaha', tanggal: '24 Agu 2026', status: 'Ditolak' },
-  { id: 5, nama: 'Wati Suryani', jenis: 'Surat Permohonan Nikah', tanggal: '23 Agu 2026', status: 'Terverifikasi' },
-  { id: 6, nama: 'Agus Prasetyo', jenis: 'Surat Keterangan Domisili', tanggal: '22 Agu 2026', status: 'Menunggu' },
+const allSubmissions = ref([
+  { id: 1, name: 'Ana Amelia Revalina', letterType: 'Surat Permohonan Nikah', date: '26 Agu 2026', status: 'Menunggu' },
+  { id: 2, name: 'Budi Santoso', letterType: 'Surat Keterangan Domisili', date: '25 Agu 2026', status: 'Terverifikasi' },
+  { id: 3, name: 'Siti Aminah', letterType: 'Surat Pengantar KTP', date: '25 Agu 2026', status: 'Menunggu' },
+  { id: 4, name: 'Rudi Hartono', letterType: 'Surat Keterangan Usaha', date: '24 Agu 2026', status: 'Ditolak' },
+  { id: 5, name: 'Wati Suryani', letterType: 'Surat Permohonan Nikah', date: '23 Agu 2026', status: 'Terverifikasi' },
+  { id: 6, name: 'Agus Prasetyo', letterType: 'Surat Keterangan Domisili', date: '22 Agu 2026', status: 'Menunggu' },
 ])
 
 const statusSeverity = { Menunggu: 'warn', Terverifikasi: 'success', Ditolak: 'danger' }
 
 const search = ref('')
 
-const filteredPengajuan = computed(() => {
-  let rows = allPengajuan.value
+const filteredSubmissions = computed(() => {
+  let rows = allSubmissions.value
   if (activeTab.value !== 'semua') rows = rows.filter((r) => r.status === activeTab.value)
   if (search.value.trim()) {
     const q = search.value.toLowerCase()
-    rows = rows.filter((r) => r.nama.toLowerCase().includes(q) || r.jenis.toLowerCase().includes(q))
+    rows = rows.filter((r) => r.name.toLowerCase().includes(q) || r.letterType.toLowerCase().includes(q))
   }
   return rows
 })
@@ -79,22 +79,22 @@ function initials(name) {
 }
 
 function handleApplyFilter(filter) {
-  activeFilterCount.value = (filter.bulan ? 1 : 0) + filter.jenisSurat.length
+  activeFilterCount.value = (filter.bulan ? 1 : 0) + filter.letterType.length
 }
 
 // === Widget: Aduan terbaru ===
-const aduanTerbaru = ref([
-  { id: 1, judul: 'Jalan rusak di Dusun Kaliurang', pelapor: 'Rudi Hartono', waktu: '2 jam lalu', status: 'Baru' },
-  { id: 2, judul: 'Lampu jalan mati 3 hari', pelapor: 'Wati Suryani', waktu: '5 jam lalu', status: 'Diproses' },
-  { id: 3, judul: 'Sampah menumpuk di TPS RW 03', pelapor: 'Agus Prasetyo', waktu: '1 hari lalu', status: 'Baru' },
+const recentComplaints = ref([
+  { id: 1, title: 'Jalan rusak di Dusun Kaliurang', reporter: 'Rudi Hartono', time: '2 jam lalu', status: 'Baru' },
+  { id: 2, title: 'Lampu jalan mati 3 hari', reporter: 'Wati Suryani', time: '5 jam lalu', status: 'Diproses' },
+  { id: 3, title: 'Sampah menumpuk di TPS RW 03', reporter: 'Agus Prasetyo', time: '1 hari lalu', status: 'Baru' },
 ])
-const aduanSeverity = { Baru: 'danger', Diproses: 'warn', Selesai: 'success' }
+const complaintSeverity = { Baru: 'danger', Diproses: 'warn', Selesai: 'success' }
 
 // === Widget: Agenda terdekat (Timeline) ===
-const agendaTerdekat = ref([
-  { id: 1, judul: 'Musyawarah Desa', tanggal: '18 Agustus', waktu: '09:00 WIB', tempat: 'Balai Desa' },
-  { id: 2, judul: 'Posyandu Balita', tanggal: '20 Agustus', waktu: '08:00 WIB', tempat: 'Pos RW 02' },
-  { id: 3, judul: 'Kerja Bakti Lingkungan', tanggal: '23 Agustus', waktu: '07:00 WIB', tempat: 'Dusun Kaliurang' },
+const upcomingAgenda = ref([
+  { id: 1, name: 'Musyawarah Desa', date: '18 Agustus', time: '09:00 WIB', location: 'Balai Desa' },
+  { id: 2, name: 'Posyandu Balita', date: '20 Agustus', time: '08:00 WIB', location: 'Pos RW 02' },
+  { id: 3, name: 'Kerja Bakti Lingkungan', date: '23 Agustus', time: '07:00 WIB', location: 'Dusun Kaliurang' },
 ])
 </script>
 
@@ -109,7 +109,7 @@ const agendaTerdekat = ref([
         <p class="text-sm text-neutral-500">Berikut ringkasan aktivitas SIBIMO.</p>
       </div>
       <div class="flex items-center gap-2">
-        <Select v-model="periode" :options="periodeOptions" optionLabel="label" optionValue="value" class="!text-sm" />
+        <Select v-model="period" :options="periodOptions" optionLabel="label" optionValue="value" class="!text-sm" />
         <AppButton icon="pi pi-refresh" variant="ghost" aria-label="Muat ulang" />
       </div>
     </div>
@@ -215,29 +215,29 @@ const agendaTerdekat = ref([
             </thead>
             <tbody>
               <tr
-                v-for="row in filteredPengajuan"
+                v-for="row in filteredSubmissions"
                 :key="row.id"
                 class="border-t border-neutral-100 hover:bg-primary-50/40 transition-colors"
               >
                 <td class="px-5 py-3">
                   <div class="flex items-center gap-2.5">
-                    <Avatar :label="initials(row.nama)" shape="circle" class="!bg-primary-100 !text-primary-700 !text-xs !w-8 !h-8" />
-                    <span class="text-neutral-800 font-medium">{{ row.nama }}</span>
+                    <Avatar :label="initials(row.name)" shape="circle" class="!bg-primary-100 !text-primary-700 !text-xs !w-8 !h-8" />
+                    <span class="text-neutral-800 font-medium">{{ row.name }}</span>
                   </div>
                 </td>
-                <td class="px-5 py-3 text-neutral-600">{{ row.jenis }}</td>
-                <td class="px-5 py-3 text-neutral-500">{{ row.tanggal }}</td>
+                <td class="px-5 py-3 text-neutral-600">{{ row.letterType }}</td>
+                <td class="px-5 py-3 text-neutral-500">{{ row.date }}</td>
                 <td class="px-5 py-3">
                   <Tag :value="row.status" :severity="statusSeverity[row.status]" />
                 </td>
                 <td class="px-5 py-3">
                   <div class="flex justify-end gap-1">
-                    <AppButton icon="pi pi-eye" variant="ghost" size="small" :aria-label="`Lihat ${row.nama}`" />
-                    <AppButton icon="pi pi-print" variant="ghost" size="small" :aria-label="`Cetak ${row.nama}`" />
+                    <AppButton icon="pi pi-eye" variant="ghost" size="small" :aria-label="`Lihat ${row.name}`" />
+                    <AppButton icon="pi pi-print" variant="ghost" size="small" :aria-label="`Cetak ${row.name}`" />
                   </div>
                 </td>
               </tr>
-              <tr v-if="filteredPengajuan.length === 0">
+              <tr v-if="filteredSubmissions.length === 0">
                 <td colspan="5" class="px-5 py-10 text-center text-neutral-400 text-sm">
                   Tidak ada pengajuan yang cocok.
                 </td>
@@ -253,15 +253,15 @@ const agendaTerdekat = ref([
         <div class="bg-white rounded-xl border border-neutral-200 p-5">
           <div class="flex items-center justify-between mb-4">
             <p class="text-sm font-semibold text-neutral-900">Aduan Terbaru</p>
-            <router-link to="/aduan" class="text-xs text-primary-600 hover:underline">Lihat semua</router-link>
+            <router-link to="/complaint" class="text-xs text-primary-600 hover:underline">Lihat semua</router-link>
           </div>
           <div class="flex flex-col gap-4">
-            <div v-for="a in aduanTerbaru" :key="a.id" class="flex items-start justify-between gap-2">
+            <div v-for="c in recentComplaints" :key="c.id" class="flex items-start justify-between gap-2">
               <div class="min-w-0">
-                <p class="text-sm text-neutral-800 truncate">{{ a.judul }}</p>
-                <p class="text-xs text-neutral-400 mt-0.5">{{ a.pelapor }} &middot; {{ a.waktu }}</p>
+                <p class="text-sm text-neutral-800 truncate">{{ c.title }}</p>
+                <p class="text-xs text-neutral-400 mt-0.5">{{ c.reporter }} &middot; {{ c.time }}</p>
               </div>
-              <Tag :value="a.status" :severity="aduanSeverity[a.status]" class="shrink-0 !text-[10px]" />
+              <Tag :value="c.status" :severity="complaintSeverity[c.status]" class="shrink-0 !text-[10px]" />
             </div>
           </div>
         </div>
@@ -273,19 +273,19 @@ const agendaTerdekat = ref([
             <router-link to="/agenda" class="text-xs text-primary-600 hover:underline">Lihat semua</router-link>
           </div>
           <div class="flex flex-col">
-            <div v-for="(item, idx) in agendaTerdekat" :key="item.id" class="flex gap-3">
+            <div v-for="(item, idx) in upcomingAgenda" :key="item.id" class="flex gap-3">
               <!-- Dot + garis penghubung -->
               <div class="flex flex-col items-center">
                 <span class="w-2.5 h-2.5 rounded-full bg-primary-500 border-2 border-white shadow shrink-0 mt-1" />
                 <span
-                  v-if="idx < agendaTerdekat.length - 1"
+                  v-if="idx < upcomingAgenda.length - 1"
                   class="w-px flex-1 bg-neutral-200 my-1"
                 />
               </div>
-              <div :class="idx < agendaTerdekat.length - 1 ? 'pb-4' : ''">
-                <p class="text-sm text-neutral-800 font-medium">{{ item.judul }}</p>
+              <div :class="idx < upcomingAgenda.length - 1 ? 'pb-4' : ''">
+                <p class="text-sm text-neutral-800 font-medium">{{ item.name }}</p>
                 <p class="text-xs text-neutral-400">
-                  {{ item.tanggal }} &middot; {{ item.waktu }} &middot; {{ item.tempat }}
+                  {{ item.date }} &middot; {{ item.time }} &middot; {{ item.location }}
                 </p>
               </div>
             </div>
