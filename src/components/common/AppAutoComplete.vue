@@ -1,27 +1,5 @@
 <script setup>
-/**
- * AppAutocomplete - "cari sambil ketik" dengan label + error, pasangan
- * dari AppSelect tapi untuk data yang jumlahnya banyak (misal daftar
- * warga/citizens) supaya nggak perlu scroll dropdown panjang.
- *
- * Dipakai di form manapun yang butuh pilih 1 warga dari tabel `citizens`
- * (Peminjaman Buku, Pengajuan Surat, Pengaduan, dll) -- bukan cuma
- * Perpustakaan, karena `citizens` adalah tabel bersama semua modul.
- *
- * Contoh pakai:
- *   <AppAutocomplete
- *     v-model="form.citizen_id"
- *     label="Nama Anggota"
- *     :options="anggotaList"
- *     option-label="full_name"
- *     option-value="citizen_id"
- *     placeholder="Ketik nama warga..."
- *   />
- *
- * Untuk data besar dari API (bukan dummy lokal), ganti isi function
- * `search()` di bawah dengan panggilan service + debounce, alih-alih
- * filter array lokal.
- */
+
 import { ref, computed } from 'vue'
 import AutoComplete from 'primevue/autocomplete'
 
@@ -31,7 +9,9 @@ const props = defineProps({
   options: { type: Array, required: true }, // array object lengkap, misal daftar citizens
   optionLabel: { type: String, default: 'label' }, // field yang ditampilkan, misal 'full_name'
   optionValue: { type: String, default: 'value' }, // field yang jadi ID, misal 'citizen_id'
+  searchFields: { type: Array, default: null }, // field(s) yang ikut dicocokkan saat mengetik, misal ['label', 'isbn']. Default: cuma optionLabel.
   placeholder: { type: String, default: 'Ketik untuk mencari...' },
+  emptyMessage: { type: String, default: 'Tidak ada hasil ditemukan' },
   error: { type: String, default: '' },
   required: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
@@ -51,13 +31,21 @@ const selectedObject = computed({
   },
 })
 
+// Field-field yang ikut dicocokkan saat mencari -- default cuma optionLabel
+// (perilaku lama tetap sama kalau prop searchFields tidak diisi).
+const effectiveSearchFields = computed(() => (props.searchFields?.length ? props.searchFields : [props.optionLabel]))
+
 function search(event) {
   const query = event.query.toLowerCase().trim()
   // TODO kalau datanya dari API (bukan dummy lokal): panggil service di sini,
   // misal `searchCitizens(query)`, lalu isi `suggestions.value` dari hasilnya.
   suggestions.value = !query
     ? props.options.slice(0, 10) // tampilkan 10 pertama kalau belum ngetik apa-apa
-    : props.options.filter((o) => String(o[props.optionLabel]).toLowerCase().includes(query))
+    : props.options.filter((o) =>
+        effectiveSearchFields.value.some((field) =>
+          String(o[field] ?? '').toLowerCase().includes(query),
+        ),
+      )
 }
 </script>
 
@@ -79,10 +67,15 @@ function search(event) {
       input-class="w-full"
       @complete="search"
     >
-      <template #option="{ option }">
-        <div>
-          <p class="text-sm">{{ option[optionLabel] }}</p>
-        </div>
+      <template #option="slotProps">
+        <slot name="option" v-bind="slotProps">
+          <div>
+            <p class="text-sm">{{ slotProps.option[optionLabel] }}</p>
+          </div>
+        </slot>
+      </template>
+      <template #empty>
+        <div class="px-3 py-2 text-sm text-neutral-400">{{ emptyMessage }}</div>
       </template>
     </AutoComplete>
     <span v-if="error" class="text-xs text-red-500">{{ error }}</span>

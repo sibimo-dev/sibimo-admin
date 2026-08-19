@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import InputText from 'primevue/inputtext'
 import Tag from 'primevue/tag'
+import Dialog from 'primevue/dialog'
 import AppButton from '@/components/common/AppButton.vue'
 import AppDataTable from '@/components/common/AppDataTable.vue'
 
@@ -18,12 +19,18 @@ const dummyLoans = ref([
 
 const keyword = ref('')
 const selectedLoan = ref(null)
+const showReturnDialog = ref(false)
 
 // Bukti pengembalian terakhir yang berhasil disimpan -- dipakai sebagai
-// sumber data struk cetak (print). null berarti belum ada transaksi yang
-// bisa dicetak (misal baru buka halaman, atau baru pilih baris tapi belum
-// klik "Proses Pengembalian").
+// sumber data preview & struk cetak. null berarti belum ada transaksi
+// yang bisa dicetak (misal baru buka halaman, atau baru pilih baris
+// tapi belum klik "Proses Pengembalian").
 const returnReceipt = ref(null)
+
+// Dialog preview bukti pengembalian -- muncul mengambang setelah proses
+// berhasil, TIDAK langsung memanggil window.print(). User baru mencetak
+// kalau menekan tombol "Cetak" di dalam dialog ini.
+const showReceiptDialog = ref(false)
 
 // Daftar peminjaman yang belum dikembalikan, difilter live sesuai keyword
 // (cari lewat loan_id atau nama anggota). Kalau backend sudah siap, ganti
@@ -64,6 +71,7 @@ const totalFine = computed(() => (statusInfo.value ? statusInfo.value.days * FIN
 function selectRow(loan) {
   selectedLoan.value = loan
   returnReceipt.value = null
+  showReturnDialog.value = true
 }
 
 async function processReturn() {
@@ -85,7 +93,7 @@ async function processReturn() {
   console.log('Payload ke API:', payload)
   toast.add({ severity: 'success', summary: 'Pengembalian berhasil dicatat (dummy)', life: 2500 })
 
-  // Simpan snapshot data buat bukti cetak, sebelum data hilang dari daftar.
+  // Simpan snapshot data buat preview & struk cetak, sebelum data hilang dari daftar.
   returnReceipt.value = {
     loan_id: selectedLoan.value.loan_id,
     full_name: selectedLoan.value.full_name,
@@ -100,15 +108,28 @@ async function processReturn() {
   // Hilangkan dari daftar yang belum kembali (dummy) -- ganti dengan
   // refetch daftar dari API setelah request di atas berhasil.
   dummyLoans.value = dummyLoans.value.filter((l) => l.loan_id !== selectedLoan.value.loan_id)
+
+  // Tutup dialog form, lalu buka dialog preview bukti (bukan langsung print).
+  showReturnDialog.value = false
   selectedLoan.value = null
+  showReceiptDialog.value = true
 }
 
+// Dipanggil dari tombol "Cetak" DI DALAM dialog preview -- baru di titik
+// ini window.print() dipanggil, jadi user selalu lihat preview dulu.
+// Modal (mask + panel) otomatis disembunyikan saat print lewat CSS di
+// bawah, jadi yang tercetak cuma area struk khusus print.
 function printReturnReceipt() {
   if (!returnReceipt.value) return
   window.print()
 }
 
+function closeReceiptDialog() {
+  showReceiptDialog.value = false
+}
+
 function cancelForm() {
+  showReturnDialog.value = false
   selectedLoan.value = null
 }
 </script>
@@ -141,11 +162,21 @@ function cancelForm() {
           </template>
         </AppDataTable>
       </div>
+    </div>
 
-      <div v-if="selectedLoan" class="card max-w-2xl">
-        <div class="flex items-center justify-between mb-4">
+    <!-- Dialog mengambang: form proses pengembalian -->
+    <Dialog
+      v-model:visible="showReturnDialog"
+      modal
+      header="Proses Pengembalian"
+      :style="{ width: '40rem' }"
+      class="mx-4"
+      :closable="true"
+      @hide="cancelForm"
+    >
+      <div v-if="selectedLoan">
+        <div class="mb-4">
           <h2 class="font-semibold text-neutral-800">No. Peminjaman: {{ selectedLoan.loan_id }}</h2>
-          <AppButton icon="pi pi-times" variant="ghost" size="small" @click="cancelForm" />
         </div>
 
         <div class="grid grid-cols-2 gap-4 text-sm mb-5">
@@ -185,16 +216,45 @@ function cancelForm() {
           <AppButton label="Proses Pengembalian" variant="primary" @click="processReturn" />
         </div>
       </div>
+    </Dialog>
 
-      <!-- Muncul setelah transaksi pengembalian berhasil disimpan -->
-      <div v-if="returnReceipt" class="card max-w-2xl mt-4 flex items-center justify-between gap-3">
-        <div>
-          <p class="text-sm font-medium text-neutral-800">Pengembalian berhasil dicatat</p>
-          <p class="text-xs text-neutral-400">No. Peminjaman: {{ returnReceipt.loan_id }}</p>
+    <!-- Dialog mengambang: preview bukti pengembalian setelah berhasil diproses.
+         Klik "Proses Pengembalian" TIDAK langsung window.print(); yang muncul
+         cuma dialog preview ini. window.print() baru dipanggil kalau user
+         menekan tombol "Cetak Bukti" di dalamnya. -->
+    <Dialog
+      v-model:visible="showReceiptDialog"
+      modal
+      header="Bukti Pengembalian Buku"
+      :style="{ width: '32rem' }"
+      class="mx-4"
+      :closable="true"
+      @hide="closeReceiptDialog"
+    >
+      <div v-if="returnReceipt">
+        <div class="text-center mb-5">
+          <p class="text-sm text-neutral-500">Perpustakaan Desa</p>
         </div>
-        <AppButton label="Cetak Bukti Pengembalian" icon="pi pi-print" variant="secondary" @click="printReturnReceipt" />
+
+        <table class="w-full text-sm mb-6">
+          <tbody>
+            <tr><td class="py-1 pr-4 w-36 align-top text-neutral-500">No. Peminjaman</td><td class="align-top font-medium text-neutral-800">: {{ returnReceipt.loan_id }}</td></tr>
+            <tr><td class="py-1 pr-4 align-top text-neutral-500">Nama Anggota</td><td class="align-top font-medium text-neutral-800">: {{ returnReceipt.full_name }}</td></tr>
+            <tr><td class="py-1 pr-4 align-top text-neutral-500">Judul Buku</td><td class="align-top font-medium text-neutral-800">: {{ returnReceipt.title }}</td></tr>
+            <tr><td class="py-1 pr-4 align-top text-neutral-500">Tanggal Pinjam</td><td class="align-top font-medium text-neutral-800">: {{ returnReceipt.borrowed_at }}</td></tr>
+            <tr><td class="py-1 pr-4 align-top text-neutral-500">Jatuh Tempo</td><td class="align-top font-medium text-neutral-800">: {{ returnReceipt.due_date }}</td></tr>
+            <tr><td class="py-1 pr-4 align-top text-neutral-500">Tanggal Kembali</td><td class="align-top font-medium text-neutral-800">: {{ returnReceipt.returned_at }}</td></tr>
+            <tr><td class="py-1 pr-4 align-top text-neutral-500">Status</td><td class="align-top font-medium text-neutral-800">: {{ returnReceipt.status === 'Late' ? 'Terlambat' : 'Tepat Waktu' }}</td></tr>
+            <tr><td class="py-1 pr-4 align-top text-neutral-500">Denda</td><td class="align-top font-medium text-neutral-800">: Rp {{ returnReceipt.fine_amount.toLocaleString('id-ID') }}</td></tr>
+          </tbody>
+        </table>
+
+        <div class="flex justify-end gap-3">
+          <AppButton label="Tutup" variant="secondary" @click="closeReceiptDialog" />
+          <AppButton label="Cetak Bukti" icon="pi pi-print" variant="primary" @click="printReturnReceipt" />
+        </div>
       </div>
-    </div>
+    </Dialog>
 
     <!-- Area struk cetak -- tersembunyi di layar, hanya tampil saat window.print() -->
     <div v-if="returnReceipt" class="hidden print:block text-sm text-black">
@@ -233,6 +293,20 @@ function cancelForm() {
 @media print {
   @page {
     margin: 1.5cm;
+  }
+
+  /* PrimeVue men-teleport Dialog ke <body> dan membungkusnya dengan mask
+     terpisah dari panel dialog itu sendiri -- class "print:hidden" yang
+     dipasang lewat prop `class` Dialog hanya nempel ke panel, BUKAN ke
+     mask/overlay-nya, sehingga modal (termasuk tombol Tutup/Cetak) tetap
+     kelihatan saat window.print() dipanggil. Ditarget langsung lewat CSS
+     global di sini supaya seluruh modal disembunyikan saat cetak, dan
+     yang tampil cuma area struk khusus print di atas.
+     Kalau versi PrimeVue kamu berbeda, cek nama class mask lewat inspect
+     element pada elemen pembungkus paling luar saat dialog terbuka. */
+  .p-dialog-mask,
+  .p-overlay-mask {
+    display: none !important;
   }
 }
 </style>
