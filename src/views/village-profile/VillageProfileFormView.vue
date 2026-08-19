@@ -155,7 +155,7 @@ function saveMain() {
 </script>
 
 <template>
-  <div class="min-h-full px-6 py-6 text-slate-800 lg:px-8">
+  <div class="min-h-full text-slate-800">
     <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
       <h1 class="m-0 text-[22px] font-bold text-slate-900">
         {{ pageTitle }}
