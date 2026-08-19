@@ -162,10 +162,12 @@ function handleDelete(role) {
 
 <template>
   <div>
-    <div class="card p-4">
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
       <!-- Header -->
       <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <h1 class="page-title mb-0">Manajemen Pengguna</h1>
+        <!-- font judul disamakan ke text-2xl font-bold, konsisten
+             dengan h1 di LetterTypeListView.vue -->
+        <h1 class="text-2xl font-bold text-gray-800 mb-0">Manajemen Pengguna</h1>
 
         <div class="flex items-center gap-3">
           <AppInput
@@ -185,24 +187,24 @@ function handleDelete(role) {
       <!-- Tabel -->
       <table class="w-full text-sm">
         <thead>
-          <tr class="text-left border-b border-neutral-100">
+          <tr class="text-left border-b border-gray-100">
             <th class="py-3 w-10">
               <Checkbox v-model="allSelected" :binary="true" />
             </th>
-            <th class="py-3 font-semibold text-neutral-700 cursor-pointer" @click="toggleSort('name')">
-              Name <i class="pi pi-sort-alt text-xs text-neutral-400"></i>
+            <th class="py-3 font-semibold text-gray-700 cursor-pointer" @click="toggleSort('name')">
+              Name <i class="pi pi-sort-alt text-xs text-gray-400"></i>
             </th>
-            <th class="py-3 font-semibold text-neutral-700 cursor-pointer" @click="toggleSort('role')">
-              Role / Posisi <i class="pi pi-sort-alt text-xs text-neutral-400"></i>
+            <th class="py-3 font-semibold text-gray-700 cursor-pointer" @click="toggleSort('role')">
+              Role / Posisi <i class="pi pi-sort-alt text-xs text-gray-400"></i>
             </th>
-            <th class="py-3 font-semibold text-neutral-700 cursor-pointer" @click="toggleSort('department')">
-              Departmen <i class="pi pi-sort-alt text-xs text-neutral-400"></i>
+            <th class="py-3 font-semibold text-gray-700 cursor-pointer" @click="toggleSort('department')">
+              Departmen <i class="pi pi-sort-alt text-xs text-gray-400"></i>
             </th>
-            <th class="py-3 font-semibold text-neutral-700 cursor-pointer" @click="toggleSort('accessLevel')">
-              Hak Akses <i class="pi pi-sort-alt text-xs text-neutral-400"></i>
+            <th class="py-3 font-semibold text-gray-700 cursor-pointer" @click="toggleSort('accessLevel')">
+              Hak Akses <i class="pi pi-sort-alt text-xs text-gray-400"></i>
             </th>
-            <th class="py-3 font-semibold text-neutral-700 cursor-pointer" @click="toggleSort('status')">
-              Status <i class="pi pi-sort-alt text-xs text-neutral-400"></i>
+            <th class="py-3 font-semibold text-gray-700 cursor-pointer" @click="toggleSort('status')">
+              Status <i class="pi pi-sort-alt text-xs text-gray-400"></i>
             </th>
             <th class="py-3"></th>
           </tr>
@@ -211,24 +213,24 @@ function handleDelete(role) {
           <tr
             v-for="role in filteredUsers"
             :key="role.id"
-            class="border-b border-neutral-50"
+            class="border-b border-gray-50"
           >
             <td class="py-3">
               <Checkbox v-model="selectedIds" :value="role.id" />
             </td>
             <td class="py-3">
               <div class="flex items-center gap-2">
-                <div class="avatar-placeholder"></div>
-                <span class="font-medium text-neutral-800">{{ role.userName }}</span>
+                <div class="w-7 h-7 rounded-full bg-gray-200 shrink-0"></div>
+                <span class="font-medium text-gray-800">{{ role.userName }}</span>
               </div>
             </td>
-            <td class="py-3 text-primary-600 font-medium">{{ role.positionTitle }}</td>
-            <td class="py-3 text-neutral-600">{{ role.department }}</td>
-            <td class="py-3 text-neutral-600">{{ role.accessLabel }}</td>
+            <td class="py-3 text-blue-600 font-medium">{{ role.positionTitle }}</td>
+            <td class="py-3 text-gray-600">{{ role.department }}</td>
+            <td class="py-3 text-gray-600">{{ role.accessLabel }}</td>
             <td class="py-3">
               <button
-                class="status-toggle"
-                :class="{ 'status-toggle-locked': role.isProtected }"
+                class="bg-transparent border-0 p-0 leading-none"
+                :class="role.isProtected ? 'cursor-not-allowed opacity-85' : 'cursor-pointer'"
                 :title="role.isProtected ? 'Super Admin selalu aktif' : 'Klik untuk mengubah status'"
                 @click="handleToggleStatus(role)"
               >
@@ -237,10 +239,18 @@ function handleDelete(role) {
             </td>
             <td class="py-3">
               <div class="flex items-center justify-end gap-2">
-                <button class="icon-btn" title="Edit" @click="goToEdit(role)">
+                <button
+                  class="w-8 h-8 rounded-full border border-gray-200 inline-flex items-center justify-center text-gray-600 bg-white hover:bg-gray-50"
+                  title="Edit"
+                  @click="goToEdit(role)"
+                >
                   <i class="pi pi-pencil"></i>
                 </button>
-                <button class="icon-btn icon-btn-danger" title="Hapus" @click="handleDelete(role)">
+                <button
+                  class="w-8 h-8 rounded-full border border-gray-200 inline-flex items-center justify-center text-gray-600 bg-white hover:bg-gray-50 hover:text-red-600 hover:border-red-200"
+                  title="Hapus"
+                  @click="handleDelete(role)"
+                >
                   <i class="pi pi-trash"></i>
                 </button>
               </div>
@@ -248,7 +258,7 @@ function handleDelete(role) {
           </tr>
 
           <tr v-if="filteredUsers.length === 0">
-            <td colspan="7" class="py-8 text-center text-neutral-400">
+            <td colspan="7" class="py-8 text-center text-gray-400">
               Tidak ada pengguna yang cocok dengan pencarian.
             </td>
           </tr>
@@ -257,44 +267,3 @@ function handleDelete(role) {
     </div>
   </div>
 </template>
-
-<style scoped>
-.avatar-placeholder {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--color-neutral-200, #e5e7eb);
-  flex-shrink: 0;
-}
-
-.status-toggle {
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  line-height: 0;
-}
-.status-toggle-locked {
-  cursor: not-allowed;
-  opacity: 0.85;
-}
-
-.icon-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 1px solid var(--color-neutral-200, #e5e7eb);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-neutral-600, #4b5563);
-  background: white;
-}
-.icon-btn:hover {
-  background: var(--color-neutral-50, #f9fafb);
-}
-.icon-btn-danger:hover {
-  color: var(--color-danger-600, #dc2626);
-  border-color: var(--color-danger-200, #fecaca);
-}
-</style>
