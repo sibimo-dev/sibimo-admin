@@ -4,24 +4,14 @@ import { useToast } from 'primevue/usetoast'
 import AppButton from '@/components/common/AppButton.vue'
 import AppInput from '@/components/common/AppInput.vue'
 import AppAutocomplete from '@/components/common/AppAutocomplete.vue'
+import { citizenList, bookList, namaKategori } from './libraryData'
 
 const toast = useToast()
 
-// ===== Dummy data anggota (citizens) -- ganti dengan panggilan API =====
-const citizenList = ref([
-  { citizen_id: 1, full_name: 'Budi Santoso', national_id: '3301234567890001' },
-  { citizen_id: 2, full_name: 'Siti Aminah', national_id: '3301234567890002' },
-])
-
-// ===== Dummy data buku (books, join book_categories) -- ganti dengan API =====
-const bookList = ref([
-  { book_id: 1, isbn: 'B-SEJ-001', title: 'Sejarah Perjuangan Kemerdekaan', category: 'Sejarah', stock: 3 },
-  { book_id: 2, isbn: 'B-PRT-042', title: 'Teknik Pertanian Modern', category: 'Pertanian', stock: 5 },
-  { book_id: 3, isbn: 'B-NOV-015', title: 'Laskar Pelangi', category: 'Novel', stock: 0 },
-])
-
 const form = reactive({
-  citizen_id: null,
+  citizen_id: null, // null kalau peminjam belum/tidak terdaftar sebagai anggota -- TIDAK wajib diisi
+  full_name: '',
+  national_id: '',
   book_id: null,
   borrowed_at: new Date().toISOString().slice(0, 10),
   loanDurationDays: 7,
@@ -33,15 +23,40 @@ const form = reactive({
 const loanReceipt = ref(null)
 
 
-// (national_id, category, stock) supaya bisa ditampilkan di item saran
-// lewat slot #option, dan bisa ikut difilter kalau user ketik NIK/ISBN.
-const citizenOptions = computed(() =>
-  citizenList.value.map((c) => ({
-    label: c.full_name,
-    value: c.citizen_id,
-    national_id: c.national_id,
-  })),
-)
+const showCitizenSuggestions = ref(false)
+
+const filteredCitizens = computed(() => {
+  const q = form.full_name.trim().toLowerCase()
+  if (!q) return []
+  return citizenList.value.filter(
+    (c) => c.full_name.toLowerCase().includes(q) || c.national_id.includes(q),
+  )
+})
+
+function onNameInput() {
+  // Kalau user mengetik ulang setelah sebelumnya pilih dari daftar,
+  // anggap dia mau ganti/isi manual -- lepas ikatan ke anggota lama.
+  if (form.citizen_id) {
+    form.citizen_id = null
+  }
+  showCitizenSuggestions.value = true
+}
+
+function selectCitizen(c) {
+  form.citizen_id = c.citizen_id
+  form.full_name = c.full_name
+  form.national_id = c.national_id
+  showCitizenSuggestions.value = false
+}
+
+function hideSuggestionsDelayed() {
+  // delay supaya klik pada item saran sempat ke-trigger duluan sebelum
+  // dropdown ditutup oleh event blur
+  setTimeout(() => {
+    showCitizenSuggestions.value = false
+  }, 150)
+}
+// --- end Autocomplete Nama Anggota ---
 
 const bookOptions = computed(() =>
   bookList.value
@@ -50,12 +65,11 @@ const bookOptions = computed(() =>
       label: b.title,
       value: b.book_id,
       isbn: b.isbn,
-      category: b.category,
+      category: namaKategori(b.category_id),
       stock: b.stock,
     })),
 )
 
-const selectedCitizen = computed(() => citizenList.value.find((c) => c.citizen_id === form.citizen_id))
 const selectedBook = computed(() => bookList.value.find((b) => b.book_id === form.book_id))
 
 // due_date dihitung dari borrowed_at + loanDurationDays, sesuai kolom asli book_loans
@@ -74,13 +88,19 @@ const dueDateDisplay = computed(() => {
 })
 
 async function saveLoan() {
-  if (!form.citizen_id || !form.book_id) {
-    toast.add({ severity: 'error', summary: 'Pilih anggota dan buku terlebih dahulu', life: 2500 })
+  if (!form.full_name.trim()) {
+    toast.add({ severity: 'error', summary: 'Nama peminjam wajib diisi', life: 2500 })
+    return
+  }
+  if (!form.book_id) {
+    toast.add({ severity: 'error', summary: 'Pilih buku terlebih dahulu', life: 2500 })
     return
   }
 
   const payload = {
-    citizen_id: form.citizen_id,
+    citizen_id: form.citizen_id, // null kalau bukan anggota terdaftar
+    full_name: form.full_name,
+    national_id: form.national_id || null,
     book_id: form.book_id,
     borrowed_at: form.borrowed_at,
     due_date: dueDateISO.value,
@@ -96,13 +116,15 @@ async function saveLoan() {
   // (Date.now()) -- ganti dengan loan_id asli dari response API di atas.
   loanReceipt.value = {
     loan_id: Date.now(),
-    full_name: selectedCitizen.value?.full_name ?? '-',
-    national_id: selectedCitizen.value?.national_id ?? '-',
+    full_name: form.full_name,
+    national_id: form.national_id || '-',
     title: selectedBook.value?.title ?? '-',
     isbn: selectedBook.value?.isbn ?? '-',
     borrowed_at: form.borrowed_at,
     due_date: dueDateISO.value,
   }
+
+  cancelForm()
 }
 
 function printLoanReceipt() {
@@ -112,6 +134,8 @@ function printLoanReceipt() {
 
 function cancelForm() {
   form.citizen_id = null
+  form.full_name = ''
+  form.national_id = ''
   form.book_id = null
   form.loanDurationDays = 7
 }
@@ -124,32 +148,60 @@ function cancelForm() {
       <h1 class="m-0 mb-1 text-[22px] font-bold text-slate-900">Peminjaman Buku</h1>
       <p class="mb-5 text-sm text-slate-500">Catat transaksi peminjaman buku perpustakaan desa (1 buku per transaksi)</p>
 
-      <div class="card max-w-2xl">
+      <div class="card">
         <h2 class="font-semibold text-neutral-800 mb-4">Form Peminjaman Buku</h2>
 
         <div class="flex flex-col gap-4">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <AppAutocomplete
-              v-model="form.citizen_id"
-              label="Nama Anggota"
-              :options="citizenOptions"
-              placeholder="Ketik nama anggota..."
-              required
-            >
-              <template #option="{ option }">
-                <div class="flex flex-col">
-                  <span>{{ option.label }}</span>
-                  <span class="text-xs text-neutral-400">NIK: {{ option.national_id }}</span>
-                </div>
-              </template>
-            </AppAutocomplete>
-            <AppInput label="NIK / ID Anggota" :model-value="selectedCitizen?.national_id || ''" disabled />
+            <div class="relative">
+              <AppInput
+                v-model="form.full_name"
+                label="Nama Anggota"
+                placeholder="Ketik nama anggota, atau isi manual jika belum terdaftar..."
+                required
+                @input="onNameInput"
+                @focus="showCitizenSuggestions = true"
+                @blur="hideSuggestionsDelayed"
+              />
+
+              <ul
+                v-if="showCitizenSuggestions && filteredCitizens.length"
+                class="absolute z-10 mt-1 w-full max-h-56 overflow-auto rounded-lg border border-border bg-white shadow-lg"
+              >
+                <li
+                  v-for="c in filteredCitizens"
+                  :key="c.citizen_id"
+                  class="px-3 py-2 text-sm cursor-pointer hover:bg-neutral-50"
+                  @mousedown.prevent="selectCitizen(c)"
+                >
+                  <div class="flex flex-col">
+                    <span class="text-neutral-800">{{ c.full_name }}</span>
+                    <span class="text-xs text-neutral-400">NIK: {{ c.national_id }}</span>
+                  </div>
+                </li>
+              </ul>
+
+              <p class="text-xs text-neutral-400 mt-1">
+                {{
+                  form.citizen_id
+                    ? 'Terdaftar sebagai anggota perpustakaan.'
+                    : 'Belum jadi anggota? Isi nama secara manual'
+                }}
+              </p>
+            </div>
+
+            <AppInput
+              v-model="form.national_id"
+              label="NIK / ID Anggota"
+              placeholder="Terisi otomatis jika pilih dari daftar, atau isi manual"
+            />
           </div>
 
           <AppAutocomplete
             v-model="form.book_id"
             label="Judul Buku"
             :options="bookOptions"
+            :search-fields="['label', 'isbn']"
             placeholder="Ketik judul atau ISBN buku..."
             empty-message="Tidak ada buku dengan stok tersedia"
             required
@@ -164,7 +216,7 @@ function cancelForm() {
             </template>
           </AppAutocomplete>
           <p v-if="selectedBook" class="text-xs text-neutral-400 -mt-2">
-            Kategori: {{ selectedBook.category }} &middot; Stok tersedia: {{ selectedBook.stock }}
+            Kategori: {{ namaKategori(selectedBook.category_id) }} &middot; Stok tersedia: {{ selectedBook.stock }}
           </p>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -182,7 +234,7 @@ function cancelForm() {
       </div>
 
       <!-- Muncul setelah transaksi berhasil disimpan -->
-      <div v-if="loanReceipt" class="card max-w-2xl mt-4 flex items-center justify-between gap-3">
+      <div v-if="loanReceipt" class="card mt-4 flex items-center justify-between gap-3">
         <div>
           <p class="text-sm font-medium text-neutral-800">Peminjaman berhasil dicatat</p>
           <p class="text-xs text-neutral-400">No. Peminjaman: {{ loanReceipt.loan_id }}</p>
