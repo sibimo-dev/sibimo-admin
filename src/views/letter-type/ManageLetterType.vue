@@ -1,15 +1,4 @@
 <script setup>
-/**
- * Letter Type Form (Create / Edit)
- * Route name: letter-type-manage, path: letter-type/:id (id = 'new' for create mode)
- *
- * NOTE: Fields below are mapped to assumed ERD tables:
- * - letter_types: code, number_prefix, letter_name, category, processing_time,
- *   signature_method, description, is_active, signer_id, updated_at, updated_by
- * - letter_type_documents: id, letter_type_id, document_name, description, is_required
- *
- * Confirm actual column/table names against your ERD and rename accordingly.
- */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
@@ -21,10 +10,12 @@ import Checkbox from 'primevue/checkbox'
 import AppButton from '@/components/common/AppButton.vue'
 import AppInput from '@/components/common/AppInput.vue'
 import AppModal from '@/components/common/AppModal.vue'
+import { useLetterTypeStore } from '@/stores/useLetterTypeStore'
 
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+const { getById, addLetterType, updateLetterType } = useLetterTypeStore()
 
 const isNew = computed(() => route.params.id === 'new' || !route.params.id)
 const isLoading = ref(false)
@@ -32,10 +23,11 @@ const isSaving = ref(false)
 
 // ====== Dropdown options (replace with master data fetch later) ======
 const categoryOptions = [
+  { label: 'Perintah', value: 'Perintah' },
   { label: 'Keterangan', value: 'Keterangan' },
   { label: 'Pengantar', value: 'Pengantar' },
   { label: 'Permohonan', value: 'Permohonan' },
-  { label: 'Rekomendasi', value: 'Rekomendasi' },
+  { label: 'Pernyataan', value: 'Pernyataan' },
 ]
 
 const signatureMethodOptions = [
@@ -48,6 +40,11 @@ const signerOptions = [
   { label: 'Rasyifa Anom S., AMd.Kes - Kasi Kesejahteraan', value: 2 },
   { label: 'Siti Aminah - Kasi Pemerintahan', value: 3 },
 ]
+// Dipakai untuk isi ulang `signer_name` (dibaca LetterCreateView.vue) tanpa
+// perlu join tabel signer sungguhan -- sementara sampai backend siap.
+const signerNameById = Object.fromEntries(
+  signerOptions.map((s) => [s.value, s.label.split(' - ')[0]]),
+)
 
 // ====== Main form ======
 const form = reactive({
@@ -112,21 +109,13 @@ onMounted(async () => {
   if (isNew.value) return
   isLoading.value = true
   try {
-    // TODO: replace with real API call
-    // const data = await letterTypeService.getById(route.params.id)
-    const dummy = {
-      letter_type_id: route.params.id,
-      code: 'SKU-01',
-      number_prefix: '581/SKU/',
-      letter_name: 'Surat Keterangan Usaha',
-      category: 'Keterangan',
-      processing_time: '15 menit',
-      signature_method: 'digital',
-      description: 'Surat keterangan yang menyatakan bahwa pemohon memiliki usaha aktif di wilayah desa.',
-      is_active: true,
-      signer_id: 1,
+    const data = getById(route.params.id)
+    if (!data) {
+      toast.add({ severity: 'error', summary: 'Tipe surat tidak ditemukan', life: 2500 })
+      router.push({ name: 'letter-type-list' })
+      return
     }
-    Object.assign(form, dummy)
+    Object.assign(form, data)
   } finally {
     isLoading.value = false
   }
@@ -145,10 +134,18 @@ async function handleSave() {
 
   isSaving.value = true
   try {
-    // TODO: replace with real API call
-    // if (isNew.value) await letterTypeService.create({ ...form, requirements: requirements.value })
-    // else await letterTypeService.update(form.letter_type_id, { ...form, requirements: requirements.value })
-    await new Promise((resolve) => setTimeout(resolve, 600))
+    const payload = {
+      ...form,
+      signer_name: signerNameById[form.signer_id] || '',
+      document_count: requirements.value.length,
+    }
+
+    if (isNew.value) {
+      addLetterType(payload)
+    } else {
+      updateLetterType(form.letter_type_id, payload)
+    }
+
     toast.add({ severity: 'success', summary: 'Perubahan berhasil disimpan', life: 2000 })
     router.push({ name: 'letter-type-list' })
   } finally {

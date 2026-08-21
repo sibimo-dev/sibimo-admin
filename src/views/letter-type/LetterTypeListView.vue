@@ -1,17 +1,4 @@
 <script setup>
-/**
- * Halaman Pengelolaan Tipe Surat
- * Pola: AppDataTable (list custom via slot) + useConfirm (hapus)
- * Create/Edit dipindah ke halaman terpisah: ManageLetterType.vue (route: letter-type-manage)
- *
- * CATATAN PENTING:
- * Kolom `category` TIDAK ADA di tabel `letter_types` pada migrasi backend
- * saat ini (hanya ada: code, letter_name, description, blade_view,
- * number_prefix, is_active). Begitu juga kolom `processing_time`,
- * `document_count`, `signer_name`, `signature_method` pada wireframe ini —
- * semuanya masih dummy/placeholder di frontend. Perlu ditambahkan dulu ke
- * migrasi & ERD backend kalau memang mau dipakai sungguhan.
- */
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
@@ -23,61 +10,15 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import InputText from 'primevue/inputtext'
-import AppDataTable from '@/components/common/AppDataTable.vue'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
 import AppButton from '@/components/common/AppButton.vue'
+import { useLetterTypeStore } from '@/stores/useLetterTypeStore'
 
 const router = useRouter()
 const confirm = useConfirm()
 const toast = useToast()
-
-// ====== Table columns ======
-const columns = [
-  { field: 'letter_name', header: 'Nama Surat' },
-  { field: 'category', header: 'Kategori' },
-  { field: 'number_prefix', header: 'Kode Nomor' },
-  { field: 'processing_time', header: 'Estimasi Proses' },
-  { field: 'document_count', header: 'Dok. Syarat' },
-  { field: 'signer_name', header: 'Penandatanganan' },
-  { field: 'signature_method', header: 'Metode TTD' },
-  { field: 'is_active', header: 'Status' },
-]
-
-// ====== Dummy data (replace with real API fetch later) ======
-const rows = ref([
-  {
-    letter_type_id: 1,
-    letter_name: 'Surat Keterangan Tidak Mampu Umum',
-    category: 'Keterangan',
-    number_prefix: '470/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Rasyifa Anom S., AMd.Kes',
-    signature_method: 'digital',
-    is_active: true,
-  },
-  {
-    letter_type_id: 2,
-    letter_name: 'Surat Pengantar SKCK',
-    category: 'Pengantar',
-    number_prefix: '330/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Rasyifa Anom S., AMd.Kes',
-    signature_method: 'digital',
-    is_active: true,
-  },
-  {
-    letter_type_id: 3,
-    letter_name: 'Surat Keterangan Usaha',
-    category: 'Keterangan',
-    number_prefix: '581/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Rasyifa Anom S., AMd.Kes',
-    signature_method: 'digital',
-    is_active: true,
-  },
-])
+const { rows, removeLetterType, updateLetterType } = useLetterTypeStore()
 
 // ====== Category (for filter & badge severity) ======
 const categorySeverity = {
@@ -94,6 +35,15 @@ const categoryOptions = computed(() => {
   const unique = [...new Set(rows.value.map((r) => r.category))]
   return [{ label: 'Semua Kategori', value: null }, ...unique.map((c) => ({ label: c, value: c }))]
 })
+
+function formatCreatedAt(isoString) {
+  if (!isoString) return '-'
+  return new Date(isoString).toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+}
 
 // ====== Search & filter ======
 const searchQuery = ref('')
@@ -123,6 +73,7 @@ const stats = computed(() => {
 async function toggleStatus(data) {
   // TODO: call API here
   // await letterTypeService.updateStatus(data.letter_type_id, data.is_active)
+  updateLetterType(data.letter_type_id, { is_active: data.is_active })
   toast.add({
     severity: data.is_active ? 'success' : 'secondary',
     summary: `Status "${data.letter_name}" diubah menjadi ${data.is_active ? 'Aktif' : 'Nonaktif'}`,
@@ -149,7 +100,7 @@ function handleDelete(data) {
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
     accept: () => {
-      rows.value = rows.value.filter((r) => r.letter_type_id !== data.letter_type_id)
+      removeLetterType(data.letter_type_id)
       toast.add({ severity: 'success', summary: 'Berhasil dihapus', life: 2000 })
     },
   })
@@ -236,45 +187,90 @@ function handleDelete(data) {
           />
         </div>
 
-        <!-- Table -->
-        <AppDataTable :columns="columns" :rows="filteredRows">
-          <template #letter_name="{ data }">
-            <span class="font-medium text-gray-800">{{ data.letter_name }}</span>
-          </template>
+        <!-- Table: DataTable/Column PrimeVue langsung, semua kolom sortable.
+             Default sort: created_at terbaru dulu (sortOrder -1). -->
+        <DataTable
+          :value="filteredRows"
+          data-key="letter_type_id"
+          sort-field="created_at"
+          :sort-order="-1"
+          removable-sort
+          paginator
+          :rows="10"
+          :rows-per-page-options="[10, 20, 50]"
+          class="p-datatable-sm"
+          responsive-layout="scroll"
+        >
+          <Column field="letter_name" header="Nama Surat" sortable>
+            <template #body="{ data }">
+              <span class="font-medium text-gray-800">{{ data.letter_name }}</span>
+            </template>
+          </Column>
 
-          <template #category="{ data }">
-            <Tag :value="data.category" :severity="severityFor(data.category)" rounded />
-          </template>
+          <Column field="category" header="Kategori" sortable>
+            <template #body="{ data }">
+              <Tag :value="data.category" :severity="severityFor(data.category)" rounded />
+            </template>
+          </Column>
 
-          <template #document_count="{ data }">
-            <span class="flex items-center gap-1.5 text-gray-600">
-              <i class="pi pi-file text-gray-400"></i>
-              {{ data.document_count }} dokumen
-            </span>
-          </template>
+          <Column field="number_prefix" header="Kode Nomor" sortable></Column>
 
-          <template #signer_name="{ data }">
-            <span class="text-gray-700">{{ data.signer_name }}</span>
-          </template>
+          <Column field="processing_time" header="Estimasi Proses" sortable></Column>
 
-          <template #signature_method="{ data }">
-            <Tag value="Digital" severity="contrast" rounded />
-          </template>
+          <Column field="document_count" header="Dok. Syarat" sortable>
+            <template #body="{ data }">
+              <span class="flex items-center gap-1.5 text-gray-600">
+                <i class="pi pi-file text-gray-400"></i>
+                {{ data.document_count }} dokumen
+              </span>
+            </template>
+          </Column>
 
-          <template #is_active="{ data }">
-            <ToggleSwitch v-model="data.is_active" @change="toggleStatus(data)" />
-          </template>
+          <Column field="signer_name" header="Penandatanganan" sortable>
+            <template #body="{ data }">
+              <span class="text-gray-700">{{ data.signer_name }}</span>
+            </template>
+          </Column>
 
-          <template #actions="{ data }">
-            <button
-              class="text-sm font-medium text-gray-700 hover:text-gray-900 inline-flex items-center gap-1"
-              @click="handleKelola(data)"
-            >
-              Kelola <i class="pi pi-arrow-right text-xs"></i>
-            </button>
-            <AppButton icon="pi pi-trash" variant="ghost" size="small" @click="handleDelete(data)" />
+          <Column field="signature_method" header="Metode TTD" sortable>
+            <template #body>
+              <Tag value="Digital" severity="contrast" rounded />
+            </template>
+          </Column>
+
+          <!-- Kolom baru: Tanggal Dibuat, dasar sorting yang diminta -->
+          <Column field="created_at" header="Tanggal Dibuat" sortable>
+            <template #body="{ data }">
+              <span class="text-gray-600">{{ formatCreatedAt(data.created_at) }}</span>
+            </template>
+          </Column>
+
+          <Column field="is_active" header="Status" sortable>
+            <template #body="{ data }">
+              <ToggleSwitch v-model="data.is_active" @change="toggleStatus(data)" />
+            </template>
+          </Column>
+
+          <Column header="Aksi">
+            <template #body="{ data }">
+              <div class="flex items-center gap-2">
+                <button
+                  class="text-sm font-medium text-gray-700 hover:text-gray-900 inline-flex items-center gap-1"
+                  @click="handleKelola(data)"
+                >
+                  Kelola <i class="pi pi-arrow-right text-xs"></i>
+                </button>
+                <AppButton icon="pi pi-trash" variant="ghost" size="small" @click="handleDelete(data)" />
+              </div>
+            </template>
+          </Column>
+
+          <template #empty>
+            <p class="text-center text-gray-400 py-10 text-sm">
+              Tidak ada tipe surat yang cocok dengan pencarian/filter.
+            </p>
           </template>
-        </AppDataTable>
+        </DataTable>
       </template>
     </Card>
   </div>
