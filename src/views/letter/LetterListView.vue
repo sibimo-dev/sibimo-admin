@@ -1,14 +1,21 @@
 <script setup>
 /**
  * Halaman Pengelolaan Layanan Surat.
- * Ganti dummyData (rows) dengan data asli dari surat.service.js begitu backend siap.
+ * rows berasal dari useLetterStore (dummy, module-level state) supaya
+ * surat yang dibuat manual lewat LetterCreateView.vue langsung tampil di sini.
+ * Ganti useLetterStore dengan surat.service.js begitu backend siap.
  */
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import Tag from 'primevue/tag'
 import Select from 'primevue/select'
 import AppDataTable from '@/components/common/AppDataTable.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import AppInput from '@/components/common/AppInput.vue'
+import { useLetterStore } from '@/stores/useLetterStore'
+
+const router = useRouter()
+const { rows } = useLetterStore()
 
 const columns = [
   { field: 'requestId', header: 'Request ID' },
@@ -19,156 +26,8 @@ const columns = [
   { field: 'verifiedBy', header: 'Verified By' },
   { field: 'authorizedBy', header: 'Authorized By' },
   { field: 'date', header: 'Date' },
+  { field: 'source', header: 'Sumber' },
 ]
-
-// Dummy data -- hapus setelah integrasi API
-// dateValue (ISO) dipakai untuk sort/filter, "date" dipakai untuk ditampilkan di tabel
-const rows = ref([
-  {
-    id: 1,
-    requestId: 'REQ-20260813-001',
-    citizenId: '3201011205900001',
-    purpose: 'Surat Keterangan Usaha (SKU)',
-    status: 'Pending',
-    signatureType: 'Digital',
-    verifiedBy: '-',
-    authorizedBy: '-',
-    date: '13 Agu 2026',
-    dateValue: '2026-08-13',
-  },
-  {
-    id: 2,
-    requestId: 'REQ-20260812-002',
-    citizenId: '3201019876543210',
-    purpose: 'Surat Keterangan Tidak Mampu (SKTM)',
-    status: 'Diverifikasi',
-    signatureType: 'Manual',
-    verifiedBy: 'Admin 1',
-    authorizedBy: '-',
-    date: '12 Agu 2026',
-    dateValue: '2026-08-12',
-  },
-  {
-    id: 3,
-    requestId: 'REQ-20260811-003',
-    citizenId: '3201015555666677',
-    purpose: 'Surat Pengantar Domisili',
-    status: 'Disetujui',
-    signatureType: 'Digital',
-    verifiedBy: 'Admin 1',
-    authorizedBy: 'Kepala Desa',
-    date: '11 Agu 2026',
-    dateValue: '2026-08-11',
-  },
-  {
-    id: 4,
-    requestId: 'REQ-20260810-004',
-    citizenId: '3201011122334455',
-    purpose: 'Surat Keterangan Pindah',
-    status: 'Ditolak',
-    signatureType: 'Manual',
-    verifiedBy: 'Admin 2',
-    authorizedBy: '-',
-    date: '10 Agu 2026',
-    dateValue: '2026-08-10',
-  },
-  {
-    id: 5,
-    requestId: 'REQ-20260809-005',
-    citizenId: '3201013344556677',
-    purpose: 'Surat Keterangan Kelahiran',
-    status: 'Pending',
-    signatureType: 'Digital',
-    verifiedBy: '-',
-    authorizedBy: '-',
-    date: '09 Agu 2026',
-    dateValue: '2026-08-09',
-  },
-  {
-    id: 6,
-    requestId: 'REQ-20260808-006',
-    citizenId: '3201017788990011',
-    purpose: 'Surat Keterangan Kematian',
-    status: 'Diverifikasi',
-    signatureType: 'Manual',
-    verifiedBy: 'Admin 2',
-    authorizedBy: '-',
-    date: '08 Agu 2026',
-    dateValue: '2026-08-08',
-  },
-  {
-    id: 7,
-    requestId: 'REQ-20260807-007',
-    citizenId: '3201012233445566',
-    purpose: 'Surat Pengantar Nikah',
-    status: 'Disetujui',
-    signatureType: 'Digital',
-    verifiedBy: 'Admin 1',
-    authorizedBy: 'Kepala Desa',
-    date: '07 Agu 2026',
-    dateValue: '2026-08-07',
-  },
-  {
-    id: 8,
-    requestId: 'REQ-20260731-008',
-    citizenId: '3201016677889900',
-    purpose: 'Surat Keterangan Usaha (SKU)',
-    status: 'Ditolak',
-    signatureType: 'Manual',
-    verifiedBy: 'Admin 1',
-    authorizedBy: '-',
-    date: '31 Jul 2026',
-    dateValue: '2026-07-31',
-  },
-  {
-    id: 9,
-    requestId: 'REQ-20260725-009',
-    citizenId: '3201014455667788',
-    purpose: 'Surat Keterangan Tidak Mampu (SKTM)',
-    status: 'Pending',
-    signatureType: 'Digital',
-    verifiedBy: '-',
-    authorizedBy: '-',
-    date: '25 Jul 2026',
-    dateValue: '2026-07-25',
-  },
-  {
-    id: 10,
-    requestId: 'REQ-20260720-010',
-    citizenId: '3201019900112233',
-    purpose: 'Surat Pengantar Domisili',
-    status: 'Disetujui',
-    signatureType: 'Manual',
-    verifiedBy: 'Admin 2',
-    authorizedBy: 'Kepala Desa',
-    date: '20 Jul 2026',
-    dateValue: '2026-07-20',
-  },
-  {
-    id: 11,
-    requestId: 'REQ-20260615-011',
-    citizenId: '3201013322114455',
-    purpose: 'Surat Keterangan Pindah',
-    status: 'Diverifikasi',
-    signatureType: 'Digital',
-    verifiedBy: 'Admin 1',
-    authorizedBy: '-',
-    date: '15 Jun 2026',
-    dateValue: '2026-06-15',
-  },
-  {
-    id: 12,
-    requestId: 'REQ-20260501-012',
-    citizenId: '3201018811223344',
-    purpose: 'Surat Keterangan Kelahiran',
-    status: 'Ditolak',
-    signatureType: 'Manual',
-    verifiedBy: 'Admin 2',
-    authorizedBy: '-',
-    date: '01 Mei 2026',
-    dateValue: '2026-05-01',
-  },
-])
 
 // --- Filter status ---
 const statusFilters = ['Semua Status', 'Pending', 'Diverifikasi', 'Disetujui', 'Ditolak']
@@ -181,7 +40,9 @@ const sortOptions = [
   { label: 'Sort by Date: Terbaru', value: 'newest' },
   { label: 'Sort by Date: Terlama', value: 'oldest' },
 ]
-const selectedSort = ref('7d')
+// Default "newest" -- filter "7 hari"/"30 hari" dihitung dari tanggal sistem berjalan,
+// jadi dummy data lama gampang ke-filter habis kalau dipakai sebagai default.
+const selectedSort = ref('newest')
 
 // --- Search ---
 const searchQuery = ref('')
@@ -261,13 +122,24 @@ const showingTo = computed(() =>
 function resetPage() {
   currentPage.value = 1
 }
+
+function goToTambahSurat() {
+  router.push('/letter/create')
+}
 </script>
 
 <template>
   <div class="min-h-screen bg-slate-50">
-    <div class="mb-6">
-      <h1 class="text-2xl font-semibold text-slate-800">Pengelolaan Layanan Surat</h1>
-      <p class="text-sm text-slate-500 mt-1">Kelola permintaan surat warga secara terpusat.</p>
+    <div class="mb-6 flex items-center justify-between flex-wrap gap-3">
+      <div>
+        <h1 class="text-2xl font-semibold text-slate-800">Pengelolaan Layanan Surat</h1>
+        <p class="text-sm text-slate-500 mt-1">Kelola permintaan surat warga secara terpusat.</p>
+      </div>
+      <AppButton
+        label="+ Tambah Surat"
+        variant="primary"
+        @click="goToTambahSurat"
+      />
     </div>
 
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
