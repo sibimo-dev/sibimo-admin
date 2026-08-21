@@ -1,9 +1,7 @@
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
-import Quill from 'quill'
-import 'quill/dist/quill.core.css'
 
 import Card from 'primevue/card'
 import InputText from 'primevue/inputtext'
@@ -13,6 +11,7 @@ import RadioButton from 'primevue/radiobutton'
 import Checkbox from 'primevue/checkbox'
 import Button from 'primevue/button'
 import FileUpload from 'primevue/fileupload'
+import Editor from 'primevue/editor'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,9 +25,6 @@ const pageTitle = computed(() => (
 
 const imagePreview = ref(null)
 const title = ref('')
-
-const editorRef = ref(null)
-const imageInputRef = ref(null)
 
 let quill = null
 const content = ref('')
@@ -136,12 +132,8 @@ function toggleList(type) {
   refreshActiveFormats()
 }
 
-function openImagePicker() {
-  imageInputRef.value?.click()
-}
-
 function handleContentImageSelect(event) {
-  const file = event.target.files?.[0]
+  const file = event.files?.[0]
   if (!file || !quill) return
 
   const reader = new FileReader()
@@ -152,8 +144,6 @@ function handleContentImageSelect(event) {
     quill.setSelection(range.index + 1)
   }
   reader.readAsDataURL(file)
-
-  event.target.value = ''
 }
 
 function insertLink() {
@@ -185,6 +175,15 @@ function setEditorHtml(html) {
   if (quill) {
     quill.root.innerHTML = html
   }
+}
+
+function onEditorLoad(event) {
+  quill = event.instance
+  refreshActiveFormats()
+}
+
+function onEditorTextChange() {
+  refreshActiveFormats()
 }
 
 const status = ref('Draft')
@@ -227,23 +226,7 @@ const visibilityLabel = computed(() => (
       : 'Privat'
 ))
 
-onMounted(async () => {
-  await nextTick()
-
-  quill = new Quill(editorRef.value, {
-    placeholder: 'Tulis isi berita di sini...',
-    modules: { toolbar: false },
-  })
-
-  quill.on('text-change', () => {
-    content.value = quill.root.innerHTML
-    refreshActiveFormats()
-  })
-
-  quill.on('selection-change', () => {
-    refreshActiveFormats()
-  })
-
+onMounted(() => {
   if (!isEditMode.value) return
 
   title.value = 'Judul berita'
@@ -374,129 +357,132 @@ function moveToTrash() {
               </label>
 
               <div class="overflow-hidden rounded-lg border border-neutral-300">
+                <Editor
+                  v-model="content"
+                  placeholder="Tulis isi berita di sini..."
+                  :pt="{
+                    toolbar: { class: 'flex flex-wrap items-center gap-1.5 border-b border-neutral-200 bg-neutral-50 px-2.5 py-2' },
+                    content: { class: 'min-h-[220px] w-full text-[13px] text-neutral-800 [&_.ql-clipboard]:absolute [&_.ql-clipboard]:-left-[100000px] [&_.ql-clipboard]:top-1/2 [&_.ql-clipboard]:h-px [&_.ql-clipboard]:overflow-y-hidden [&_.ql-editor]:min-h-[220px] [&_.ql-editor]:p-3.5 [&_.ql-editor]:outline-none [&_.ql-editor]:whitespace-pre-wrap [&_.ql-editor_a]:text-primary-700 [&_.ql-editor_a]:underline [&_.ql-editor_blockquote]:my-2.5 [&_.ql-editor_blockquote]:border-l-4 [&_.ql-editor_blockquote]:border-neutral-300 [&_.ql-editor_blockquote]:pl-4 [&_.ql-editor_img]:max-w-full [&_.ql-editor_ol]:list-decimal [&_.ql-editor_ol]:pl-5 [&_.ql-editor_ul]:list-disc [&_.ql-editor_ul]:pl-5' },
+                  }"
+                  @load="onEditorLoad"
+                  @text-change="onEditorTextChange"
+                  @selection-change="refreshActiveFormats"
+                >
+                  <template #toolbar>
+                    <Select
+                      :modelValue="activeFormats.header"
+                      :options="blockTypeOptions"
+                      optionLabel="label"
+                      optionValue="value"
+                      class="rounded-md border border-neutral-200 bg-white text-xs text-neutral-700 outline-none focus:border-primary-700"
+                      :pt="{ label: { class: 'px-1.5 py-1' } }"
+                      @update:modelValue="applyHeader"
+                    />
 
-                <div class="flex flex-wrap items-center gap-1.5 border-b border-neutral-200 bg-neutral-50 px-2.5 py-2">
+                    <Select
+                      :modelValue="activeFormats.font"
+                      :options="fontFamilyOptions"
+                      optionLabel="label"
+                      optionValue="value"
+                      class="rounded-md border border-neutral-200 bg-white text-xs text-neutral-700 outline-none focus:border-primary-700"
+                      :pt="{ label: { class: 'px-1.5 py-1' } }"
+                      @update:modelValue="applyFont"
+                    />
 
-                  <Select
-                    :modelValue="activeFormats.header"
-                    :options="blockTypeOptions"
-                    optionLabel="label"
-                    optionValue="value"
-                    class="rounded-md border border-neutral-200 bg-white text-xs text-neutral-700 outline-none focus:border-primary-700"
-                    :pt="{ label: { class: 'px-1.5 py-1' } }"
-                    @update:modelValue="applyHeader"
-                  />
+                    <span class="mx-0.5 h-[18px] w-px bg-neutral-200" />
 
-                  <Select
-                    :modelValue="activeFormats.font"
-                    :options="fontFamilyOptions"
-                    optionLabel="label"
-                    optionValue="value"
-                    class="rounded-md border border-neutral-200 bg-white text-xs text-neutral-700 outline-none focus:border-primary-700"
-                    :pt="{ label: { class: 'px-1.5 py-1' } }"
-                    @update:modelValue="applyFont"
-                  />
+                    <Button
+                      text
+                      :severity="activeFormats.bold ? 'primary' : 'secondary'"
+                      title="Bold"
+                      class="min-w-0 rounded-md px-2 py-1 text-[13px] font-bold hover:bg-neutral-200"
+                      label="B"
+                      @click="toggleBold"
+                    />
 
-                  <span class="mx-0.5 h-[18px] w-px bg-neutral-200" />
+                    <Button
+                      text
+                      :severity="activeFormats.italic ? 'primary' : 'secondary'"
+                      title="Italic"
+                      class="min-w-0 rounded-md px-2 py-1 text-[13px] italic hover:bg-neutral-200"
+                      label="I"
+                      @click="toggleItalic"
+                    />
 
-                  <Button
-                    text
-                    :severity="activeFormats.bold ? 'primary' : 'secondary'"
-                    title="Bold"
-                    class="min-w-0 rounded-md px-2 py-1 text-[13px] font-bold hover:bg-neutral-200"
-                    label="B"
-                    @click="toggleBold"
-                  />
+                    <Button
+                      text
+                      :severity="activeFormats.underline ? 'primary' : 'secondary'"
+                      title="Underline"
+                      class="min-w-0 rounded-md px-2 py-1 text-[13px] underline hover:bg-neutral-200"
+                      label="U"
+                      @click="toggleUnderline"
+                    />
 
-                  <Button
-                    text
-                    :severity="activeFormats.italic ? 'primary' : 'secondary'"
-                    title="Italic"
-                    class="min-w-0 rounded-md px-2 py-1 text-[13px] italic hover:bg-neutral-200"
-                    label="I"
-                    @click="toggleItalic"
-                  />
+                    <span class="mx-0.5 h-[18px] w-px bg-neutral-200" />
 
-                  <Button
-                    text
-                    :severity="activeFormats.underline ? 'primary' : 'secondary'"
-                    title="Underline"
-                    class="min-w-0 rounded-md px-2 py-1 text-[13px] underline hover:bg-neutral-200"
-                    label="U"
-                    @click="toggleUnderline"
-                  />
+                    <Button
+                      text
+                      severity="secondary"
+                      :icon="alignIconMap[activeFormats.align || false]"
+                      title="Perataan teks"
+                      class="min-w-0 rounded-md px-2 py-1 text-neutral-700 hover:bg-neutral-200"
+                      @click="cycleAlign"
+                    />
 
-                  <span class="mx-0.5 h-[18px] w-px bg-neutral-200" />
+                    <Button
+                      text
+                      :severity="activeFormats.list === 'ordered' ? 'primary' : 'secondary'"
+                      icon="pi pi-list"
+                      title="List bernomor"
+                      class="min-w-0 rounded-md px-2 py-1 hover:bg-neutral-200"
+                      @click="toggleList('ordered')"
+                    />
 
-                  <Button
-                    text
-                    severity="secondary"
-                    :icon="alignIconMap[activeFormats.align || false]"
-                    title="Perataan teks"
-                    class="min-w-0 rounded-md px-2 py-1 text-neutral-700 hover:bg-neutral-200"
-                    @click="cycleAlign"
-                  />
+                    <Button
+                      text
+                      :severity="activeFormats.list === 'bullet' ? 'primary' : 'secondary'"
+                      icon="pi pi-circle-fill"
+                      title="List poin"
+                      class="min-w-0 rounded-md px-2 py-1 text-[8px] hover:bg-neutral-200"
+                      @click="toggleList('bullet')"
+                    />
 
-                  <Button
-                    text
-                    :severity="activeFormats.list === 'ordered' ? 'primary' : 'secondary'"
-                    icon="pi pi-list"
-                    title="List bernomor"
-                    class="min-w-0 rounded-md px-2 py-1 hover:bg-neutral-200"
-                    @click="toggleList('ordered')"
-                  />
+                    <span class="mx-0.5 h-[18px] w-px bg-neutral-200" />
 
-                  <Button
-                    text
-                    :severity="activeFormats.list === 'bullet' ? 'primary' : 'secondary'"
-                    icon="pi pi-circle-fill"
-                    title="List poin"
-                    class="min-w-0 rounded-md px-2 py-1 text-[8px] hover:bg-neutral-200"
-                    @click="toggleList('bullet')"
-                  />
+                    <FileUpload
+                      mode="basic"
+                      accept="image/*"
+                      :auto="false"
+                      customUpload
+                      chooseLabel=""
+                      chooseIcon="pi pi-image"
+                      title="Sisipkan gambar"
+                      :pt="{
+                        root: { class: 'inline-flex' },
+                        chooseButton: { class: 'min-w-0 rounded-md border-0 bg-transparent px-2 py-1 text-neutral-700 hover:bg-neutral-200' },
+                      }"
+                      @select="handleContentImageSelect"
+                    />
 
-                  <span class="mx-0.5 h-[18px] w-px bg-neutral-200" />
+                    <Button
+                      text
+                      severity="secondary"
+                      icon="pi pi-link"
+                      title="Sisipkan tautan"
+                      class="min-w-0 rounded-md px-2 py-1 text-neutral-700 hover:bg-neutral-200"
+                      @click="insertLink"
+                    />
 
-                  <Button
-                    text
-                    severity="secondary"
-                    icon="pi pi-image"
-                    title="Sisipkan gambar"
-                    class="min-w-0 rounded-md px-2 py-1 text-neutral-700 hover:bg-neutral-200"
-                    @click="openImagePicker"
-                  />
-
-                  <Button
-                    text
-                    severity="secondary"
-                    icon="pi pi-link"
-                    title="Sisipkan tautan"
-                    class="min-w-0 rounded-md px-2 py-1 text-neutral-700 hover:bg-neutral-200"
-                    @click="insertLink"
-                  />
-
-                  <Button
-                    text
-                    severity="secondary"
-                    icon="pi pi-times"
-                    title="Hapus format"
-                    class="min-w-0 rounded-md px-2 py-1 text-neutral-700 hover:bg-neutral-200"
-                    @click="clearFormatting"
-                  />
-
-                  <input
-                    ref="imageInputRef"
-                    type="file"
-                    accept="image/*"
-                    class="hidden"
-                    @change="handleContentImageSelect"
-                  />
-                </div>
-
-                <div
-                  ref="editorRef"
-                  class="min-h-[220px] w-full text-[13px] text-neutral-800 [&_.ql-editor]:min-h-[220px] [&_.ql-editor]:p-3.5 [&_.ql-editor]:outline-none [&_.ql-editor_a]:text-primary-700 [&_.ql-editor_a]:underline [&_.ql-editor_img]:max-w-full [&_.ql-editor_ol]:list-decimal [&_.ql-editor_ol]:pl-5 [&_.ql-editor_ul]:list-disc [&_.ql-editor_ul]:pl-5"
-                />
+                    <Button
+                      text
+                      severity="secondary"
+                      icon="pi pi-times"
+                      title="Hapus format"
+                      class="min-w-0 rounded-md px-2 py-1 text-neutral-700 hover:bg-neutral-200"
+                      @click="clearFormatting"
+                    />
+                  </template>
+                </Editor>
               </div>
             </div>
           </div>
@@ -543,9 +529,10 @@ function moveToTrash() {
         <Card>
           <template #content>
             <div class="flex flex-col gap-2.5">
-              <button
-                type="button"
-                class="flex items-center justify-between bg-transparent p-0 text-left text-[13px] text-neutral-700"
+              <Button
+                text
+                severity="secondary"
+                class="w-full min-w-0 justify-between rounded-md border-0 bg-transparent p-0 text-left text-[13px] font-normal text-neutral-700 hover:bg-transparent"
                 @click="statusOpen = !statusOpen"
               >
                 <span>
@@ -557,7 +544,7 @@ function moveToTrash() {
                   class="pi pi-chevron-up text-[11px] text-neutral-400 transition-transform"
                   :class="statusOpen ? 'rotate-180' : ''"
                 />
-              </button>
+              </Button>
 
               <div v-show="statusOpen" class="flex flex-col gap-1.5">
                 <Select
