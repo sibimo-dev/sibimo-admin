@@ -26,6 +26,8 @@ const mainButtonLabel = computed(() => (
 ))
 
 const genderOptions = ['Laki-laki', 'Perempuan']
+const educationOptions = ['Tidak Sekolah', 'SD', 'SMP', 'SMA/SMK', 'D3', 'S1', 'S2', 'S3']
+const maritalStatusOptions = ['Belum Menikah', 'Menikah', 'Cerai Hidup', 'Cerai Mati']
 const statusOptions = [
   { label: 'Active', value: 'Active' },
   { label: 'Pindah', value: 'Pindah' },
@@ -39,6 +41,9 @@ const birthPlace = ref('')
 const birthDate = ref(null)
 const phoneNumber = ref('')
 const address = ref('')
+const occupation = ref('')
+const education = ref('SMA/SMK')
+const maritalStatus = ref('Belum Menikah')
 
 const status = ref('Active')
 const statusOpen = ref(true)
@@ -63,6 +68,9 @@ onMounted(() => {
   birthDate.value = new Date('1990-05-14')
   phoneNumber.value = '081234567890'
   address.value = 'Jl. Merdeka No. 1, RT 01/RW 02'
+  occupation.value = 'Wiraswasta'
+  education.value = 'S1'
+  maritalStatus.value = 'Menikah'
   status.value = 'Active'
 })
 
@@ -220,6 +228,55 @@ function deleteCitizen() {
                   iconDisplay="input"
                   class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
                   :pt="{ pcInputText: { root: { class: 'w-full px-3 py-2.5' } } }"
+                />
+              </div>
+
+            </div>
+
+            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+
+              <div class="flex flex-col gap-2">
+                <label class="text-[13px] font-semibold text-neutral-700" for="occupation">
+                  Pekerjaan
+                </label>
+
+                <InputText
+                  id="occupation"
+                  v-model="occupation"
+                  placeholder="Pekerjaan warga"
+                  class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
+                />
+              </div>
+
+              <div class="flex flex-col gap-2">
+                <label class="text-[13px] font-semibold text-neutral-700" for="education">
+                  Pendidikan
+                </label>
+
+                <Select
+                  id="education"
+                  v-model="education"
+                  :options="educationOptions"
+                  class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
+                  :pt="{ label: { class: 'px-3 py-2.5' } }"
+                />
+              </div>
+
+            </div>
+
+            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+
+              <div class="flex flex-col gap-2">
+                <label class="text-[13px] font-semibold text-neutral-700" for="maritalStatus">
+                  Status Pernikahan
+                </label>
+
+                <Select
+                  id="maritalStatus"
+                  v-model="maritalStatus"
+                  :options="maritalStatusOptions"
+                  class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
+                  :pt="{ label: { class: 'px-3 py-2.5' } }"
                 />
               </div>
 
