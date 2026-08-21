@@ -1,12 +1,5 @@
 <script setup>
-/**
- * AppTextarea - pasangan AppInput untuk field teks panjang (deskripsi,
- * keterangan, dll). Sama seperti komponen common lain: label + error
- * konsisten, tinggal pasang di form manapun.
- *
- * Contoh pakai:
- *   <AppTextarea v-model="form.deskripsi" label="Deskripsi" :rows="4" />
- */
+
 import Textarea from 'primevue/textarea'
 
 defineProps({

@@ -1,13 +1,5 @@
 <script setup>
-/**
- * AppModal - wrapper di atas PrimeVue Dialog untuk form tambah/edit
- * (dipakai di hampir semua CRUD: tipe surat, berita, potensi, galeri, dst).
- *
- * Contoh pakai:
- *   <AppModal v-model="showModal" title="Tambah Berita" @save="handleSave">
- *     <AppInput v-model="form.judul" label="Judul" />
- *   </AppModal>
- */
+
 import Dialog from 'primevue/dialog'
 import AppButton from './AppButton.vue'
 
