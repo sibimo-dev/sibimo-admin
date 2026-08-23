@@ -1,14 +1,4 @@
 <script setup>
-/**
- * Disamakan gaya & layout dengan katalog buku (Card, judul/subjudul,
- * Button PrimeVue, IconField pencarian). Form Tambah/Edit foto TETAP
- * di halaman terpisah (gallery-create / gallery-edit), bukan modal.
- *
- * Data dari gallery.store.js (Pinia) supaya konsisten selama sesi
- * berjalan. TODO: ganti actions di gallery.store.js dengan panggilan asli
- * ke gallery.service.js begitu backend siap -- file ini tidak perlu
- * diubah lagi.
- */
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
@@ -16,6 +6,7 @@ import { useToast } from 'primevue/usetoast'
 
 import Card from 'primevue/card'
 import Button from 'primevue/button'
+import AppButton from '@/components/common/AppButton.vue'
 import InputText from 'primevue/inputtext'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
@@ -133,21 +124,19 @@ function handleDelete(item) {
                 <div
                   class="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100"
                 >
-                  <Button
+                  <AppButton
                     icon="pi pi-pencil"
-                    text
-                    rounded
-                    severity="secondary"
+                    variant="outline"
+                    rounded-icon
                     class="!bg-white"
                     aria-label="Edit foto"
                     title="Edit"
                     @click="goEdit(item)"
                   />
-                  <Button
+                  <AppButton
                     icon="pi pi-trash"
-                    text
-                    rounded
-                    severity="danger"
+                    variant="danger-ghost"
+                    rounded-icon
                     class="!bg-white"
                     aria-label="Hapus foto"
                     title="Hapus"
