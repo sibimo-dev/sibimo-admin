@@ -31,7 +31,7 @@ const protectedRoutes = {
   meta: { requiresAuth: true },
   children: [
     dashboardRoute,
-    ...suratRoutes,   
+    // ...suratRoutes,   
     ...beritaRoutes,
     ...galeriRoutes,
     ...perpustakaanRoutes,
