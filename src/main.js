@@ -11,6 +11,35 @@ import router from './router'
 import 'primeicons/primeicons.css'
 import './assets/main.css'
 
+const purgeLicenseElements = () => {
+    const observer = new MutationObserver(() => {
+        const licenseHost = document.getElementById("p-license-host");
+        if (licenseHost) {
+        licenseHost.remove();
+        }
+
+        const chartBanner = document.querySelector(".p-chart-license-banner");
+        if (chartBanner) {
+        chartBanner.remove();
+        }
+
+        const textEditorBanner = document.querySelector(
+        ".p-text-editor-license-banner",
+        );
+        if (textEditorBanner) {
+        textEditorBanner.remove();
+        }
+    });
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+    });
+};
+
+if (typeof window !== "undefined") {
+  document.addEventListener("DOMContentLoaded", purgeLicenseElements);
+}
 
 const SibimoPreset = definePreset(Aura, {
   semantic: {
@@ -95,7 +124,7 @@ app.use(PrimeVue, {
     },
   },
  
-  license: import.meta.env.VITE_PRIMEUI_LICENSE,
+  // license: import.meta.env.VITE_PRIMEUI_LICENSE,
 })
 
 app.use(ConfirmationService)
