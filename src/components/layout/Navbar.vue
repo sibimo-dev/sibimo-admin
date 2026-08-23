@@ -33,14 +33,6 @@ function toggleMenu(event) {
     class="h-16 bg-white border-b border-neutral-100 flex items-center justify-between px-4 md:px-6 gap-3"
   >
     <div class="flex items-center gap-3 min-w-0">
-      <!-- Hanya tampil di layar kecil, buka Sidebar sebagai Drawer -->
-       <Button
-       icon="pi pi-bars"
-       text
-       rounded
-       class="md:hidden !text-primary-600 hover:!bg-primary-50 hover:!text-primary-700"
-       aria-label="Buka menu"
-       @click="uiStore.toggleMobileSidebar()"/>
       <Breadcrumb class="min-w-0" 
       />
     </div>
@@ -63,10 +55,10 @@ function toggleMenu(event) {
         <div
           class="w-7 h-7 rounded-full flex items-center justify-center bg-primary-600 text-white text-xs font-semibold shrink-0"
         >
-          {{ (authStore.user?.nama || 'Admin').charAt(0).toUpperCase() }}
+          {{ (authStore.user?.nama || 'Super Admin').charAt(0).toUpperCase() }}
         </div>
         <span class="font-medium text-neutral-900">{{
-          authStore.user?.nama || 'Admin'
+          authStore.user?.nama || 'Super Admin'
         }}</span>
         <i class="pi pi-chevron-down text-xs text-neutral-400" />
       </button>

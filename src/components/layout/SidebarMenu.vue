@@ -1,26 +1,14 @@
 <script setup>
-/**
- * SidebarMenu - isi navigasi admin SIBIMO, dipakai bareng oleh Sidebar.vue
- * (versi statis desktop) dan Drawer mobile-nya. Dipisah dari Sidebar.vue
- * supaya markup menu tidak perlu ditulis dua kali.
- *
- * Dibangun di atas <PanelMenu> asli PrimeVue (bukan <div>/<button> manual),
- * dengan #item template kustom mengikuti pola resmi PrimeVue untuk integrasi
- * vue-router (item.route -> router-link) + highlight halaman aktif.
- *
- 
- */
+import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import PanelMenu from 'primevue/panelmenu'
 
-defineProps({
-  // Saat collapsed, cuma icon yang tampil (dipakai versi desktop saja).
+const props = defineProps({
   collapsed: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['navigate'])
 const route = useRoute()
-
 
 const menuGroups = [
   {
@@ -29,95 +17,85 @@ const menuGroups = [
     items: [{ label: 'Dashboard', icon: 'pi pi-home', route: '/dashboard' }],
   },
   {
-    label: 'Persuratan', // Dev A
+    label: 'Persuratan',
     showLabel: false,
     items: [
       {
         label: 'Persuratan',
         icon: 'pi pi-file',
         items: [
-          { label: 'Pengelolaan Surat', route: '/surat' },
-          { label: 'Verifikasi Surat', route: '/surat/verifikasi' },
-          { label: 'Otorisasi Surat', route: '/surat/otorisasi' },
-          { label: 'Tipe Surat', route: '/tipe-surat' },
+          { label: 'Pengelolaan Surat', route: '/letter' },
+          { label: 'Verifikasi Surat', route: '/letter/verification' },
+          { label: 'Otorisasi Surat', route: '/letter/authorization' },
+          { label: 'Tipe Surat', route: '/letter-type' },
         ],
       },
     ],
   },
   {
-    label: 'Pengaduan', // Dev A
+    label: 'Pengaduan',
     showLabel: false,
     items: [
       {
         label: 'Pengaduan',
         icon: 'pi pi-comments',
         items: [
-          { label: 'Daftar Aduan', route: '/aduan' },
-          { label: 'Tanggapan Aduan', route: '/aduan/tanggapan' },
+          { label: 'Daftar Aduan', route: '/complaint' },
+          { label: 'Tanggapan Aduan', route: '/complaint/response' },
         ],
       },
     ],
   },
   {
-    label: 'Konten Publik', // Dev B
+    label: 'Konten Publik',
     showLabel: false,
     items: [
-      { label: 'Berita & Pengumuman', icon: 'pi pi-megaphone', route: '/berita' },
-      {
-        label: 'Kelola Agenda',
-        icon: 'pi pi-calendar',
-        items: [
-          { label: 'List Agenda', route: '/agenda' },
-          { label: 'Kalender Agenda', route: '/agenda/kalender' },
-        ],
-      },
-      { label: 'Kelola Potensi', icon: 'pi pi-star', route: '/potensi' },
+      { label: 'Berita & Pengumuman', icon: 'pi pi-megaphone', route: '/news' },
+      { label: 'Kelola Agenda', icon: 'pi pi-calendar', route: '/agenda' },
+      { label: 'Kelola Potensi', icon: 'pi pi-star', route: '/village-potential' },
     ],
   },
   {
-    label: 'Data Desa', // Dev B
+    label: 'Data Desa',
     showLabel: false,
-    items: [
-      { label: 'Data Wilayah', icon: 'pi pi-globe', route: '/wilayah' },
-      { label: 'Kelola Data Warga', icon: 'pi pi-users', route: '/warga' },
-    ],
+    items: [{ label: 'Kelola Data Warga', icon: 'pi pi-users', route: '/citizen' }],
   },
   {
-    label: 'Galeri & Perpustakaan', // Dev C
+    label: 'Galeri & Perpustakaan',
     showLabel: false,
     items: [
-      { label: 'Kelola Gallery', icon: 'pi pi-images', route: '/galeri' },
+      { label: 'Kelola Gallery', icon: 'pi pi-images', route: '/gallery' },
       {
         label: 'Kelola Perpustakaan',
         icon: 'pi pi-book',
         items: [
-          { label: 'Katalog Buku', route: '/perpustakaan/katalog' },
-          { label: 'Peminjaman', route: '/perpustakaan/peminjaman' },
-          { label: 'Pengembalian', route: '/perpustakaan/pengembalian' },
+          { label: 'Katalog Buku', route: '/library/catalog' },
+          { label: 'Peminjaman', route: '/library/loan' },
+          { label: 'Pengembalian', route: '/library/return' },
         ],
       },
     ],
   },
   {
-    label: 'Profil Desa', // Dev C
+    label: 'Profil Desa',
     showLabel: false,
     items: [
       {
         label: 'Profile Desa',
         icon: 'pi pi-building',
         items: [
-          { label: 'Sejarah', route: '/profil-desa/sejarah' },
-          { label: 'Visi & Misi', route: '/profil-desa/visi-misi' },
-          { label: 'Struktur Organisasi', route: '/profil-desa/struktur' },
-          { label: 'Data Wilayah', route: '/wilayah' },
+          { label: 'Sejarah', route: '/village-profile/history' },
+          { label: 'Visi & Misi', route: '/village-profile/vision-mission' },
+          { label: 'Struktur Organisasi', route: '/village-profile/organizational-structure' },
+          { label: 'Data Wilayah', route: '/village-profile/region' },
         ],
       },
     ],
   },
   {
-    label: 'User Management', // Dev A
+    label: 'User Management',
     showLabel: true,
-    items: [{ label: 'List Admin', icon: 'pi pi-user-edit', route: '/pengguna' }],
+    items: [{ label: 'List Admin', icon: 'pi pi-user-edit', route: '/user-management' }],
   },
 ]
 
@@ -134,6 +112,122 @@ function handleNavigate(navigate, event) {
   navigate(event)
   emit('navigate')
 }
+
+/* ------------------- Flyout mengambang saat collapsed ------------------- */
+
+const flyout = ref(null) // { item, top, left }
+
+function isFlyoutOpen(item) {
+  return flyout.value?.item === item
+}
+
+function toggleFlyout(item, targetEl) {
+  if (flyout.value && flyout.value.item === item) {
+    flyout.value = null
+    return
+  }
+  const rect = targetEl.getBoundingClientRect()
+  flyout.value = {
+    item,
+    top: rect.top,
+    left: rect.right + 8, // jarak sedikit dari sidebar
+  }
+}
+
+function closeFlyout() {
+  flyout.value = null
+}
+
+// Kalau ada submenu & sidebar collapsed, cegah PanelMenu expand ke bawah,
+// ganti dengan flyout mengambang di samping.
+function handleGroupClick(item, hasSubmenu, event) {
+  if (props.collapsed && hasSubmenu) {
+    event.preventDefault()
+    event.stopPropagation()
+    toggleFlyout(item, event.currentTarget)
+  } else {
+    closeFlyout()
+  }
+}
+
+function handleFlyoutNavigate(navigate, event) {
+  navigate(event)
+  closeFlyout()
+  emit('navigate')
+}
+
+function handleClickOutside(e) {
+  if (!flyout.value) return
+  if (e.target.closest('.sidebar-flyout')) return
+  if (e.target.closest('nav')) return
+  closeFlyout()
+}
+
+// Tutup flyout begitu sidebar di-expand lagi (biar tidak nyangkut)
+watch(
+  () => props.collapsed,
+  () => closeFlyout(),
+)
+
+onMounted(() => document.addEventListener('click', handleClickOutside))
+onBeforeUnmount(() => document.removeEventListener('click', handleClickOutside))
+
+/* ------------------------- Kelas warna item menu ------------------------- */
+// Collapsed: kotak ikon rounded, aktif => biru solid + ikon putih.
+// Expanded: gaya lama (border kiri + background biru muda).
+
+function itemButtonClass(active) {
+  const base =
+    'flex items-center gap-3 rounded-lg text-[15px] font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-1'
+
+  if (props.collapsed) {
+    return [
+      base,
+      'justify-center w-11 h-11 mx-auto rounded-xl border-0',
+      active ? 'bg-blue-600 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-100',
+    ]
+  }
+
+  return [
+    base,
+    'px-3 py-2.5 border-l-[3px]',
+    active
+      ? 'bg-blue-50 text-blue-700 border-blue-600'
+      : 'text-neutral-700 border-transparent hover:bg-neutral-100 hover:border-neutral-300',
+  ]
+}
+
+function itemIconClass(active) {
+  if (props.collapsed) {
+    return active ? 'text-white' : 'text-neutral-500'
+  }
+  return active ? 'text-blue-700' : 'text-neutral-500'
+}
+
+// Kelas untuk item link di dalam flyout mengambang.
+// Background flyout sudah biru penuh, jadi item "aktif" dibedakan dengan
+// overlay putih transparan, bukan warna biru terpisah.
+function flyoutItemClass(active) {
+  return active ? 'bg-white/15 text-white' : 'text-blue-50 hover:bg-white/10'
+}
+
+const panelMenuPt = computed(() => ({
+  root: { class: 'flex flex-col w-full' },
+  panel: { class: 'relative border-0 bg-transparent mb-0 shadow-none' },
+  header: { class: 'relative border-0 bg-transparent shadow-none p-0' },
+  headerContent: { class: 'border-0 bg-transparent shadow-none p-0' },
+  contentContainer: { class: 'border-0 bg-transparent shadow-none overflow-hidden' },
+  content: {
+    class: [
+      'border-y-0 border-r-0 bg-transparent shadow-none pb-0 overflow-hidden',
+      props.collapsed ? 'pl-0 ml-0 border-l-0 pt-0' : 'pl-6 ml-3 border-l border-neutral-200 pt-1.5',
+    ],
+  },
+  rootList: { class: 'p-0 m-0 gap-1 flex flex-col' },
+  item: { class: 'border-0 bg-transparent shadow-none' },
+  itemContent: { class: 'border-0 bg-transparent shadow-none p-0' },
+  submenu: { class: props.collapsed ? 'hidden' : 'p-0 m-0 flex flex-col gap-0.5' },
+}))
 </script>
 
 <template>
@@ -141,12 +235,12 @@ function handleNavigate(navigate, event) {
     <div v-for="group in menuGroups" :key="group.label" class="mb-1">
       <p
         v-if="group.showLabel && !collapsed"
-        class="px-3 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-400"
+        class="px-3 pt-4 pb-1 text-[11px] font-bold uppercase tracking-wide text-neutral-500"
       >
         {{ group.label }}
       </p>
 
-      <PanelMenu :model="group.items" class="sidebar-panelmenu" :class="{ 'is-collapsed': collapsed }">
+      <PanelMenu :model="group.items" :pt="panelMenuPt" unstyled>
         <template #item="{ item, hasSubmenu }">
           <router-link
             v-if="item.route"
@@ -156,59 +250,65 @@ function handleNavigate(navigate, event) {
           >
             <a
               :href="href"
-              class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors"
-              :class="
-                linkActive
-                  ? 'bg-primary-50 text-primary-700 font-medium'
-                  : 'text-neutral-700 hover:bg-neutral-50'
-              "
+              :class="itemButtonClass(linkActive)"
               @click="handleNavigate(navigate, $event)"
             >
-              <i v-if="item.icon" :class="item.icon" class="text-base shrink-0" />
+              <i
+                v-if="item.icon"
+                :class="[item.icon, itemIconClass(linkActive)]"
+                class="text-[20px] shrink-0"
+              ></i>
               <span v-if="!collapsed" class="flex-1">{{ item.label }}</span>
             </a>
           </router-link>
 
           <a
             v-else
-            class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors"
-            :class="
-              groupHasActiveChild(item)
-                ? 'bg-primary-50 text-primary-700 font-medium'
-                : 'text-neutral-700 hover:bg-neutral-50'
-            "
+            :class="itemButtonClass(groupHasActiveChild(item) || isFlyoutOpen(item))"
+            class="cursor-pointer"
+            @click="handleGroupClick(item, hasSubmenu, $event)"
           >
-            <i v-if="item.icon" :class="item.icon" class="text-base shrink-0" />
+            <i
+              v-if="item.icon"
+              :class="[item.icon, itemIconClass(groupHasActiveChild(item) || isFlyoutOpen(item))]"
+              class="text-[20px] shrink-0"
+            ></i>
             <span v-if="!collapsed" class="flex-1 text-left">{{ item.label }}</span>
             <i
               v-if="hasSubmenu && !collapsed"
-              class="pi pi-angle-down text-xs text-neutral-400"
-            />
+              class="pi pi-angle-down text-sm text-neutral-500 transition-transform"
+            ></i>
           </a>
         </template>
       </PanelMenu>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="flyout"
+        class="sidebar-flyout fixed z-50 min-w-[220px] rounded-lg bg-blue-600 shadow-xl py-2"
+        :style="{ top: flyout.top + 'px', left: flyout.left + 'px' }"
+      >
+        <p class="px-3 pb-1.5 mb-1 text-[13px] font-bold text-white border-b border-white/20">
+          {{ flyout.item.label }}
+        </p>
+        <router-link
+          v-for="child in flyout.item.items"
+          :key="child.route"
+          v-slot="{ href, navigate, isActive: linkActive }"
+          :to="child.route"
+          custom
+        >
+          <a
+            :href="href"
+            class="block px-3 py-2 mx-1 rounded-md text-[14px] font-medium transition-colors"
+            :class="flyoutItemClass(linkActive)"
+            @click="handleFlyoutNavigate(navigate, $event)"
+          >
+            {{ child.label }}
+          </a>
+        </router-link>
+      </div>
+    </Teleport>
   </nav>
 </template>
-
-<style scoped>
-/* PanelMenu bawaan punya padding/border sendiri; kita rapikan supaya
-   menyatu visual dengan sidebar custom (bukan tampil sebagai "panel" terpisah). */
-.sidebar-panelmenu :deep(.p-panelmenu-panel) {
-  border: none;
-  background: transparent;
-}
-.sidebar-panelmenu :deep(.p-panelmenu-header-content) {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-}
-.sidebar-panelmenu :deep(.p-panelmenu-content) {
-  background: transparent;
-  border: none;
-  padding-left: 1.75rem;
-}
-.sidebar-panelmenu.is-collapsed :deep(.p-panelmenu-submenu) {
-  display: none;
-}
-</style>
