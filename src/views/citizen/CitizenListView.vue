@@ -16,6 +16,7 @@ import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import FileUpload from 'primevue/fileupload'
 import Message from 'primevue/message'
+import Dialog from 'primevue/dialog'
 
 const router = useRouter()
 const confirm = useConfirm()
@@ -25,48 +26,90 @@ const residents = ref([
     id: 1,
     name: 'Budi Santoso',
     nationalId: '3273123456789012',
+    familyCardNumber: '3273120001112223',
     gender: 'Laki-laki',
+    birthPlace: 'Yogyakarta',
+    birthDate: new Date('1990-05-14'),
+    phoneNumber: '081234567890',
     address: 'Jl. Merdeka No. 1, RT 01/RW 02',
+    occupation: 'Wiraswasta',
+    education: 'S1',
+    maritalStatus: 'Menikah',
     status: 'Active',
   },
   {
     id: 2,
     name: 'Siti Aminah',
     nationalId: '3273987654321098',
+    familyCardNumber: '3273120001112224',
     gender: 'Perempuan',
+    birthPlace: 'Sleman',
+    birthDate: new Date('1985-11-02'),
+    phoneNumber: '081298765432',
     address: 'Jl. Pahlawan No. 45, RT 02/RW 01',
+    occupation: 'Ibu Rumah Tangga',
+    education: 'SMA/SMK',
+    maritalStatus: 'Menikah',
     status: 'Pindah',
   },
   {
     id: 3,
     name: 'Agus Setiawan',
     nationalId: '3273112223445566',
+    familyCardNumber: '3273120001112225',
     gender: 'Laki-laki',
+    birthPlace: 'Bantul',
+    birthDate: new Date('1992-02-20'),
+    phoneNumber: '081311122233',
     address: 'Jl. Sudirman No. 10, RT 03/RW 03',
+    occupation: 'Karyawan Swasta',
+    education: 'D3',
+    maritalStatus: 'Belum Menikah',
     status: 'Active',
   },
   {
     id: 4,
     name: 'Dewi Lestari',
     nationalId: '3273119876543210',
+    familyCardNumber: '3273120001112226',
     gender: 'Perempuan',
+    birthPlace: 'Yogyakarta',
+    birthDate: new Date('1998-07-09'),
+    phoneNumber: '081398765432',
     address: 'Jl. Kenanga No. 7, RT 01/RW 04',
+    occupation: 'Guru',
+    education: 'S1',
+    maritalStatus: 'Belum Menikah',
     status: 'Active',
   },
   {
     id: 5,
     name: 'Rudi Hartono',
     nationalId: '3273115566778899',
+    familyCardNumber: '3273120001112227',
     gender: 'Laki-laki',
+    birthPlace: 'Kulon Progo',
+    birthDate: new Date('1978-03-30'),
+    phoneNumber: '081355667788',
     address: 'Jl. Anggrek No. 12, RT 04/RW 02',
+    occupation: 'Petani',
+    education: 'SMP',
+    maritalStatus: 'Menikah',
     status: 'Active',
   },
   {
     id: 6,
     name: 'Ani Wulandari',
     nationalId: '3273119988776655',
+    familyCardNumber: '3273120001112228',
     gender: 'Perempuan',
+    birthPlace: 'Gunungkidul',
+    birthDate: new Date('1995-09-17'),
+    phoneNumber: '081399887766',
     address: 'Jl. Mawar No. 3, RT 02/RW 03',
+    occupation: 'Perawat',
+    education: 'D3',
+    maritalStatus: 'Cerai Hidup',
     status: 'Pindah',
   },
 ])
@@ -80,6 +123,23 @@ const filters = ref({
 
 const importError = ref('')
 const importSuccess = ref('')
+
+
+
+const detailDialogVisible = ref(false)
+const selectedDetailResident = ref(null)
+
+function viewDetail(data) {
+  selectedDetailResident.value = data
+  detailDialogVisible.value = true
+}
+
+function formatDate(value) {
+  if (!value) return '-'
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+}
 
 function statusSeverity(status) {
   return status === 'Active' ? 'success' : 'warn'
@@ -137,8 +197,15 @@ function mapRowToResident(row, nextId) {
 
   const name = normalized['namalengkap'] ?? normalized['nama'] ?? normalized['name'] ?? ''
   const nationalId = normalized['nik'] ?? normalized['nationalid'] ?? ''
+  const familyCardNumber = normalized['nomorkk'] ?? normalized['kk'] ?? normalized['familycardnumber'] ?? ''
   const gender = normalized['jeniskelamin'] ?? normalized['gender'] ?? normalized['jk'] ?? ''
+  const birthPlace = normalized['tempatlahir'] ?? normalized['birthplace'] ?? ''
+  const birthDate = normalized['tanggallahir'] ?? normalized['birthdate'] ?? null
+  const phoneNumber = normalized['notelepon'] ?? normalized['nomortelepon'] ?? normalized['phonenumber'] ?? ''
   const address = normalized['alamat'] ?? normalized['address'] ?? ''
+  const occupation = normalized['pekerjaan'] ?? normalized['occupation'] ?? ''
+  const education = normalized['pendidikan'] ?? normalized['education'] ?? ''
+  const maritalStatus = normalized['statuspernikahan'] ?? normalized['maritalstatus'] ?? ''
   let status = normalized['status'] ?? 'Active'
 
   status = String(status).trim().toLowerCase() === 'pindah' ? 'Pindah' : 'Active'
@@ -149,8 +216,15 @@ function mapRowToResident(row, nextId) {
     id: nextId,
     name: String(name).trim(),
     nationalId: String(nationalId).trim(),
+    familyCardNumber: String(familyCardNumber).trim(),
     gender: String(gender).trim(),
+    birthPlace: String(birthPlace).trim(),
+    birthDate: birthDate ? String(birthDate).trim() : null,
+    phoneNumber: String(phoneNumber).trim(),
     address: String(address).trim(),
+    occupation: String(occupation).trim(),
+    education: String(education).trim(),
+    maritalStatus: String(maritalStatus).trim(),
     status,
   }
 }
@@ -217,20 +291,24 @@ function handleFileSelect(event) {
       </p>
     </div>
 
-    <Card>
+    <Card
+      :pt="{
+        root: { class: 'rounded-lg border border-neutral-200 bg-white shadow-sm' },
+        body: { class: 'p-5' },
+        content: { class: 'p-0' },
+      }"
+    >
       <template #content>
 
         <div class="mb-4 flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
-          <IconField class="w-full sm:w-72">
-            <InputIcon class="pi pi-search text-neutral-400" />
-            <InputText
-              v-model="filters.global.value"
-              placeholder="Cari nama, NIK, atau alamat"
-              class="w-full rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
-            />
-          </IconField>
-
           <div class="flex flex-wrap items-center gap-2">
+
+            <Button
+              label="Tambah Warga"
+              icon="pi pi-plus"
+              class="rounded-lg border border-transparent bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
+              @click="createResident"
+            />
 
             <Button
               label="Hapus"
@@ -241,6 +319,18 @@ function handleFileSelect(event) {
               class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
               @click="deleteSelected"
             />
+
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <IconField class="w-full sm:w-72">
+              <InputIcon class="pi pi-search text-neutral-400" />
+              <InputText
+                v-model="filters.global.value"
+                placeholder="Cari nama, NIK, atau alamat"
+                class="w-full rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
+              />
+            </IconField>
 
             <FileUpload
               mode="basic"
@@ -258,14 +348,6 @@ function handleFileSelect(event) {
               }"
               @select="handleFileSelect"
             />
-
-            <Button
-              label="Tambah Warga"
-              icon="pi pi-plus"
-              class="rounded-lg border border-transparent bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
-              @click="createResident"
-            />
-
           </div>
         </div>
 
@@ -326,9 +408,18 @@ function handleFileSelect(event) {
             </template>
           </Column>
 
-          <Column header="Aksi" headerStyle="width: 6rem">
+          <Column header="Aksi" headerStyle="width: 8rem">
             <template #body="{ data }">
               <div class="flex items-center gap-1">
+                <Button
+                  icon="pi pi-eye"
+                  text
+                  rounded
+                  severity="secondary"
+                  class="h-8 w-8 text-neutral-500 hover:bg-neutral-100 hover:text-primary-700"
+                  title="Detail"
+                  @click="viewDetail(data)"
+                />
                 <Button
                   icon="pi pi-pencil"
                   text
@@ -354,5 +445,98 @@ function handleFileSelect(event) {
 
       </template>
     </Card>
+
+    <Dialog
+      v-model:visible="detailDialogVisible"
+      header="Detail Data Warga"
+      modal
+      :style="{ width: '32rem' }"
+      class="rounded-lg"
+      :pt="{
+        header: { class: 'border-b border-neutral-100 px-5 py-4' },
+        title: { class: 'text-base font-bold text-primary-900' },
+        content: { class: 'px-5 py-5' },
+        footer: { class: 'border-t border-neutral-100 px-5 py-3' },
+      }"
+    >
+      <div v-if="selectedDetailResident" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+        <div class="flex flex-col gap-1 sm:col-span-2">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nama Lengkap</span>
+          <span class="text-[13px] font-medium text-neutral-800">{{ selectedDetailResident.name }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">NIK</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.nationalId || '-' }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor KK</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.familyCardNumber || '-' }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Jenis Kelamin</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.gender || '-' }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor Telepon</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.phoneNumber || '-' }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tempat Lahir</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.birthPlace || '-' }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tanggal Lahir</span>
+          <span class="text-[13px] text-neutral-800">{{ formatDate(selectedDetailResident.birthDate) }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Pekerjaan</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.occupation || '-' }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Pendidikan</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.education || '-' }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Status Pernikahan</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.maritalStatus || '-' }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Status</span>
+          <Tag
+            :value="selectedDetailResident.status"
+            :severity="statusSeverity(selectedDetailResident.status)"
+            class="w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide"
+          />
+        </div>
+
+        <div class="flex flex-col gap-1 sm:col-span-2">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Alamat</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.address || '-' }}</span>
+        </div>
+
+      </div>
+
+      <template #footer>
+        <Button
+          label="Tutup"
+          severity="secondary"
+          outlined
+          class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
+          @click="detailDialogVisible = false"
+        />
+      </template>
+    </Dialog>
+
   </div>
 </template>
