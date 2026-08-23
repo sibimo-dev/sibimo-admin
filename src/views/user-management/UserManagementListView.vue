@@ -1,29 +1,12 @@
 <script setup>
-/**
- * Halaman Manajemen Pengguna.
- *
- * Data sekarang berasal dari composable singleton `useAdminRoles` --
- * SUMBER YANG SAMA dipakai oleh AdminRoleManagementView.vue (List Admin).
- * Karena itu, toggle status Active/Deactive di tabel ini langsung
- * kelihatan berubah juga di sidebar List Admin, tanpa reload dan tanpa
- * perlu sinkronisasi manual -- keduanya baca dari ref yang sama persis.
- *
- * Catatan alur (sesuai kebutuhan produk):
- * - Tombol "Add New" -> diarahkan ke halaman Kelola Admin (RBAC) untuk
- *   super admin mengatur peran & hak akses, BUKAN form tambah user biasa.
- * - Icon pensil (edit) di tiap baris -> diarahkan ke halaman yang sama
- *   (Kelola Admin), sekalian bawa konteks peran (RBAC) user ini lewat
- *   query ?role=... (dicocokkan ke `role.name`, bukan `positionTitle`).
- * - Badge Status bisa langsung diklik di sini untuk toggle Active/Deactive.
- * - Kalau halaman ini dibuka dari tombol "Kelola" di List Admin
- *   (?role=Admin Berita, dst), tabel otomatis ke-filter ke peran itu.
- */
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import Tag from 'primevue/tag'
 import Checkbox from 'primevue/checkbox'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
 import AppButton from '@/components/common/AppButton.vue'
 import AppInput from '@/components/common/AppInput.vue'
 import { useAdminRoles } from '@/composables/useAdminRoles'
@@ -46,54 +29,17 @@ onMounted(() => {
   }
 })
 
-// --- Sort ---
-const sortField = ref(null)
-const sortDirection = ref('asc') // 'asc' | 'desc'
-
-function toggleSort(field) {
-  if (sortField.value === field) {
-    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
-  } else {
-    sortField.value = field
-    sortDirection.value = 'asc'
-  }
-}
-
-// Field yang dipakai untuk sort per kolom (menyesuaikan nama field di roles)
-const sortAccessor = {
-  name: (r) => r.userName,
-  role: (r) => r.positionTitle,
-  department: (r) => r.department,
-  accessLevel: (r) => r.accessLabel,
-  status: (r) => r.status,
-}
-
 const filteredUsers = computed(() => {
-  let result = [...roles.value]
-
   const query = searchQuery.value.trim().toLowerCase()
-  if (query) {
-    result = result.filter(
-      (r) =>
-        r.userName.toLowerCase().includes(query) ||
-        r.name.toLowerCase().includes(query) ||
-        r.positionTitle.toLowerCase().includes(query) ||
-        r.department.toLowerCase().includes(query),
-    )
-  }
+  if (!query) return roles.value
 
-  if (sortField.value) {
-    const accessor = sortAccessor[sortField.value]
-    result.sort((a, b) => {
-      const valA = String(accessor(a)).toLowerCase()
-      const valB = String(accessor(b)).toLowerCase()
-      if (valA < valB) return sortDirection.value === 'asc' ? -1 : 1
-      if (valA > valB) return sortDirection.value === 'asc' ? 1 : -1
-      return 0
-    })
-  }
-
-  return result
+  return roles.value.filter(
+    (r) =>
+      r.userName.toLowerCase().includes(query) ||
+      r.name.toLowerCase().includes(query) ||
+      r.positionTitle.toLowerCase().includes(query) ||
+      r.department.toLowerCase().includes(query),
+  )
 })
 
 // --- Checkbox pilih semua / per baris ---
@@ -184,86 +130,89 @@ function handleDelete(role) {
         </div>
       </div>
 
-      <!-- Tabel -->
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="text-left border-b border-gray-100">
-            <th class="py-3 w-10">
-              <Checkbox v-model="allSelected" :binary="true" />
-            </th>
-            <th class="py-3 font-semibold text-gray-700 cursor-pointer" @click="toggleSort('name')">
-              Name <i class="pi pi-sort-alt text-xs text-gray-400"></i>
-            </th>
-            <th class="py-3 font-semibold text-gray-700 cursor-pointer" @click="toggleSort('role')">
-              Role / Posisi <i class="pi pi-sort-alt text-xs text-gray-400"></i>
-            </th>
-            <th class="py-3 font-semibold text-gray-700 cursor-pointer" @click="toggleSort('department')">
-              Departmen <i class="pi pi-sort-alt text-xs text-gray-400"></i>
-            </th>
-            <th class="py-3 font-semibold text-gray-700 cursor-pointer" @click="toggleSort('accessLevel')">
-              Hak Akses <i class="pi pi-sort-alt text-xs text-gray-400"></i>
-            </th>
-            <th class="py-3 font-semibold text-gray-700 cursor-pointer" @click="toggleSort('status')">
-              Status <i class="pi pi-sort-alt text-xs text-gray-400"></i>
-            </th>
-            <th class="py-3"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="role in filteredUsers"
-            :key="role.id"
-            class="border-b border-gray-50"
-          >
-            <td class="py-3">
-              <Checkbox v-model="selectedIds" :value="role.id" />
-            </td>
-            <td class="py-3">
-              <div class="flex items-center gap-2">
-                <div class="w-7 h-7 rounded-full bg-gray-200 shrink-0"></div>
-                <span class="font-medium text-gray-800">{{ role.userName }}</span>
-              </div>
-            </td>
-            <td class="py-3 text-blue-600 font-medium">{{ role.positionTitle }}</td>
-            <td class="py-3 text-gray-600">{{ role.department }}</td>
-            <td class="py-3 text-gray-600">{{ role.accessLabel }}</td>
-            <td class="py-3">
-              <button
-                class="bg-transparent border-0 p-0 leading-none"
-                :class="role.isProtected ? 'cursor-not-allowed opacity-85' : 'cursor-pointer'"
-                :title="role.isProtected ? 'Super Admin selalu aktif' : 'Klik untuk mengubah status'"
-                @click="handleToggleStatus(role)"
-              >
-                <Tag :value="statusLabel[role.status]" :severity="statusColor[role.status]" />
-              </button>
-            </td>
-            <td class="py-3">
-              <div class="flex items-center justify-end gap-2">
-                <button
-                  class="w-8 h-8 rounded-full border border-gray-200 inline-flex items-center justify-center text-gray-600 bg-white hover:bg-gray-50"
-                  title="Edit"
-                  @click="goToEdit(role)"
-                >
-                  <i class="pi pi-pencil"></i>
-                </button>
-                <button
-                  class="w-8 h-8 rounded-full border border-gray-200 inline-flex items-center justify-center text-gray-600 bg-white hover:bg-gray-50 hover:text-red-600 hover:border-red-200"
-                  title="Hapus"
-                  @click="handleDelete(role)"
-                >
-                  <i class="pi pi-trash"></i>
-                </button>
-              </div>
-            </td>
-          </tr>
+      <!-- Tabel: DataTable/Column PrimeVue langsung, sorting bawaan per kolom -->
+      <DataTable
+        :value="filteredUsers"
+        data-key="id"
+        class="p-datatable-sm"
+        responsive-layout="scroll"
+      >
+        <Column header-style="width: 2.5rem">
+          <template #header>
+            <Checkbox v-model="allSelected" :binary="true" />
+          </template>
+          <template #body="{ data }">
+            <Checkbox v-model="selectedIds" :value="data.id" />
+          </template>
+        </Column>
 
-          <tr v-if="filteredUsers.length === 0">
-            <td colspan="7" class="py-8 text-center text-gray-400">
-              Tidak ada pengguna yang cocok dengan pencarian.
-            </td>
-          </tr>
-        </tbody>
-      </table>
+        <Column field="userName" header="Name" sortable>
+          <template #body="{ data }">
+            <div class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded-full bg-gray-200 shrink-0"></div>
+              <span class="font-medium text-gray-800">{{ data.userName }}</span>
+            </div>
+          </template>
+        </Column>
+
+        <Column field="positionTitle" header="Role / Posisi" sortable>
+          <template #body="{ data }">
+            <span class="text-blue-600 font-medium">{{ data.positionTitle }}</span>
+          </template>
+        </Column>
+
+        <Column field="department" header="Departmen" sortable>
+          <template #body="{ data }">
+            <span class="text-gray-600">{{ data.department }}</span>
+          </template>
+        </Column>
+
+        <Column field="accessLabel" header="Hak Akses" sortable>
+          <template #body="{ data }">
+            <span class="text-gray-600">{{ data.accessLabel }}</span>
+          </template>
+        </Column>
+
+        <Column field="status" header="Status" sortable>
+          <template #body="{ data }">
+            <button
+              class="bg-transparent border-0 p-0 leading-none"
+              :class="data.isProtected ? 'cursor-not-allowed opacity-85' : 'cursor-pointer'"
+              :title="data.isProtected ? 'Super Admin selalu aktif' : 'Klik untuk mengubah status'"
+              @click="handleToggleStatus(data)"
+            >
+              <Tag :value="statusLabel[data.status]" :severity="statusColor[data.status]" />
+            </button>
+          </template>
+        </Column>
+
+        <Column header-style="width: 5.5rem">
+          <template #body="{ data }">
+            <div class="flex items-center justify-end gap-2">
+              <button
+                class="w-8 h-8 rounded-full border border-gray-200 inline-flex items-center justify-center text-gray-600 bg-white hover:bg-gray-50"
+                title="Edit"
+                @click="goToEdit(data)"
+              >
+                <i class="pi pi-pencil"></i>
+              </button>
+              <button
+                class="w-8 h-8 rounded-full border border-gray-200 inline-flex items-center justify-center text-gray-600 bg-white hover:bg-gray-50 hover:text-red-600 hover:border-red-200"
+                title="Hapus"
+                @click="handleDelete(data)"
+              >
+                <i class="pi pi-trash"></i>
+              </button>
+            </div>
+          </template>
+        </Column>
+
+        <template #empty>
+          <p class="text-center text-gray-400 py-8">
+            Tidak ada pengguna yang cocok dengan pencarian.
+          </p>
+        </template>
+      </DataTable>
     </div>
   </div>
 </template>
