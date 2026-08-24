@@ -1,20 +1,6 @@
 <script setup>
-/**
- * Halaman List Otorisasi Surat.
- * Menampilkan surat yang sudah lolos verifikasi (status "Diverifikasi")
- * dan perlu tindakan otorisasi (pilih penandatangan + jenis TTD + keputusan
- * Disetujui/Ditolak). Klik "Proses Otorisasi" -> ke LetterAuthorizationView.vue
- * (route: letter-authorization-detail) untuk surat yang bersangkutan.
- *
- * Tab "Disetujui" & "Ditolak" disediakan sebagai riwayat surat yang sudah
- * pernah diproses lewat halaman ini.
- *
- * Data (`rows`) berasal dari useLetterStore (module-level state, shared
- * dengan LetterListView.vue) supaya begitu sebuah surat diotorisasi,
- * langsung hilang dari daftar "Menunggu Otorisasi" di sini.
- */
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import Tag from 'primevue/tag'
 import AppDataTable from '@/components/common/AppDataTable.vue'
 import AppButton from '@/components/common/AppButton.vue'
@@ -22,6 +8,7 @@ import AppInput from '@/components/common/AppInput.vue'
 import { useLetterStore } from '@/stores/useLetterStore'
 
 const router = useRouter()
+const route = useRoute()
 const { rows } = useLetterStore()
 
 const columns = [
@@ -68,6 +55,42 @@ const statusColor = {
 function goToDetail(row) {
   router.push({ name: 'letter-authorization-detail', params: { id: row.id } })
 }
+
+// ====== Highlight baris dari query ?highlight=REQ-xxx (dikirim dari halaman
+// Pengelolaan Surat). Nyala berkedip 5 detik lalu hilang otomatis. ======
+const highlightedId = ref(route.query.highlight ?? null)
+let highlightTimer = null
+
+function scrollToHighlighted() {
+  const el = document.querySelector('.row-highlight')
+  el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+// Pastikan tab aktif sesuai status surat yang di-highlight, supaya barisnya
+// pasti kelihatan meski defaultnya tab lain yang aktif.
+function syncTabWithHighlight(id) {
+  if (!id) return
+  const target = rows.value.find((r) => r.requestId === id)
+  if (target) activeTab.value = target.status
+}
+
+watch(
+  () => route.query.highlight,
+  (val) => {
+    clearTimeout(highlightTimer)
+    highlightedId.value = val ?? null
+    if (val) {
+      syncTabWithHighlight(val)
+      nextTick(scrollToHighlighted)
+      highlightTimer = setTimeout(() => {
+        highlightedId.value = null
+      }, 5000)
+    }
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => clearTimeout(highlightTimer))
 </script>
 
 <template>
@@ -100,16 +123,21 @@ function goToDetail(row) {
       </div>
 
       <div class="rounded-xl border border-slate-100 overflow-hidden">
-        <AppDataTable :columns="columns" :rows="filteredRows">
+        <AppDataTable
+          :columns="columns"
+          :rows="filteredRows"
+          data-key="requestId"
+          highlight-field="requestId"
+          :highlight-value="highlightedId"
+        >
           <template #status="{ data }">
             <Tag :value="data.status" :severity="statusColor[data.status]" />
           </template>
           <template #actions="{ data }">
             <AppButton
               :label="data.status === 'Diverifikasi' ? 'Proses Otorisasi' : 'Lihat Detail'"
-              variant="link"
+              variant="primary"
               size="small"
-              class="text-blue-600 hover:text-blue-700"
               @click="goToDetail(data)"
             />
           </template>
