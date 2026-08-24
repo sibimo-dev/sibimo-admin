@@ -49,15 +49,22 @@ const router = createRouter({
 })
 // Route guard: tendang ke /login kalau belum login,
 // dan jangan biarkan user yang sudah login buka /login lagi.
-router.beforeEach((to, from, next) => {
+router.beforeEach((to) => {
   const authStore = useAuthStore()
-  const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
+
+  const requiresAuth = to.matched.some(
+    (record) => record.meta.requiresAuth
+  )
+
   if (requiresAuth && !authStore.isAuthenticated) {
-    next('/login')
-  } else if (to.name === 'login' && authStore.isAuthenticated) {
-    next('/dashboard')
-  } else {
-    next()
+    return '/login'
   }
+
+  if (to.name === 'login' && authStore.isAuthenticated) {
+    return '/dashboard'
+  }
+
+  return
 })
+
 export default router

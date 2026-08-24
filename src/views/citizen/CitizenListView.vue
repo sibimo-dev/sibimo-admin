@@ -1,10 +1,11 @@
 <script setup>
 
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import * as XLSX from 'xlsx'
 import { FilterMatchMode } from '@primevue/core/api'
 import { useConfirm } from 'primevue/useconfirm'
+import api from '@/services/api'   // <-- axios instance yang udah ada
 
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
@@ -16,103 +17,66 @@ import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import FileUpload from 'primevue/fileupload'
 import Message from 'primevue/message'
-import Dialog from 'primevue/dialog'
+import Dialog from 'primevue/dialog' 
 
 const router = useRouter()
 const confirm = useConfirm()
 
-const residents = ref([
-  {
-    id: 1,
-    name: 'Budi Santoso',
-    nationalId: '3273123456789012',
-    familyCardNumber: '3273120001112223',
-    gender: 'Laki-laki',
-    birthPlace: 'Yogyakarta',
-    birthDate: new Date('1990-05-14'),
-    phoneNumber: '081234567890',
-    address: 'Jl. Merdeka No. 1, RT 01/RW 02',
-    occupation: 'Wiraswasta',
-    education: 'S1',
-    maritalStatus: 'Menikah',
-    status: 'Active',
-  },
-  {
-    id: 2,
-    name: 'Siti Aminah',
-    nationalId: '3273987654321098',
-    familyCardNumber: '3273120001112224',
-    gender: 'Perempuan',
-    birthPlace: 'Sleman',
-    birthDate: new Date('1985-11-02'),
-    phoneNumber: '081298765432',
-    address: 'Jl. Pahlawan No. 45, RT 02/RW 01',
-    occupation: 'Ibu Rumah Tangga',
-    education: 'SMA/SMK',
-    maritalStatus: 'Menikah',
-    status: 'Pindah',
-  },
-  {
-    id: 3,
-    name: 'Agus Setiawan',
-    nationalId: '3273112223445566',
-    familyCardNumber: '3273120001112225',
-    gender: 'Laki-laki',
-    birthPlace: 'Bantul',
-    birthDate: new Date('1992-02-20'),
-    phoneNumber: '081311122233',
-    address: 'Jl. Sudirman No. 10, RT 03/RW 03',
-    occupation: 'Karyawan Swasta',
-    education: 'D3',
-    maritalStatus: 'Belum Menikah',
-    status: 'Active',
-  },
-  {
-    id: 4,
-    name: 'Dewi Lestari',
-    nationalId: '3273119876543210',
-    familyCardNumber: '3273120001112226',
-    gender: 'Perempuan',
-    birthPlace: 'Yogyakarta',
-    birthDate: new Date('1998-07-09'),
-    phoneNumber: '081398765432',
-    address: 'Jl. Kenanga No. 7, RT 01/RW 04',
-    occupation: 'Guru',
-    education: 'S1',
-    maritalStatus: 'Belum Menikah',
-    status: 'Active',
-  },
-  {
-    id: 5,
-    name: 'Rudi Hartono',
-    nationalId: '3273115566778899',
-    familyCardNumber: '3273120001112227',
-    gender: 'Laki-laki',
-    birthPlace: 'Kulon Progo',
-    birthDate: new Date('1978-03-30'),
-    phoneNumber: '081355667788',
-    address: 'Jl. Anggrek No. 12, RT 04/RW 02',
-    occupation: 'Petani',
-    education: 'SMP',
-    maritalStatus: 'Menikah',
-    status: 'Active',
-  },
-  {
-    id: 6,
-    name: 'Ani Wulandari',
-    nationalId: '3273119988776655',
-    familyCardNumber: '3273120001112228',
-    gender: 'Perempuan',
-    birthPlace: 'Gunungkidul',
-    birthDate: new Date('1995-09-17'),
-    phoneNumber: '081399887766',
-    address: 'Jl. Mawar No. 3, RT 02/RW 03',
-    occupation: 'Perawat',
-    education: 'D3',
-    maritalStatus: 'Cerai Hidup',
-    status: 'Pindah',
-  },
-])
+// GANTI: dari array dummy statis -> ref kosong, diisi lewat fetchCitizens()
+const residents = ref([])
+const loading = ref(false)
+const loadError = ref('')
+
+const detailDialogVisible = ref(false)
+const selectedDetailResident = ref(null)
+
+function viewDetail(data) {
+  selectedDetailResident.value = data
+  detailDialogVisible.value = true
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '-'
+  return new Date(dateStr).toLocaleDateString('id-ID', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  })
+}
+
+// Mapping field backend (snake_case) -> field yang dipakai UI (camelCase)
+// Kenapa perlu mapping: biar KODE TEMPLATE DI BAWAH (Column, dst) TIDAK PERLU DIUBAH SAMA SEKALI.
+function mapCitizenFromApi(item) {
+  return {
+    id: item.citizen_id,
+    name: item.full_name,
+    nationalId: item.national_id, 
+    familyCardNumber: item.family_card_number,
+    gender: item.gender,
+    address: item.address,
+    status: item.status,
+    occupation: item.occupation,
+    education: item.education,
+    maritalStatus: item.marital_status,
+    phoneNumber: item.phone_number,
+    birthPlace: item.birth_place,
+    birthDate: item.birth_date,
+  }
+}
+
+async function fetchCitizens() {
+  loading.value = true
+  loadError.value = ''
+  try {
+    const res = await api.get('/citizens')
+    residents.value = res.data.data.map(mapCitizenFromApi)
+  } catch (err) {
+    loadError.value = err.response?.data?.message || 'Gagal memuat data warga.'
+  } finally {
+    loading.value = false
+  }
+}
+
+// Panggil sekali waktu halaman dibuka
+onMounted(fetchCitizens)
 
 const selectedResidents = ref([])
 const rowsPerPage = ref(10)
@@ -123,23 +87,6 @@ const filters = ref({
 
 const importError = ref('')
 const importSuccess = ref('')
-
-
-
-const detailDialogVisible = ref(false)
-const selectedDetailResident = ref(null)
-
-function viewDetail(data) {
-  selectedDetailResident.value = data
-  detailDialogVisible.value = true
-}
-
-function formatDate(value) {
-  if (!value) return '-'
-  const date = value instanceof Date ? value : new Date(value)
-  if (Number.isNaN(date.getTime())) return String(value)
-  return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
-}
 
 function statusSeverity(status) {
   return status === 'Active' ? 'success' : 'warn'
@@ -153,7 +100,9 @@ function editResident(id) {
   router.push({ name: 'citizen-edit', params: { id } })
 }
 
-function deleteResident(data) {
+
+// GANTI: deleteResident sekarang beneran panggil API, bukan cuma filter array lokal
+async function deleteResident(data) {
   confirm.require({
     message: `Hapus data warga "${data.name}" dengan NIK "${data.nationalId}"?`,
     header: 'Konfirmasi Hapus',
@@ -161,14 +110,20 @@ function deleteResident(data) {
     acceptLabel: 'Hapus',
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
-    accept: () => {
-      residents.value = residents.value.filter(resident => resident.id !== data.id)
-      selectedResidents.value = selectedResidents.value.filter(resident => resident.id !== data.id)
+    accept: async () => {
+      try {
+        await api.delete(`/citizens/${data.id}`)
+        residents.value = residents.value.filter(resident => resident.id !== data.id)
+        selectedResidents.value = selectedResidents.value.filter(resident => resident.id !== data.id)
+      } catch (err) {
+        loadError.value = err.response?.data?.message || 'Gagal menghapus data warga.'
+      }
     },
   })
 }
 
-function deleteSelected() {
+// GANTI: hapus banyak sekaligus -> panggil API satu-satu (backend belum ada endpoint bulk-delete)
+async function deleteSelected() {
   confirm.require({
     message: `Hapus ${selectedResidents.value.length} data warga terpilih?`,
     header: 'Konfirmasi Hapus',
@@ -176,13 +131,23 @@ function deleteSelected() {
     acceptLabel: 'Hapus',
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
-    accept: () => {
-      const idsToDelete = new Set(selectedResidents.value.map(resident => resident.id))
-      residents.value = residents.value.filter(resident => !idsToDelete.has(resident.id))
-      selectedResidents.value = []
+    accept: async () => {
+      const idsToDelete = selectedResidents.value.map(resident => resident.id)
+      try {
+        await Promise.all(idsToDelete.map(id => api.delete(`/citizens/${id}`)))
+        const idSet = new Set(idsToDelete)
+        residents.value = residents.value.filter(resident => !idSet.has(resident.id))
+        selectedResidents.value = []
+      } catch (err) {
+        loadError.value = err.response?.data?.message || 'Sebagian data gagal dihapus.'
+        await fetchCitizens() // sinkronin ulang biar data yg berhasil kehapus tetap ke-refresh
+      }
     },
   })
 }
+
+// --- Bagian import Excel (handleFileSelect, mapRowToResident, normalizeKey)
+// TETAP SAMA PERSIS, tidak perlu diubah -- itu logic baca file, bukan komunikasi API.
 
 function normalizeKey(key) {
   return key.trim().toLowerCase().replace(/[\s_]+/g, '')
@@ -195,41 +160,40 @@ function mapRowToResident(row, nextId) {
     normalized[normalizeKey(key)] = row[key]
   })
 
-  const name = normalized['namalengkap'] ?? normalized['nama'] ?? normalized['name'] ?? ''
-  const nationalId = normalized['nik'] ?? normalized['nationalid'] ?? ''
-  const familyCardNumber = normalized['nomorkk'] ?? normalized['kk'] ?? normalized['familycardnumber'] ?? ''
+  const full_name = normalized['namalengkap'] ?? normalized['nama'] ?? normalized['name'] ?? ''
+  const national_id = normalized['nik'] ?? normalized['nationalid'] ?? ''
+  const family_card_number = normalized['nomorkk'] ?? normalized['kk'] ?? normalized['familycardnumber'] ?? ''
   const gender = normalized['jeniskelamin'] ?? normalized['gender'] ?? normalized['jk'] ?? ''
-  const birthPlace = normalized['tempatlahir'] ?? normalized['birthplace'] ?? ''
-  const birthDate = normalized['tanggallahir'] ?? normalized['birthdate'] ?? null
-  const phoneNumber = normalized['notelepon'] ?? normalized['nomortelepon'] ?? normalized['phonenumber'] ?? ''
+  const birth_place = normalized['tempatlahir'] ?? normalized['birthplace'] ?? ''
+  const birth_date = normalized['tanggallahir'] ?? normalized['birthdate'] ?? null
+  const phone_number = normalized['notelepon'] ?? normalized['nomortelepon'] ?? normalized['phonenumber'] ?? ''
   const address = normalized['alamat'] ?? normalized['address'] ?? ''
   const occupation = normalized['pekerjaan'] ?? normalized['occupation'] ?? ''
   const education = normalized['pendidikan'] ?? normalized['education'] ?? ''
-  const maritalStatus = normalized['statuspernikahan'] ?? normalized['maritalstatus'] ?? ''
+  const marital_status = normalized['statuspernikahan'] ?? normalized['maritalstatus'] ?? ''
   let status = normalized['status'] ?? 'Active'
 
   status = String(status).trim().toLowerCase() === 'pindah' ? 'Pindah' : 'Active'
 
-  if (!name && !nationalId) return null
+  if (!full_name && !national_id) return null
 
   return {
-    id: nextId,
-    name: String(name).trim(),
-    nationalId: String(nationalId).trim(),
-    familyCardNumber: String(familyCardNumber).trim(),
+    full_name: String(full_name).trim(),
+    national_id: String(national_id).trim(),
+    family_card_number: String(family_card_number).trim(),
     gender: String(gender).trim(),
-    birthPlace: String(birthPlace).trim(),
-    birthDate: birthDate ? String(birthDate).trim() : null,
-    phoneNumber: String(phoneNumber).trim(),
+    birth_place: String(birth_place).trim(),
+    birth_date: birth_date ? String(birth_date).trim() : null,
+    phone_number: String(phone_number).trim(),
     address: String(address).trim(),
     occupation: String(occupation).trim(),
     education: String(education).trim(),
-    maritalStatus: String(maritalStatus).trim(),
+    marital_status: String(marital_status).trim(),
     status,
   }
 }
 
-function handleFileSelect(event) {
+async function handleFileSelect(event) {
   const file = event.files?.[0]
   if (!file) return
 
@@ -238,7 +202,7 @@ function handleFileSelect(event) {
 
   const reader = new FileReader()
 
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
       const data = new Uint8Array(e.target.result)
       const workbook = XLSX.read(data, { type: 'array' })
@@ -251,24 +215,32 @@ function handleFileSelect(event) {
         return
       }
 
-      let nextId = residents.value.reduce((max, resident) => Math.max(max, resident.id), 0) + 1
-      const imported = []
+      const payloads = rows.map(row => mapRowToResident(row)).filter(p => p !== null)
 
-      rows.forEach(row => {
-        const mapped = mapRowToResident(row, nextId)
-        if (mapped) {
-          imported.push(mapped)
-          nextId += 1
-        }
-      })
-
-      if (imported.length === 0) {
+      if (payloads.length === 0) {
         importError.value = 'Tidak ada baris valid ditemukan. Pastikan kolom Nama Lengkap dan NIK terisi.'
         return
       }
 
-      residents.value = [...residents.value, ...imported]
-      importSuccess.value = `${imported.length} data warga berhasil diimpor.`
+      let successCount = 0
+      let failCount = 0
+
+      for (const payload of payloads) {
+        try {
+          await api.post('/citizens', payload)
+          successCount++
+        } catch {
+          failCount++
+        }
+      }
+
+      await fetchCitizens()
+
+      if (failCount === 0) {
+        importSuccess.value = `${successCount} data warga berhasil diimpor.`
+      } else {
+        importSuccess.value = `${successCount} data berhasil diimpor, ${failCount} gagal (kemungkinan NIK duplikat/tidak valid).`
+      }
     } catch (err) {
       importError.value = 'Gagal membaca file. Pastikan format file adalah .xlsx, .xls, atau .csv.'
     }
