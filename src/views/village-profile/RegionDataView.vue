@@ -1,5 +1,7 @@
 <script setup>
 import { reactive, ref, computed } from 'vue'
+import { useToast } from 'primevue/usetoast'
+import * as XLSX from 'xlsx'
 
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
@@ -10,6 +12,25 @@ import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
+
+const toast = useToast()
+
+// Kolom yang diharapkan ada di header baris pertama file Excel/CSV.
+// Urutan bebas -- dicocokkan berdasarkan nama header, bukan posisi kolom.
+const EXCEL_COLUMN_MAP = {
+  'Dusun': 'name',
+  'Kepala Dusun': 'headName',
+  'Jumlah RW': 'rwCount',
+  'Jumlah RT': 'rtCount',
+  'Jumlah KK': 'kkCount',
+  'Jiwa': 'population',
+  'Laki-laki': 'maleCount',
+  'Perempuan': 'femaleCount',
+}
+const NUMBER_FIELDS = ['rwCount', 'rtCount', 'kkCount', 'population', 'maleCount', 'femaleCount']
+
+const excelFileInput = ref(null)
+const importingExcel = ref(false)
 
 // Dummy data dusun -- ganti dengan GET /hamlets via region.service.js.
 // Field kkCount, population, maleCount, femaleCount sementara manual;
@@ -34,6 +55,16 @@ const totalArea = ref(12.5) // km² -- ganti angka sesuai data desa Kak
 const totalRw = computed(() => hamlets.value.reduce((sum, h) => sum + h.rwCount, 0))
 const totalRt = computed(() => hamlets.value.reduce((sum, h) => sum + h.rtCount, 0))
 
+// Format sama seperti stats di Dashboard.vue -- label, value, unit, icon, bg.
+// bg pakai token warna tema Sibimo (primary/secondary/success/warning), bukan
+// warna Tailwind generik, biar konsisten dengan dashboard dan file main.css.
+const areaStats = computed(() => [
+  { label: 'Luas Wilayah', value: totalArea.value, unit: 'km²', icon: 'pi pi-map', bg: 'bg-primary-500' },
+  { label: 'Jumlah RW', value: totalRw.value, unit: 'RW', icon: 'pi pi-sitemap', bg: 'bg-secondary-600' },
+  { label: 'Jumlah RT', value: totalRt.value, unit: 'RT', icon: 'pi pi-building', bg: 'bg-success-600' },
+  { label: 'Batas Wilayah', value: neighborCount.value, unit: 'Desa Tetangga', icon: 'pi pi-compass', bg: 'bg-warning-500' },
+])
+
 const boundaries = reactive({
   north: 'Desa Sukamaju',
   south: 'Desa Margoluwih',
@@ -49,6 +80,7 @@ const filters = ref({
 })
 
 const rowsPerPage = ref(10)
+const currentPage = ref(0)
 
 const hamletDialogOpen = ref(false)
 const editingHamletId = ref(null)
@@ -107,20 +139,175 @@ function openEditHamlet(hamlet) {
 }
 
 function saveHamlet() {
-  if (!hamletForm.name.trim()) return
+  if (!hamletForm.name.trim()) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Belum lengkap',
+      detail: 'Nama dusun wajib diisi',
+      life: 3000,
+    })
+    return
+  }
 
   if (editingHamletId.value === null) {
-    hamlets.value.push({ ...hamletForm, id: Date.now() })
+    
+    currentPage.value = 0 
+
+    toast.add({
+      severity: 'success',
+      summary: 'Berhasil',
+      detail: `Dusun ${hamletForm.name} ditambahkan`,
+      life: 3000,
+    })
   } else {
     const idx = hamlets.value.findIndex((h) => h.id === editingHamletId.value)
     if (idx !== -1) hamlets.value[idx] = { ...hamlets.value[idx], ...hamletForm }
+
+    toast.add({
+      severity: 'success',
+      summary: 'Berhasil',
+      detail: `Dusun ${hamletForm.name} diperbarui`,
+      life: 3000,
+    })
   }
 
   hamletDialogOpen.value = false
 }
 
 function deleteHamlet(id) {
+  const hamlet = hamlets.value.find((h) => h.id === id)
   hamlets.value = hamlets.value.filter((h) => h.id !== id)
+
+ 
+  const maxFirst = Math.max(0, Math.ceil(hamlets.value.length / rowsPerPage.value) - 1) * rowsPerPage.value
+  if (currentPage.value > maxFirst) currentPage.value = maxFirst
+
+  toast.add({
+    severity: 'success',
+    summary: 'Berhasil',
+    detail: `Dusun ${hamlet?.name ?? ''} dihapus`,
+    life: 3000,
+  })
+}
+
+function downloadExcelTemplate() {
+  const headers = Object.keys(EXCEL_COLUMN_MAP)
+  const exampleRow = {
+    'Dusun': 'CONTOH DUSUN',
+    'Kepala Dusun': 'Nama Kepala Dusun',
+    'Jumlah RW': 3,
+    'Jumlah RT': 5,
+    'Jumlah KK': 250,
+    'Jiwa': 700,
+    'Laki-laki': 350,
+    'Perempuan': 350,
+  }
+
+  const worksheet = XLSX.utils.json_to_sheet([exampleRow], { header: headers })
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Data Wilayah')
+  XLSX.writeFile(workbook, 'template-data-wilayah.xlsx')
+}
+
+function triggerExcelImport() {
+  excelFileInput.value?.click()
+}
+
+async function handleExcelImport(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  importingExcel.value = true
+
+  try {
+    const buffer = await file.arrayBuffer()
+    const workbook = XLSX.read(buffer, { type: 'array' })
+    const firstSheetName = workbook.SheetNames[0]
+    const sheet = workbook.Sheets[firstSheetName]
+
+   
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+
+    if (rows.length === 0) {
+      toast.add({
+        severity: 'warn',
+        summary: 'File kosong',
+        detail: 'Tidak ada baris data yang terbaca dari file',
+        life: 3000,
+      })
+      return
+    }
+
+    const parsed = []
+    const errors = []
+
+    rows.forEach((row, index) => {
+      const rowNumber = index + 2 // +2: baris 1 = header, data mulai baris 2
+      const mapped = {}
+
+      for (const [excelHeader, fieldKey] of Object.entries(EXCEL_COLUMN_MAP)) {
+        mapped[fieldKey] = row[excelHeader]
+      }
+
+      const name = String(mapped.name ?? '').trim()
+      if (!name) {
+        errors.push(`Baris ${rowNumber}: kolom "Dusun" kosong, dilewati`)
+        return
+      }
+
+      const hamlet = {
+        id: Date.now() + index,
+        name,
+        headName: String(mapped.headName ?? '').trim(),
+      }
+
+      for (const field of NUMBER_FIELDS) {
+        const num = Number(mapped[field])
+        hamlet[field] = Number.isFinite(num) ? num : 0
+      }
+
+      parsed.push(hamlet)
+    })
+
+    if (parsed.length > 0) {
+      hamlets.value.unshift(...parsed)
+      currentPage.value = 0
+    }
+
+    if (parsed.length > 0 && errors.length === 0) {
+      toast.add({
+        severity: 'success',
+        summary: 'Import berhasil',
+        detail: `${parsed.length} data dusun ditambahkan`,
+        life: 3500,
+      })
+    } else if (parsed.length > 0 && errors.length > 0) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Import selesai dengan catatan',
+        detail: `${parsed.length} baris masuk, ${errors.length} baris dilewati (nama dusun kosong)`,
+        life: 4500,
+      })
+    } else {
+      toast.add({
+        severity: 'error',
+        summary: 'Import gagal',
+        detail: 'Tidak ada baris valid. Pastikan kolom "Dusun" terisi di setiap baris',
+        life: 4500,
+      })
+    }
+  } catch (err) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal membaca file',
+      detail: 'Pastikan file berformat .xlsx, .xls, atau .csv yang valid',
+      life: 4000,
+    })
+  } finally {
+    importingExcel.value = false
+    // reset value input, supaya pilih file yang SAMA dua kali berturut-turut tetap trigger @change
+    event.target.value = ''
+  }
 }
 
 function openBoundaryDialog() {
@@ -134,6 +321,13 @@ function openBoundaryDialog() {
 function saveBoundaries() {
   Object.assign(boundaries, { ...boundaryForm })
   boundaryDialogOpen.value = false
+
+  toast.add({
+    severity: 'success',
+    summary: 'Berhasil',
+    detail: 'Batas wilayah diperbarui',
+    life: 3000,
+  })
 }
 </script>
 
@@ -148,53 +342,25 @@ function saveBoundaries() {
     </p>
 
     <div class="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <Card>
-        <template #content>
-          <p class="m-0 mb-2 text-sm text-slate-500">
-            Luas Wilayah
-          </p>
-          <p class="m-0 text-2xl font-bold text-slate-900">
-            {{ totalArea }}
-            <span class="text-sm font-medium text-slate-400">km²</span>
-          </p>
-        </template>
-      </Card>
-
-      <Card>
-        <template #content>
-          <p class="m-0 mb-2 text-sm text-slate-500">
-            Jumlah RW
-          </p>
-          <p class="m-0 text-2xl font-bold text-slate-900">
-            {{ totalRw }}
-            <span class="text-sm font-medium text-slate-400">RW</span>
-          </p>
-        </template>
-      </Card>
-
-      <Card>
-        <template #content>
-          <p class="m-0 mb-2 text-sm text-slate-500">
-            Jumlah RT
-          </p>
-          <p class="m-0 text-2xl font-bold text-slate-900">
-            {{ totalRt }}
-            <span class="text-sm font-medium text-slate-400">RT</span>
-          </p>
-        </template>
-      </Card>
-
-      <Card>
-        <template #content>
-          <p class="m-0 mb-2 text-sm text-slate-500">
-            Batas Wilayah
-          </p>
-          <p class="m-0 text-2xl font-bold text-slate-900">
-            {{ neighborCount }}
-            <span class="text-sm font-medium text-slate-400">Desa Tetangga</span>
-          </p>
-        </template>
-      </Card>
+      <div
+        v-for="s in areaStats"
+        :key="s.label"
+        class="bg-white rounded-xl border border-neutral-200 p-5 relative overflow-hidden"
+      >
+        <div class="flex items-start justify-between mb-3">
+          <p class="text-sm text-neutral-500">{{ s.label }}</p>
+          <div
+            class="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-white shadow-md"
+            :class="s.bg"
+          >
+            <i :class="s.icon" class="text-lg" />
+          </div>
+        </div>
+        <p class="text-3xl font-bold text-neutral-900">
+          {{ s.value }}
+          <span class="text-sm font-medium text-neutral-400">{{ s.unit }}</span>
+        </p>
+      </div>
     </div>
 
     <div class="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -217,6 +383,31 @@ function saveBoundaries() {
                 </IconField>
 
                 <Button
+                  label="Template"
+                  icon="pi pi-download"
+                  severity="secondary"
+                  text
+                  @click="downloadExcelTemplate"
+                />
+
+                <Button
+                  label="Import Excel"
+                  icon="pi pi-upload"
+                  severity="secondary"
+                  outlined
+                  :loading="importingExcel"
+                  @click="triggerExcelImport"
+                />
+
+                <input
+                  ref="excelFileInput"
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  class="hidden"
+                  @change="handleExcelImport"
+                />
+
+                <Button
                   label="Tambah Data"
                   icon="pi pi-plus"
                   @click="openCreateHamlet"
@@ -226,6 +417,7 @@ function saveBoundaries() {
 
             <DataTable
               v-model:filters="filters"
+              v-model:first="currentPage"
               :value="hamlets"
               dataKey="id"
               :paginator="true"
@@ -319,59 +511,62 @@ function saveBoundaries() {
         </template>
       </Card>
 
-      <Card>
-        <template #content>
-          <div class="flex flex-col gap-4">
-            <div class="flex items-center justify-between">
-              <h2 class="m-0 text-base font-semibold text-slate-900">
-                Batas Wilayah
-              </h2>
+      <div class="bg-primary-600 rounded-xl p-5 text-white shadow-md flex flex-col">
+        <div class="flex items-center justify-between mb-4">
+          <p class="text-sm font-semibold flex items-center gap-2">
+            <i class="pi pi-compass text-base" />
+            Batas Wilayah
+          </p>
 
-              <Button
-                icon="pi pi-pencil"
-                text
-                rounded
-                severity="secondary"
-                aria-label="Edit batas wilayah"
-                title="Edit"
-                @click="openBoundaryDialog"
-              />
-            </div>
+          <Button
+            icon="pi pi-pencil"
+            text
+            rounded
+            aria-label="Edit batas wilayah"
+            title="Edit"
+            class="!text-white hover:!bg-white/15 !w-8 !h-8"
+            @click="openBoundaryDialog"
+          />
+        </div>
 
-            <div class="flex flex-col gap-3">
-              <div
-                v-for="direction in directionLabels"
-                :key="direction.key"
-                class="flex items-center gap-3"
-              >
-                <span
-                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600"
-                >
-                  {{ direction.letter }}
-                </span>
+        <div class="flex flex-col gap-4">
+          <div
+            v-for="direction in directionLabels"
+            :key="direction.key"
+            class="flex items-start gap-3"
+          >
+            <span
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/15 text-sm font-bold text-white"
+            >
+              {{ direction.letter }}
+            </span>
 
-                <div class="flex flex-col">
-                  <span class="text-sm font-semibold text-slate-800">
-                    {{ direction.label }}
-                  </span>
-                  <span class="text-xs text-slate-500">
-                    {{ boundaries[direction.key] || 'Belum diisi' }}
-                  </span>
-                </div>
-              </div>
+            <div class="min-w-0">
+              <p class="text-sm text-white font-medium">{{ direction.label }}</p>
+              <p class="text-xs text-white/65 mt-0.5">
+                {{ boundaries[direction.key] || 'Belum diisi' }}
+              </p>
             </div>
           </div>
-        </template>
-      </Card>
+        </div>
+      </div>
     </div>
 
+    <!--
+      Dialog Tambah/Edit Data Wilayah.
+      width diperbesar dari 28rem -> 36rem karena grid 3-kolom (Jiwa/Laki-laki/
+      Perempuan) + InputNumber (yang punya wrapper stepper +/-) butuh ruang
+      lebih dari InputText biasa. maxWidth + breakpoints menjaga dialog tetap
+      muat di layar sempit (HP) tanpa keluar viewport.
+    -->
     <Dialog
       v-model:visible="hamletDialogOpen"
       modal
       :header="editingHamletId === null ? 'Tambah Data Wilayah' : 'Edit Data Wilayah'"
-      :style="{ width: '28rem' }"
+      :style="{ width: '36rem', maxWidth: '95vw' }"
+      :breakpoints="{ '640px': '95vw' }"
     >
-      <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-4 overflow-x-hidden">
         <div class="flex flex-col gap-2">
           <label class="text-sm font-semibold text-slate-700" for="hamletName">
             Nama Dusun
@@ -406,6 +601,8 @@ function saveBoundaries() {
               v-model="hamletForm.rwCount"
               :min="0"
               class="w-full"
+              inputClass="w-full"
+              fluid
             />
           </div>
 
@@ -418,6 +615,8 @@ function saveBoundaries() {
               v-model="hamletForm.rtCount"
               :min="0"
               class="w-full"
+              inputClass="w-full"
+              fluid
             />
           </div>
         </div>
@@ -431,10 +630,12 @@ function saveBoundaries() {
             v-model="hamletForm.kkCount"
             :min="0"
             class="w-full"
+            inputClass="w-full"
+            fluid
           />
         </div>
 
-        <div class="grid grid-cols-3 gap-4">
+        <div class="grid grid-cols-3 gap-3">
           <div class="flex flex-col gap-2">
             <label class="text-sm font-semibold text-slate-700" for="hamletPopulation">
               Jiwa
@@ -444,6 +645,8 @@ function saveBoundaries() {
               v-model="hamletForm.population"
               :min="0"
               class="w-full"
+              inputClass="w-full"
+              fluid
             />
           </div>
 
@@ -456,6 +659,8 @@ function saveBoundaries() {
               v-model="hamletForm.maleCount"
               :min="0"
               class="w-full"
+              inputClass="w-full"
+              fluid
             />
           </div>
 
@@ -468,6 +673,8 @@ function saveBoundaries() {
               v-model="hamletForm.femaleCount"
               :min="0"
               class="w-full"
+              inputClass="w-full"
+              fluid
             />
           </div>
         </div>

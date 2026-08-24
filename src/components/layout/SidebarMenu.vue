@@ -35,16 +35,7 @@ const menuGroups = [
   {
     label: 'Pengaduan',
     showLabel: false,
-    items: [
-      {
-        label: 'Pengaduan',
-        icon: 'pi pi-comments',
-        items: [
-          { label: 'Daftar Aduan', route: '/complaint' },
-          { label: 'Tanggapan Aduan', route: '/complaint/response' },
-        ],
-      },
-    ],
+    items: [{ label: 'Kelola Aduan', icon: 'pi pi-comments', route: '/complaint' }],
   },
   {
     label: 'Konten Publik',

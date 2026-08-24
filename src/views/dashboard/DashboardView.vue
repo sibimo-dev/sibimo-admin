@@ -372,7 +372,7 @@ const upcomingAgenda = ref([
         </div>
 
         <!-- Agenda terdekat -->
-        <div class="bg-secondary-600 rounded-xl p-5 text-white shadow-md flex flex-col">
+        <div class="bg-gradient-to-br from-primary-700 to-primary-950 rounded-xl p-5 text-white shadow-md flex flex-col">
           <p class="text-sm font-semibold flex items-center gap-2 mb-3">
             <i class="pi pi-calendar text-base" />
             Agenda Terdekat
