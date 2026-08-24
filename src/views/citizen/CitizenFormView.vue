@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
+import api from '@/services/api'
 
 import Card from 'primevue/card'
 import InputText from 'primevue/inputtext'
@@ -48,6 +49,10 @@ const maritalStatus = ref('Belum Menikah')
 const status = ref('Active')
 const statusOpen = ref(true)
 
+const loading = ref(false)
+const saving = ref(false)
+const errorMessage = ref('')
+
 const statusLabelMap = {
   Active: 'Active',
   Pindah: 'Pindah',
@@ -57,31 +62,85 @@ const statusDisplay = computed(() => (
   statusLabelMap[status.value] ?? status.value
 ))
 
+// Helper: format Date object -> 'YYYY-MM-DD' buat dikirim ke backend
+function toApiDate(date) {
+  if (!date) return null
+  const d = date instanceof Date ? date : new Date(date)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toISOString().split('T')[0]
+}
+
+// GANTI: dari hardcode dummy -> fetch data asli dari API
+async function fetchCitizenDetail() {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const res = await api.get(`/citizens/${citizenId.value}`)
+    const data = res.data.data
+
+    fullName.value = data.full_name ?? ''
+    nationalId.value = data.national_id ?? ''
+    familyCardNumber.value = data.family_card_number ?? ''
+    gender.value = data.gender ?? 'Laki-laki'
+    birthPlace.value = data.birth_place ?? ''
+    birthDate.value = data.birth_date ? new Date(data.birth_date) : null
+    phoneNumber.value = data.phone_number ?? ''
+    address.value = data.address ?? ''
+    occupation.value = data.occupation ?? ''
+    education.value = data.education ?? 'SMA/SMK'
+    maritalStatus.value = data.marital_status ?? 'Belum Menikah'
+    status.value = data.status ?? 'Active'
+  } catch (err) {
+    errorMessage.value = err.response?.data?.message || 'Gagal memuat detail data warga.'
+  } finally {
+    loading.value = false
+  }
+}
+
 onMounted(() => {
   if (!isEditMode.value) return
-
-  fullName.value = 'Budi Santoso'
-  nationalId.value = '3273123456789012'
-  familyCardNumber.value = '3273120001112223'
-  gender.value = 'Laki-laki'
-  birthPlace.value = 'Yogyakarta'
-  birthDate.value = new Date('1990-05-14')
-  phoneNumber.value = '081234567890'
-  address.value = 'Jl. Merdeka No. 1, RT 01/RW 02'
-  occupation.value = 'Wiraswasta'
-  education.value = 'S1'
-  maritalStatus.value = 'Menikah'
-  status.value = 'Active'
+  fetchCitizenDetail()
 })
 
 function goBack() {
   router.push({ name: 'citizen-list' })
 }
 
-function saveCitizen() {
-  router.push({ name: 'citizen-list' })
+// GANTI: beneran kirim ke API (POST buat tambah baru, PUT buat update)
+async function saveCitizen() {
+  saving.value = true
+  errorMessage.value = ''
+
+  const payload = {
+    full_name: fullName.value,
+    national_id: nationalId.value,
+    family_card_number: familyCardNumber.value,
+    gender: gender.value,
+    birth_place: birthPlace.value,
+    birth_date: toApiDate(birthDate.value),
+    phone_number: phoneNumber.value,
+    address: address.value,
+    occupation: occupation.value,
+    education: education.value,
+    marital_status: maritalStatus.value,
+    status: status.value,
+  }
+
+  try {
+    if (isEditMode.value) {
+      await api.put(`/citizens/${citizenId.value}`, payload)
+    } else {
+      await api.post('/citizens', payload)
+    }
+    router.push({ name: 'citizen-list' })
+  } catch (err) {
+    errorMessage.value = err.response?.data?.message || 'Gagal menyimpan data warga.'
+  } finally {
+    saving.value = false
+  }
 }
 
+// GANTI: beneran hapus lewat API
 function deleteCitizen() {
   confirm.require({
     message: `Hapus data warga "${fullName.value}" dengan NIK "${nationalId.value}"?`,
@@ -90,8 +149,13 @@ function deleteCitizen() {
     acceptLabel: 'Hapus',
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
-    accept: () => {
-      router.push({ name: 'citizen-list' })
+    accept: async () => {
+      try {
+        await api.delete(`/citizens/${citizenId.value}`)
+        router.push({ name: 'citizen-list' })
+      } catch (err) {
+        errorMessage.value = err.response?.data?.message || 'Gagal menghapus data warga.'
+      }
     },
   })
 }

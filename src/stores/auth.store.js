@@ -10,16 +10,25 @@ import * as authService from '@/services/auth.service'
  */
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('sibimo_token') || null)
-  const user = ref(JSON.parse(localStorage.getItem('sibimo_user') || 'null'))
+
+  const storedUser = localStorage.getItem('sibimo_user')
+  
+  const user = ref(
+    storedUser && storedUser !== 'undefined'
+      ? JSON.parse(storedUser)
+      : null
+  )
 
   const isAuthenticated = computed(() => !!token.value)
-
+  
   async function login(credentials) {
     const { data } = await authService.login(credentials)
-    token.value = data.token
-    user.value = data.user
-    localStorage.setItem('sibimo_token', data.token)
-    localStorage.setItem('sibimo_user', JSON.stringify(data.user))
+  
+    token.value = data.data.token
+    user.value = data.data.user
+  
+    localStorage.setItem('sibimo_token', data.data.token)
+    localStorage.setItem('sibimo_user', JSON.stringify(data.data.user))
   }
 
   function logout() {
