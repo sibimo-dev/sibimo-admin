@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
+import { useToast } from 'primevue/usetoast'
 
 import Card from 'primevue/card'
 import InputText from 'primevue/inputtext'
@@ -16,6 +17,7 @@ import Editor from 'primevue/editor'
 const route = useRoute()
 const router = useRouter()
 const confirm = useConfirm()
+const toast = useToast()
 
 const potentialId = computed(() => route.params.id ?? null)
 const isEditMode = computed(() => potentialId.value !== null)
@@ -29,170 +31,12 @@ const mainButtonLabel = computed(() => (
 ))
 
 const photoPreview = ref(null)
+const photoFile = ref(null)
+const fileUploadRef = ref(null)
 const title = ref('')
-
-let quill = null
 const content = ref('')
 
-const blockTypeOptions = [
-  { label: 'Heading', value: 2 },
-  { label: 'Paragraf', value: false },
-]
-
-const fontFamilyOptions = [
-  { label: 'Sans Serif', value: false },
-  { label: 'Serif', value: 'serif' },
-  { label: 'Monospace', value: 'monospace' },
-]
-
-const alignCycle = [false, 'center', 'right']
-const alignIconMap = {
-  false: 'pi pi-align-left',
-  center: 'pi pi-align-center',
-  right: 'pi pi-align-right',
-}
-
-const activeFormats = ref({
-  bold: false,
-  italic: false,
-  underline: false,
-  list: null,
-  align: false,
-  header: false,
-  font: false,
-})
-
-function focusEditor() {
-  quill?.focus()
-}
-
-function getRange() {
-  return quill?.getSelection(true) ?? null
-}
-
-function refreshActiveFormats() {
-  if (!quill) return
-  const range = quill.getSelection()
-  const fmt = range ? quill.getFormat(range) : {}
-
-  activeFormats.value.bold = !!fmt.bold
-  activeFormats.value.italic = !!fmt.italic
-  activeFormats.value.underline = !!fmt.underline
-  activeFormats.value.list = fmt.list ?? null
-  activeFormats.value.align = fmt.align ?? false
-  activeFormats.value.header = fmt.header ?? false
-  activeFormats.value.font = fmt.font ?? false
-}
-
-function toggleFormat(name) {
-  if (!quill) return
-  focusEditor()
-  const range = getRange()
-  const fmt = quill.getFormat(range)
-  quill.format(name, !fmt[name])
-  refreshActiveFormats()
-}
-
-function toggleBold() {
-  toggleFormat('bold')
-}
-
-function toggleItalic() {
-  toggleFormat('italic')
-}
-
-function toggleUnderline() {
-  toggleFormat('underline')
-}
-
-function applyHeader(value) {
-  if (!quill) return
-  focusEditor()
-  quill.format('header', value)
-  refreshActiveFormats()
-}
-
-function applyFont(value) {
-  if (!quill) return
-  focusEditor()
-  quill.format('font', value)
-  refreshActiveFormats()
-}
-
-function cycleAlign() {
-  if (!quill) return
-  const currentIndex = alignCycle.indexOf(activeFormats.value.align || false)
-  const nextAlign = alignCycle[(currentIndex + 1) % alignCycle.length]
-  focusEditor()
-  quill.format('align', nextAlign)
-  refreshActiveFormats()
-}
-
-function toggleList(type) {
-  if (!quill) return
-  focusEditor()
-  const range = getRange()
-  const fmt = quill.getFormat(range)
-  quill.format('list', fmt.list === type ? false : type)
-  refreshActiveFormats()
-}
-
-function handleContentImageSelect(event) {
-  const file = event.files?.[0]
-  if (!file || !quill) return
-
-  const reader = new FileReader()
-  reader.onload = () => {
-    focusEditor()
-    const range = getRange() ?? { index: quill.getLength() }
-    quill.insertEmbed(range.index, 'image', reader.result, 'user')
-    quill.setSelection(range.index + 1)
-  }
-  reader.readAsDataURL(file)
-}
-
-function insertLink() {
-  if (!quill) return
-  const url = window.prompt('Masukkan URL tautan:', 'https://')
-  if (!url) return
-
-  focusEditor()
-  const range = getRange() ?? { index: quill.getLength(), length: 0 }
-
-  if (range.length > 0) {
-    quill.format('link', url)
-  } else {
-    quill.insertText(range.index, url, { link: url }, 'user')
-    quill.setSelection(range.index + url.length)
-  }
-}
-
-function clearFormatting() {
-  if (!quill) return
-  focusEditor()
-  const range = getRange()
-  if (range) quill.removeFormat(range.index, range.length)
-  refreshActiveFormats()
-}
-
-function setEditorHtml(html) {
-  content.value = html
-  if (quill) {
-    quill.root.innerHTML = html
-  }
-}
-
-function onEditorLoad(event) {
-  quill = event.instance
-  refreshActiveFormats()
-}
-
-function onEditorTextChange() {
-  refreshActiveFormats()
-}
-
 const status = ref('Draft')
-const statusOpen = ref(true)
 const visibility = ref('publik')
 const publishDate = ref(new Date())
 const authorOptions = ['User Name']
@@ -204,15 +48,6 @@ const categoryOptions = ref([
   { id: 'pariwisata', label: 'Pariwisata', checked: false },
   { id: 'umkm', label: 'UMKM', checked: false },
 ])
-
-const statusLabelMap = {
-  Draft: 'Draft',
-  Published: 'Published',
-}
-
-const statusDisplay = computed(() => (
-  statusLabelMap[status.value] ?? status.value
-))
 
 const visibilityLabel = computed(() => (
   visibility.value === 'publik'
@@ -227,11 +62,11 @@ onMounted(() => {
 
   title.value = 'Judul Potensi desa'
 
-  setEditorHtml(`
+  content.value = `
     <p>Lorem ipsum dolor sit amet, id enim eiusmod elit dolore aute.
     Non qui labore in in ea id pariatur consequat velit qui sunt
     sit exercitation commodo excepteur.</p>
-  `)
+  `
 
   status.value = 'Published'
   visibility.value = 'publik'
@@ -242,10 +77,33 @@ onMounted(() => {
   if (agricultureCategory) agricultureCategory.checked = true
 })
 
-function selectPhoto(event) {
+function handlePhotoSelect(event) {
   const file = event.files?.[0]
   if (!file) return
-  photoPreview.value = URL.createObjectURL(file)
+  photoFile.value = file
+  const reader = new FileReader()
+  reader.onload = () => {
+    photoPreview.value = reader.result
+  }
+  reader.readAsDataURL(file)
+}
+
+function handlePhotoValidationError(event) {
+  const message = event.files?.[0]?.name
+    ? `File "${event.files[0].name}" tidak valid (format/ukuran tidak sesuai)`
+    : 'File tidak valid'
+  toast.add({ severity: 'error', summary: message, life: 3000 })
+}
+
+function changePhoto(removeFileCallback) {
+  removeFileCallback?.(0)
+  fileUploadRef.value?.choose()
+}
+
+function removePhoto(removeFileCallback) {
+  removeFileCallback?.(0)
+  photoPreview.value = null
+  photoFile.value = null
 }
 
 function previewPotential() {
@@ -293,46 +151,68 @@ function moveToTrash() {
           <div class="flex flex-col gap-5">
 
             <div class="flex flex-col gap-2">
-              <label class="text-[13px] font-semibold text-neutral-700">
+              <span class="text-[13px] font-semibold text-neutral-700">
                 Foto
-              </label>
+              </span>
 
-              <div
-                class="relative flex h-60 items-center justify-center overflow-hidden rounded-[10px] bg-neutral-100"
-                :class="
-                  photoPreview
-                    ? 'border border-solid border-neutral-300'
-                    : 'border-[1.5px] border-dashed border-neutral-300'
-                "
+              <FileUpload
+                ref="fileUploadRef"
+                mode="advanced"
+                accept="image/*"
+                :maxFileSize="5000000"
+                :multiple="false"
+                :auto="false"
+                :showUploadButton="false"
+                :showCancelButton="false"
+                customUpload
+                :pt="{
+                  root: { class: 'border-none bg-transparent p-0' },
+                  header: { class: 'hidden' },
+                  content: { class: 'border-none bg-transparent p-0' },
+                }"
+                @select="handlePhotoSelect"
+                @file-validation-failed="handlePhotoValidationError"
               >
-                <img
-                  v-if="photoPreview"
-                  :src="photoPreview"
-                  alt="Preview foto"
-                  class="h-full w-full object-cover"
-                />
+                <template #empty>
+                  <div
+                    v-if="!photoPreview"
+                    class="rounded-xl border-2 border-dashed border-primary-200 bg-primary-50/40 flex flex-col items-center justify-center py-10 cursor-pointer hover:bg-primary-50 transition-colors"
+                    @click="fileUploadRef?.choose()"
+                  >
+                    <i class="pi pi-cloud-upload text-3xl text-primary-400 mb-2" />
+                    <p class="text-sm text-neutral-600 m-0">
+                      <span class="text-primary-600 font-medium">Klik untuk unggah</span> atau seret foto ke sini
+                    </p>
+                    <p class="text-xs text-neutral-400 mt-1">PNG, JPG, maks. 5MB</p>
+                  </div>
+                </template>
 
-                <span v-else class="text-[13px] text-neutral-400">
-                  Klik atau seret foto ke sini
-                </span>
-
-                <span class="absolute right-2.5 top-2.5 rounded-md bg-white p-1.5 text-primary-600 shadow">
-                  <i class="pi pi-pencil text-sm" />
-                </span>
-
-                <FileUpload
-                  mode="basic"
-                  accept="image/*"
-                  :auto="false"
-                  customUpload
-                  chooseLabel=""
-                  :pt="{
-                    root: { class: 'absolute inset-0' },
-                    chooseButton: { class: 'absolute inset-0 h-full w-full cursor-pointer opacity-0' },
-                  }"
-                  @select="selectPhoto"
-                />
-              </div>
+                <template #content="{ removeFileCallback }">
+                  <div v-if="photoPreview" class="relative overflow-hidden rounded-xl border border-neutral-200 group">
+                    <img :src="photoPreview" alt="Preview foto" class="h-48 w-full object-cover" />
+                    <div
+                      class="absolute inset-0 bg-neutral-900/0 group-hover:bg-neutral-900/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100"
+                    >
+                      <Button
+                        type="button"
+                        icon="pi pi-refresh"
+                        severity="secondary"
+                        rounded
+                        aria-label="Ganti foto"
+                        @click="changePhoto(removeFileCallback)"
+                      />
+                      <Button
+                        type="button"
+                        icon="pi pi-trash"
+                        severity="danger"
+                        rounded
+                        aria-label="Hapus foto"
+                        @click="removePhoto(removeFileCallback)"
+                      />
+                    </div>
+                  </div>
+                </template>
+              </FileUpload>
             </div>
 
             <div class="flex flex-col gap-2">
@@ -353,134 +233,11 @@ function moveToTrash() {
                 Isi Konten
               </label>
 
-              <div class="overflow-hidden rounded-lg border border-neutral-300">
-                <Editor
-                  v-model="content"
-                  placeholder="Tulis deskripsi potensi desa di sini..."
-                  :pt="{
-                    toolbar: { class: 'flex flex-wrap items-center gap-1.5 border-b border-neutral-200 bg-neutral-50 px-2.5 py-2' },
-                    content: { class: 'min-h-[220px] w-full text-[13px] text-neutral-800 [&_.ql-clipboard]:absolute [&_.ql-clipboard]:-left-[100000px] [&_.ql-clipboard]:top-1/2 [&_.ql-clipboard]:h-px [&_.ql-clipboard]:overflow-y-hidden [&_.ql-editor]:min-h-[220px] [&_.ql-editor]:p-3.5 [&_.ql-editor]:outline-none [&_.ql-editor]:whitespace-pre-wrap [&_.ql-editor_a]:text-primary-600 [&_.ql-editor_a]:underline [&_.ql-editor_blockquote]:my-2.5 [&_.ql-editor_blockquote]:border-l-4 [&_.ql-editor_blockquote]:border-neutral-300 [&_.ql-editor_blockquote]:pl-4 [&_.ql-editor_img]:max-w-full [&_.ql-editor_ol]:list-decimal [&_.ql-editor_ol]:pl-5 [&_.ql-editor_ul]:list-disc [&_.ql-editor_ul]:pl-5' },
-                  }"
-                  @load="onEditorLoad"
-                  @text-change="onEditorTextChange"
-                  @selection-change="refreshActiveFormats"
-                >
-                  <template #toolbar>
-                    <Select
-                      :modelValue="activeFormats.header"
-                      :options="blockTypeOptions"
-                      optionLabel="label"
-                      optionValue="value"
-                      class="rounded-md border border-neutral-200 bg-white text-xs text-neutral-700"
-                      :pt="{ label: { class: 'px-1.5 py-1' } }"
-                      @update:modelValue="applyHeader"
-                    />
-
-                    <Select
-                      :modelValue="activeFormats.font"
-                      :options="fontFamilyOptions"
-                      optionLabel="label"
-                      optionValue="value"
-                      class="rounded-md border border-neutral-200 bg-white text-xs text-neutral-700"
-                      :pt="{ label: { class: 'px-1.5 py-1' } }"
-                      @update:modelValue="applyFont"
-                    />
-
-                    <span class="mx-0.5 h-[18px] w-px bg-neutral-200" />
-
-                    <Button
-                      text
-                      :severity="activeFormats.bold ? 'primary' : 'secondary'"
-                      title="Bold"
-                      label="B"
-                      class="min-w-0 rounded-md px-2 py-1 text-[13px] font-bold hover:bg-neutral-200"
-                      @click="toggleBold"
-                    />
-
-                    <Button
-                      text
-                      :severity="activeFormats.italic ? 'primary' : 'secondary'"
-                      title="Italic"
-                      label="I"
-                      class="min-w-0 rounded-md px-2 py-1 text-[13px] italic hover:bg-neutral-200"
-                      @click="toggleItalic"
-                    />
-
-                    <Button
-                      text
-                      :severity="activeFormats.underline ? 'primary' : 'secondary'"
-                      title="Underline"
-                      label="U"
-                      class="min-w-0 rounded-md px-2 py-1 text-[13px] underline hover:bg-neutral-200"
-                      @click="toggleUnderline"
-                    />
-
-                    <span class="mx-0.5 h-[18px] w-px bg-neutral-200" />
-
-                    <Button
-                      text
-                      severity="secondary"
-                      :icon="alignIconMap[activeFormats.align || false]"
-                      title="Perataan teks"
-                      class="min-w-0 rounded-md px-2 py-1 text-neutral-700 hover:bg-neutral-200"
-                      @click="cycleAlign"
-                    />
-
-                    <Button
-                      text
-                      :severity="activeFormats.list === 'ordered' ? 'primary' : 'secondary'"
-                      icon="pi pi-list"
-                      title="List bernomor"
-                      class="min-w-0 rounded-md px-2 py-1 hover:bg-neutral-200"
-                      @click="toggleList('ordered')"
-                    />
-
-                    <Button
-                      text
-                      :severity="activeFormats.list === 'bullet' ? 'primary' : 'secondary'"
-                      icon="pi pi-circle-fill"
-                      title="List poin"
-                      class="min-w-0 rounded-md px-2 py-1 text-[8px] hover:bg-neutral-200"
-                      @click="toggleList('bullet')"
-                    />
-
-                    <span class="mx-0.5 h-[18px] w-px bg-neutral-200" />
-
-                    <FileUpload
-                      mode="basic"
-                      accept="image/*"
-                      :auto="false"
-                      customUpload
-                      chooseLabel=""
-                      chooseIcon="pi pi-image"
-                      title="Sisipkan gambar"
-                      :pt="{
-                        root: { class: 'inline-flex' },
-                        chooseButton: { class: 'min-w-0 rounded-md border-0 bg-transparent px-2 py-1 text-neutral-700 hover:bg-neutral-200' },
-                      }"
-                      @select="handleContentImageSelect"
-                    />
-
-                    <Button
-                      text
-                      severity="secondary"
-                      icon="pi pi-link"
-                      title="Sisipkan tautan"
-                      class="min-w-0 rounded-md px-2 py-1 text-neutral-700 hover:bg-neutral-200"
-                      @click="insertLink"
-                    />
-
-                    <Button
-                      text
-                      severity="secondary"
-                      icon="pi pi-times"
-                      title="Hapus format"
-                      class="min-w-0 rounded-md px-2 py-1 text-neutral-700 hover:bg-neutral-200"
-                      @click="clearFormatting"
-                    />
-                  </template>
-                </Editor>
-              </div>
+              <Editor
+                v-model="content"
+                editorStyle="height: 220px"
+                placeholder="Tulis deskripsi potensi desa di sini..."
+              />
             </div>
           </div>
         </template>
@@ -519,40 +276,6 @@ function moveToTrash() {
                 class="min-w-0 p-0 text-[13px] font-medium text-primary-600 hover:underline"
                 @click="previewPotential"
               />
-            </div>
-          </template>
-        </Card>
-
-        <Card>
-          <template #content>
-            <div class="flex flex-col gap-2.5">
-              <Button
-                text
-                severity="secondary"
-                class="w-full min-w-0 justify-between rounded-md border-0 bg-transparent p-0 text-left text-[13px] font-normal text-neutral-700 hover:bg-transparent"
-                @click="statusOpen = !statusOpen"
-              >
-                <span>
-                  Status:
-                  <strong>{{ statusDisplay }}</strong>
-                </span>
-
-                <i
-                  class="pi pi-chevron-up text-[11px] text-neutral-400 transition-transform"
-                  :class="{ 'rotate-180': statusOpen }"
-                />
-              </Button>
-
-              <div v-show="statusOpen" class="flex flex-col gap-1.5">
-                <Select
-                  v-model="status"
-                  :options="[{ label: 'Draft', value: 'Draft' }, { label: 'Published', value: 'Published' }]"
-                  optionLabel="label"
-                  optionValue="value"
-                  class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-600 focus:ring-4 focus:ring-primary-100"
-                  :pt="{ label: { class: 'px-3 py-2.5' } }"
-                />
-              </div>
             </div>
           </template>
         </Card>
