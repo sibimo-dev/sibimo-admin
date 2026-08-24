@@ -8,7 +8,7 @@ const props = defineProps({
   variant: {
     type: String,
     default: 'primary',
-    // primary | dark | secondary | outline | soft | text | ghost | link
+    // primary | dark | secondary | gold | outline | soft | text | ghost | link
     // | danger | success | warning | neutral | light
   },
   loading: { type: Boolean, default: false },
@@ -22,20 +22,21 @@ const props = defineProps({
 
 defineEmits(['click'])
 
-
 const variantMap = {
-  primary: { severity: undefined },
+  primary: { severity: undefined, gradient: 'primary' },
   dark: { severity: 'contrast' },
-  secondary: { severity: 'secondary' },
+  
+  secondary: { severity: undefined, gradient: 'secondary' },
+  gold: { severity: undefined, gradient: 'secondary' },
   outline: { severity: undefined, outlined: true },
   soft: { severity: undefined, text: true, soft: true },
   text: { severity: undefined, text: true },
   ghost: { severity: 'secondary', text: true },
   link: { severity: undefined, link: true },
-  danger: { severity: 'danger' },
+  danger: { severity: 'danger', gradient: 'danger' },
   'danger-ghost': { severity: 'danger', text: true },
-  success: { severity: 'success' },
-  warning: { severity: 'warn' },
+  success: { severity: 'success', gradient: 'success' },
+  warning: { severity: 'warn', gradient: 'warning' },
   neutral: { severity: 'secondary', outlined: true },
   light: { severity: 'secondary', text: true },
 }
@@ -47,10 +48,12 @@ const text = computed(() => config.value.text ?? false)
 const link = computed(() => config.value.link ?? false)
 const isSoft = computed(() => config.value.soft ?? false)
 const isRounded = computed(() => props.rounded || props.roundedIcon)
+const gradient = computed(() => config.value.gradient ?? null)
 
 const buttonClass = computed(() => ({
   'app-btn-soft': isSoft.value,
   'app-btn-rounded-icon': props.roundedIcon,
+  [`app-btn-gradient-${gradient.value}`]: !!gradient.value && !text.value && !link.value && !outlined.value,
 }))
 </script>
 
@@ -74,7 +77,7 @@ const buttonClass = computed(() => ({
 </template>
 
 <style scoped>
-
+/* ===== Soft variant ===== */
 .app-btn-soft {
   background: var(--p-primary-50) !important;
   color: var(--p-primary-700) !important;
@@ -84,9 +87,84 @@ const buttonClass = computed(() => ({
   background: var(--p-primary-100) !important;
 }
 
+/* ===== Rounded icon-only button ===== */
 .app-btn-rounded-icon {
   width: 2.25rem;
   height: 2.25rem;
   padding: 0;
+}
+
+
+:deep(.p-button-link .p-button-label) {
+  color: var(--p-primary-600) !important;
+}
+:deep(.p-button-link:not(:disabled):hover .p-button-label) {
+  color: var(--p-primary-700) !important;
+}
+
+/* ===== Gradient variants - biar tidak flat/monoton ===== */
+.app-btn-gradient-primary {
+  background: linear-gradient(135deg, var(--p-primary-400), var(--p-primary-700)) !important;
+  border: none !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--p-primary-700) 35%, transparent);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.app-btn-gradient-primary:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--p-primary-700) 45%, transparent);
+}
+
+
+.app-btn-gradient-secondary {
+  background: linear-gradient(135deg, var(--p-secondary-300), var(--p-secondary-600)) !important;
+  border: none !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--p-secondary-600) 35%, transparent);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.app-btn-gradient-secondary:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--p-secondary-600) 45%, transparent);
+}
+
+.app-btn-gradient-danger {
+  background: linear-gradient(135deg, var(--p-danger-400), var(--p-danger-600)) !important;
+  border: none !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--p-danger-600) 35%, transparent);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.app-btn-gradient-danger:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--p-danger-600) 45%, transparent);
+}
+
+.app-btn-gradient-success {
+  background: linear-gradient(135deg, var(--p-success-400), var(--p-success-600)) !important;
+  border: none !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--p-success-600) 35%, transparent);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.app-btn-gradient-success:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--p-success-600) 45%, transparent);
+}
+
+.app-btn-gradient-warning {
+  background: linear-gradient(135deg, var(--p-warn-400), var(--p-warn-600)) !important;
+  border: none !important;
+  color: #1c1300 !important; /* warning tetap kuning terang -> teks gelap, bukan putih */
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--p-warn-600) 35%, transparent);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.app-btn-gradient-warning:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--p-warn-600) 45%, transparent);
+}
+
+:deep(.p-button) {
+  border-radius: 10px;
 }
 </style>
