@@ -1,10 +1,4 @@
 <script setup>
-/**
- * Halaman Pengelolaan Layanan Surat.
- * rows berasal dari useLetterStore (dummy, module-level state) supaya
- * surat yang dibuat manual lewat LetterCreateView.vue langsung tampil di sini.
- * Ganti useLetterStore dengan surat.service.js begitu backend siap.
- */
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import Tag from 'primevue/tag'
@@ -40,8 +34,6 @@ const sortOptions = [
   { label: 'Sort by Date: Terbaru', value: 'newest' },
   { label: 'Sort by Date: Terlama', value: 'oldest' },
 ]
-// Default "newest" -- filter "7 hari"/"30 hari" dihitung dari tanggal sistem berjalan,
-// jadi dummy data lama gampang ke-filter habis kalau dipakai sebagai default.
 const selectedSort = ref('newest')
 
 // --- Search ---
@@ -93,12 +85,28 @@ const statusColor = {
   Ditolak: 'danger',
 }
 
-// --- Tombol aksi dinamis sesuai status ---
+// --- Tombol aksi hanya untuk status yang butuh tindakan lanjutan.
+// Disetujui/Ditolak tidak ada aksi -- notif WA sudah otomatis terkirim
+// begitu proses verifikasi/otorisasi selesai. ---
 const actionLabel = {
   Pending: 'Verifikasi',
   Diverifikasi: 'Otorisasi',
-  Disetujui: 'Kirim Notif',
-  Ditolak: 'Kirim Notif',
+}
+
+// Route tujuan per status -- disertai highlight query supaya baris surat
+// yang diklik langsung ditunjukkan (kedip 5 detik) di halaman tujuan.
+const actionRoute = {
+  Pending: { name: 'letter-verification' },
+  Diverifikasi: { name: 'letter-authorization' },
+}
+
+function handleAction(data) {
+  const target = actionRoute[data.status]
+  if (!target) return
+  router.push({
+    ...target,
+    query: { highlight: data.requestId },
+  })
 }
 
 // --- Pagination ---
@@ -182,11 +190,13 @@ function goToTambahSurat() {
           </template>
           <template #actions="{ data }">
             <AppButton
+              v-if="actionLabel[data.status]"
               :label="actionLabel[data.status]"
-              variant="link"
+              variant="primary"
               size="small"
-              class="text-blue-600 hover:text-blue-700"
+              @click="handleAction(data)"
             />
+            <span v-else class="text-slate-300 text-sm">—</span>
           </template>
         </AppDataTable>
       </div>

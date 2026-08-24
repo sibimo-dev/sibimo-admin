@@ -1,12 +1,6 @@
 <script setup>
-/**
- * Halaman Verifikasi Surat -- daftar antrean.
- * Menampilkan surat berstatus "Pending" (menunggu verifikasi). Klik "Verifikasi"
- * membuka detail (LetterVerificationView.vue) lewat route /letter/verification/:id
- * yang isi tombolnya (Setujui/Tolak) langsung mengubah status di useLetterStore.
- */
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import Tag from 'primevue/tag'
 import AppDataTable from '@/components/common/AppDataTable.vue'
 import AppButton from '@/components/common/AppButton.vue'
@@ -14,6 +8,7 @@ import AppInput from '@/components/common/AppInput.vue'
 import { useLetterStore } from '@/stores/useLetterStore'
 
 const router = useRouter()
+const route = useRoute()
 const { rows } = useLetterStore()
 
 const columns = [
@@ -28,8 +23,6 @@ const columns = [
 
 const searchQuery = ref('')
 
-// Antrean verifikasi hanya menampilkan yang masih Pending -- yang sudah
-// Diverifikasi/Disetujui/Ditolak tidak perlu tindakan lagi di sini.
 const pendingRows = computed(() => {
   let result = rows.value.filter((r) => r.status === 'Pending')
 
@@ -43,12 +36,47 @@ const pendingRows = computed(() => {
     )
   }
 
-  return result.sort((a, b) => new Date(a.dateValue) - new Date(b.dateValue)) // antrean lama duluan
+  return result.sort((a, b) => new Date(a.dateValue) - new Date(b.dateValue))
 })
 
 function openVerification(data) {
   router.push(`/letter/verification/${data.requestId}`)
 }
+
+// ====== Highlight baris dari query ?highlight=REQ-xxx (dikirim dari halaman
+// Pengelolaan Surat). Nyala 5 detik lalu hilang otomatis. ======
+const highlightedId = ref(route.query.highlight ?? null)
+let highlightTimer = null
+
+// Lompat otomatis ke halaman paginator yang berisi baris highlight
+const highlightFirst = computed(() => {
+  if (!highlightedId.value) return 0
+  const index = pendingRows.value.findIndex((r) => r.requestId === highlightedId.value)
+  if (index === -1) return 0
+  return Math.floor(index / 10) * 10
+})
+
+function scrollToHighlighted() {
+  const el = document.querySelector('.row-highlight')
+  el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+watch(
+  () => route.query.highlight,
+  (val) => {
+    clearTimeout(highlightTimer)
+    highlightedId.value = val ?? null
+    if (val) {
+      nextTick(scrollToHighlighted)
+      highlightTimer = setTimeout(() => {
+        highlightedId.value = null
+      }, 5000)
+    }
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => clearTimeout(highlightTimer))
 </script>
 
 <template>
@@ -74,7 +102,14 @@ function openVerification(data) {
       </div>
 
       <div class="rounded-xl border border-slate-100 overflow-hidden">
-        <AppDataTable :columns="columns" :rows="pendingRows">
+        <AppDataTable
+          :columns="columns"
+          :rows="pendingRows"
+          data-key="requestId"
+          highlight-field="requestId"
+          :highlight-value="highlightedId"
+          :first="highlightFirst"
+        >
           <template #category="{ data }">
             <Tag :value="data.category" severity="info" />
           </template>
