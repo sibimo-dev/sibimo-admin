@@ -1,15 +1,4 @@
 <script setup>
-/**
- * Halaman Verifikasi Surat (detail).
- * Diakses dari LetterVerificationListView.vue lewat /letter/verification/:id
- * (id = requestId). Data pemohon sekarang diambil dari useLetterStore --
- * bukan dummy hardcode lagi -- dan tombol Setujui/Tolak memanggil
- * updateStatus() di store yang sama.
- *
- * Dokumen terlampir & preview MASIH dummy statis karena belum ada alur
- * upload/simpan dokumen di aplikasi ini. Ganti begitu fitur upload dokumen
- * pemohon (online maupun manual) sudah ada.
- */
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
@@ -62,28 +51,113 @@ async function setujuiPermohonan() {
       notes: catatan.value,
     })
     toast.add({ severity: 'success', summary: 'Permohonan diverifikasi', life: 2000 })
-    router.push('/letter/verification')
+
+    // Arahkan ke daftar Otorisasi, bawa requestId lewat query supaya baris
+    // surat ini bisa di-highlight (blink) di sana agar admin langsung tahu
+    // surat mana yang baru saja diverifikasi.
+    router.push({ name: 'letter-authorization', query: { highlight: record.value.requestId } })
   } finally {
     loading.value = false
   }
 }
 
+/**
+ * Ubah nomor telepon lokal (08xxx / +62xxx / 62xxx) ke format
+ * internasional tanpa simbol, sesuai kebutuhan link wa.me (mis. 6281234500005).
+ */
+function formatNomorWa(nomor) {
+  if (!nomor) return null
+  let digits = String(nomor).replace(/\D/g, '')
+  if (!digits) return null
+
+  if (digits.startsWith('0')) {
+    digits = '62' + digits.slice(1)
+  } else if (!digits.startsWith('62')) {
+    digits = '62' + digits
+  }
+
+  // Nomor telepon Indonesia yang valid minimal ~10 digit total (termasuk 62).
+  // Kalau kurang dari itu, anggap nomornya tidak valid daripada nekat kirim
+  // ke tujuan yang salah/ambigu.
+  if (digits.length < 10) return null
+
+  return digits
+}
+
+/**
+ * Susun pesan penolakan yang akan dikirim ke pemohon lewat WhatsApp.
+ */
+function buatPesanPenolakan(rec, alasan) {
+  const nama = rec.citizenName || 'Bapak/Ibu'
+  return (
+    `Halo ${nama},\n\n` +
+    `Kami informasikan bahwa permohonan *${rec.purpose}* Anda ` +
+    `(No. Permohonan: ${rec.requestId}) yang diajukan pada ${rec.date} ` +
+    `telah *DITOLAK*.\n\n` +
+    `Alasan penolakan:\n${alasan}\n\n` +
+    `Untuk informasi lebih lanjut atau pengajuan ulang, silakan hubungi ` +
+    `kantor kelurahan/kecamatan setempat.\n\n` +
+    `Terima kasih.`
+  )
+}
+
 async function tolakPermohonan() {
   if (!record.value) return
+
   if (!catatan.value.trim()) {
     toast.add({ severity: 'warn', summary: 'Isi catatan alasan penolakan terlebih dahulu', life: 2500 })
     return
   }
+
+  const nomorWa = formatNomorWa(record.value.citizenPhone)
+  if (!nomorWa) {
+    toast.add({
+      severity: 'error',
+      summary: 'Nomor WhatsApp pemohon tidak tersedia',
+      detail: 'Tidak bisa mengirim notifikasi penolakan tanpa nomor telepon.',
+      life: 3000,
+    })
+    return
+  }
+
   loading.value = true
   try {
+    const pesan = buatPesanPenolakan(record.value, catatan.value.trim())
+    const waUrl = `https://wa.me/${nomorWa}?text=${encodeURIComponent(pesan)}`
+
+    // Buka tab WhatsApp berisi pesan penolakan yang sudah terisi otomatis,
+    // diarahkan langsung ke nomor WA pemohon.
+    const waTab = window.open(waUrl, '_blank', 'noopener,noreferrer')
+
+    if (!waTab) {
+      // Popup diblokir browser -- batalkan proses, jangan ubah status
+      // supaya admin tidak menyangka notifikasi sudah terkirim.
+      toast.add({
+        severity: 'error',
+        summary: 'Gagal membuka WhatsApp',
+        detail: 'Popup diblokir browser. Izinkan popup untuk domain ini lalu coba lagi.',
+        life: 3500,
+      })
+      return
+    }
+
     // TODO: panggil surat.service.js -> rejectSurat(requestId, { catatan })
+    // (idealnya status pengiriman WA juga dicatat di backend, mis. via
+    // provider WA Business API, bukan hanya wa.me di sisi client)
     updateStatus(requestId.value, {
       status: 'Ditolak',
       verifiedBy: currentAdminName,
       notes: catatan.value,
     })
-    toast.add({ severity: 'success', summary: 'Permohonan ditolak', life: 2000 })
-    router.push('/letter/verification')
+
+    toast.add({
+      severity: 'success',
+      summary: 'Notifikasi WhatsApp terkirim & permohonan ditolak',
+      life: 2500,
+    })
+
+    // Arahkan ke daftar Pengelolaan Surat (bukan daftar Verifikasi)
+    router.push('/letter/management')
   } finally {
     loading.value = false
   }
