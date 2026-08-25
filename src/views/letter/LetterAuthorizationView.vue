@@ -1,19 +1,4 @@
 <script setup>
-/**
- * Halaman Detail Otorisasi Surat. Route: /letter/authorization/:id
- *
- * Alur (sesuai kebutuhan):
- * 1. Admin pilih PENANDATANGAN (mis. Kepala Desa / Sekretaris Desa).
- * 2. Admin pilih JENIS TANDA TANGAN (Digital/TTE atau Basah/Manual).
- *    -> Pratinjau dokumen di kanan langsung menyesuaikan (live, sebelum disimpan).
- * 3. Admin tetapkan keputusan (Disetujui/Ditolak) & klik "Simpan Perubahan"
- *    -> tersimpan ke useLetterStore (shared dgn LetterListView & list otorisasi).
- * 4. Setelah tersimpan, tombol "Kirim Notifikasi" aktif untuk memberi tahu pemohon.
- *
- * Daftar penandatangan (signerOptions) masih data dummy lokal -- ganti
- * dengan data pejabat sungguhan (mis. dari modul User Management / Profil
- * Desa) begitu tersedia.
- */
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
@@ -67,7 +52,6 @@ const selectedSignatureType = ref(null)
 const statusOptions = [
   { value: 'Diverifikasi', label: 'Menunggu Otorisasi' },
   { value: 'Disetujui', label: 'Disetujui' },
-  { value: 'Ditolak', label: 'Ditolak' },
 ]
 const selectedStatus = ref(surat.value?.status || 'Diverifikasi')
 
@@ -78,6 +62,94 @@ watch(surat, (val) => {
 
 const isSaving = ref(false)
 const isFinalized = ref(false) // true setelah "Simpan Perubahan" berhasil, mengaktifkan tombol notifikasi
+
+/**
+ * Ubah nomor telepon lokal (08xxx / +62xxx / 62xxx) ke format
+ * internasional tanpa simbol, sesuai kebutuhan link wa.me (mis. 6281234500005).
+ */
+function formatNomorWa(nomor) {
+  if (!nomor) return null
+  let digits = String(nomor).replace(/\D/g, '')
+  if (!digits) return null
+
+  if (digits.startsWith('0')) {
+    digits = '62' + digits.slice(1)
+  } else if (!digits.startsWith('62')) {
+    digits = '62' + digits
+  }
+
+  // Nomor telepon Indonesia yang valid minimal ~10 digit total (termasuk 62).
+  // Kalau kurang dari itu, anggap nomornya tidak valid daripada nekat kirim
+  // ke tujuan yang salah/ambigu.
+  if (digits.length < 10) return null
+
+  return digits
+}
+
+/**
+ * Susun pesan pemberitahuan bahwa surat sudah selesai/disetujui,
+ * dikirim ke pemohon lewat WhatsApp. Isi pesan menyesuaikan jenis TTD:
+ * - Digital (TTE/Barcode): softfile sudah SAH & bisa langsung dipakai,
+ *   pemohon tinggal ambil hardfile (cetakan fisik) ke kantor kalau perlu.
+ * - Manual (Basah): softfile dikirim untuk DICETAK SENDIRI oleh pemohon,
+ *   lalu dibawa ke kantor kelurahan/kecamatan untuk ditandatangani &
+ *   dicap secara manual.
+ */
+function buatPesanSelesai(rec, signer, signatureType) {
+  const nama = rec.citizenName || 'Bapak/Ibu'
+  const nomorSuratLine = rec.letterNumber ? `\nNomor Surat: ${rec.letterNumber}` : ''
+  const penandatangan = signer?.jabatan || 'pejabat berwenang'
+
+  // TODO: ganti dengan link unduh PDF asli begitu backend penyimpanan/
+  // generate dokumen surat sudah tersedia. Untuk sekarang masih placeholder.
+  const linkSoftfile = `https://sibimo.example.id/surat/unduh/${rec.requestId}`
+
+  const instruksi =
+    signatureType === 'Digital'
+      ? `Berikut softfile surat Anda (sudah *ditandatangani secara digital/TTE* & SAH):\n` +
+        `${linkSoftfile}\n\n` +
+        `Surat ini sudah bisa langsung digunakan. Kalau butuh versi cetak (hardfile), ` +
+        `silakan datang ke kantor kelurahan/kecamatan untuk mengambilnya.`
+      : `Berikut softfile surat Anda:\n${linkSoftfile}\n\n` +
+        `Karena surat ini memakai *tanda tangan basah (manual + cap desa)*, mohon dicetak ` +
+        `terlebih dahulu, lalu datang ke kantor kelurahan/kecamatan untuk proses tanda ` +
+        `tangan dan cap resmi.`
+
+  return (
+    `Halo ${nama},\n\n` +
+    `Kabar baik! Pengajuan *${rec.purpose}* Anda ` +
+    `(No. Permohonan: ${rec.requestId})${nomorSuratLine} telah *SELESAI* diproses ` +
+    `dan *DISETUJUI*.\n\n` +
+    `Surat sudah ditandatangani oleh ${penandatangan}.\n\n` +
+    `${instruksi}\n\n` +
+    `Terima kasih.`
+  )
+}
+
+/**
+ * Buka tab WhatsApp berisi pesan "surat selesai/disetujui" ke nomor pemohon.
+ * Return true kalau tab berhasil dibuka, false kalau gagal (nomor kosong
+ * atau popup diblokir browser).
+ */
+function bukaWaNotifikasiSelesai() {
+  if (!surat.value) return false
+
+  const nomorWa = formatNomorWa(surat.value.citizenPhone)
+  if (!nomorWa) {
+    toast.add({
+      severity: 'error',
+      summary: 'Nomor WhatsApp pemohon tidak tersedia',
+      detail: 'Tidak bisa mengirim notifikasi tanpa nomor telepon.',
+      life: 3000,
+    })
+    return false
+  }
+
+  const pesan = buatPesanSelesai(surat.value, selectedSigner.value, surat.value.signatureType)
+  const waUrl = `https://wa.me/${nomorWa}?text=${encodeURIComponent(pesan)}`
+  const waTab = window.open(waUrl, '_blank', 'noopener,noreferrer')
+  return !!waTab
+}
 
 async function simpanPerubahan() {
   if (!surat.value) return
@@ -112,13 +184,25 @@ async function simpanPerubahan() {
 }
 
 function kirimNotifikasi() {
-  // TODO: panggil API kirim notifikasi ke pemohon
+  const terkirim = bukaWaNotifikasiSelesai()
+
+  if (!terkirim) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal membuka WhatsApp',
+      detail: 'Popup diblokir browser atau nomor WA pemohon tidak tersedia.',
+      life: 3500,
+    })
+    return
+  }
+
   toast.add({
     severity: 'success',
     summary: 'Notifikasi terkirim',
     detail: 'Pemohon telah diberi tahu mengenai status surat ini.',
     life: 2500,
   })
+  router.push({ name: 'letter-list' })
 }
 
 function goBackToList() {
@@ -280,6 +364,9 @@ const todayDisplay = new Date().toLocaleDateString('id-ID', {
               />
               <p v-if="!isFinalized && surat.authorizedBy === '-'" class="text-xs text-gray-400 mt-2">
                 Simpan keputusan otorisasi dulu sebelum mengirim notifikasi.
+              </p>
+              <p v-else class="text-xs text-gray-400 mt-2">
+                Klik tombol ini untuk membuka WhatsApp dan mengirim notifikasi ke nomor pemohon.
               </p>
             </template>
           </Card>

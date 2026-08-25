@@ -1,22 +1,4 @@
 <script setup>
-/**
- * Halaman Tambah Surat (input manual oleh admin).
- * Dipakai saat warga mengajukan langsung ke kelurahan tanpa lewat form online.
- * Route: /letter/create
- *
- * Kategori & jenis surat di step 1-2 diambil dari useLetterTypeStore --
- * sumber data yang SAMA dengan yang dikelola di halaman Pengelolaan Tipe
- * Surat (LetterTypeListView.vue / ManageLetterType.vue). Hanya tipe surat
- * dengan is_active = true yang bisa dipilih di sini, karena tipe yang
- * nonaktif/draft belum boleh dipakai untuk membuat surat baru.
- *
- * Setelah step 3 (Data Pemohon) disubmit, surat tetap disimpan ke
- * useLetterStore (status Pending, sama seperti sebelumnya) supaya tercatat
- * di Pengelolaan Surat -- tapi alih-alih layar sukses biasa, admin langsung
- * diarahkan ke PREVIEW SURAT siap cetak (window.print()). Kop surat & isi
- * surat di preview masih placeholder/dummy; nanti bisa diganti pakai
- * blade_view dari backend atau data Profil Desa begitu tersedia.
- */
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import AppButton from '@/components/common/AppButton.vue'
@@ -115,6 +97,8 @@ function submitForm() {
     letterType: selectedLetterType.value,
     citizenId: form.value.citizenId.trim(),
     citizenName: form.value.citizenName.trim(),
+    citizenPhone: form.value.phone.trim(),
+    citizenAddress: form.value.address.trim(),
     notes: form.value.notes.trim(),
   })
   isSubmitting.value = false
