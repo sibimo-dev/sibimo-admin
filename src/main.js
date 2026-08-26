@@ -12,73 +12,63 @@ import { useAuthStore } from './stores/auth.store'
 import 'primeicons/primeicons.css'
 import './assets/main.css'
 
+const purgeLicenseElements = () => {
+    const observer = new MutationObserver(() => {
+        const licenseHost = document.getElementById("p-license-host");
+        if (licenseHost) {
+        licenseHost.remove();
+        }
+
+        const chartBanner = document.querySelector(".p-chart-license-banner");
+        if (chartBanner) {
+        chartBanner.remove();
+        }
+
+        const textEditorBanner = document.querySelector(
+        ".p-text-editor-license-banner",
+        );
+        if (textEditorBanner) {
+        textEditorBanner.remove();
+        }
+    });
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+    });
+};
+
+if (typeof window !== "undefined") {
+  document.addEventListener("DOMContentLoaded", purgeLicenseElements);
+}
 
 const SibimoPreset = definePreset(Aura, {
   semantic: {
     primary: {
-      50: '#eff6fb',
-      100: '#d9ecf7',
-      200: '#b0dbf1',
-      300: '#7cc3e8',
-      400: '#45a8dc',
-      500: '#1e8fcb',
-      600: '#1c72a8',
-      700: '#235a86',
-      800: '#264568',
-      900: '#1f3350',
-      950: '#152436',
+      50: '#eaf6fd', 100: '#cdebfa', 200: '#9ad9f5', 300: '#5fc4ee',
+      400: '#2fa6de', 500: '#1483c7', 600: '#136aa3', 700: '#175380',
+      800: '#1c3f61', 900: '#22314f', 950: '#141f33',
     },
+   
     secondary: {
-      50: '#f2f7f5',
-      100: '#deeae3',
-      200: '#b4d0c1',
-      300: '#8ab69f',
-      400: '#5c9a79',
-      500: '#2e7d53',
-      600: '#296c49',
-      700: '#235a3d',
-      800: '#1d4731',
-      900: '#183627',
-      950: '#11281d',
+      50: '#eef4fb', 100: '#d7e6f5', 200: '#aecbe9', 300: '#82aed9',
+      400: '#5c93c6', 500: '#3d76ab', 600: '#2f5d88', 700: '#264a6c',
+      800: '#1e3a54', 900: '#172c3f', 950: '#0f1e2b',
     },
     success: {
-      50: '#eef4f0',
-      100: '#d6e6da',
-      200: '#aeceb6',
-      300: '#85b591',
-      400: '#5f9c6e',
-      500: '#488250',
-      600: '#3a6941',
-      700: '#2e5233',
-      800: '#233d27',
-      900: '#182a1b',
-      950: '#101c12',
+      50: '#eaf6ef', 100: '#cbe9d6', 200: '#98d3ae', 300: '#63bb85',
+      400: '#3aa367', 500: '#1e7a46', 600: '#19643a', 700: '#144e2e',
+      800: '#0f3a23', 900: '#0a2818', 950: '#06190f',
     },
     warn: {
-      50: '#fbf7e6',
-      100: '#f5ecc0',
-      200: '#ebdd8c',
-      300: '#dcc95c',
-      400: '#c7b23e',
-      500: '#ab982f',
-      600: '#8b7b26',
-      700: '#6e621e',
-      800: '#524917',
-      900: '#383210',
-      950: '#25210b',
+      50: '#fdf6e8', 100: '#f9e6bd', 200: '#f1cd7e', 300: '#e6b348',
+      400: '#d69f2c', 500: '#b8861f', 600: '#946c19', 700: '#715214',
+      800: '#523c0f', 900: '#38290a', 950: '#241a06',
     },
     danger: {
-      50: '#fdf1f1',
-      100: '#f8dddd',
-      200: '#efb8b8',
-      300: '#e29494',
-      400: '#d07575',
-      500: '#b85c5c',
-      600: '#9c4a4a',
-      700: '#7d3b3b',
-      800: '#5e2c2c',
-      900: '#421f1f',
-      950: '#2c1414',
+      50: '#fdecea', 100: '#f9cdc8', 200: '#f0958a', 300: '#e65f4f',
+      400: '#dd3a26', 500: '#d42e24', 600: '#ac251d', 700: '#851d17',
+      800: '#611512', 900: '#420f0c', 950: '#2a0a08',
     },
   },
 })
@@ -96,8 +86,8 @@ app.use(PrimeVue, {
       darkModeSelector: false,
     },
   },
+
  
-  license: import.meta.env.VITE_PRIMEUI_LICENSE,
 })
 
 app.use(ConfirmationService)

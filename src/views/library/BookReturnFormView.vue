@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import InputText from 'primevue/inputtext'
 import Tag from 'primevue/tag'
+import Dialog from 'primevue/dialog'
 import AppButton from '@/components/common/AppButton.vue'
 import AppDataTable from '@/components/common/AppDataTable.vue'
 import { getLoans, returnLoan } from '@/services/library.service'
@@ -13,13 +14,18 @@ const loading = ref(false)
 const submittingReturn = ref(false)
 const keyword = ref('')
 const selectedLoan = ref(null)
-<<<<<<< Updated upstream
+const showReturnDialog = ref(false)
 
 // Bukti pengembalian terakhir yang berhasil disimpan -- dipakai sebagai
-// sumber data struk cetak (print). null berarti belum ada transaksi yang
-// bisa dicetak (misal baru buka halaman, atau baru pilih baris tapi belum
-// klik "Proses Pengembalian").
+// sumber data preview & struk cetak. null berarti belum ada transaksi
+// yang bisa dicetak (misal baru buka halaman, atau baru pilih baris
+// tapi belum klik "Proses Pengembalian").
 const returnReceipt = ref(null)
+
+// Dialog preview bukti pengembalian -- muncul mengambang setelah proses
+// berhasil, TIDAK langsung memanggil window.print(). User baru mencetak
+// kalau menekan tombol "Cetak" di dalam dialog ini.
+const showReceiptDialog = ref(false)
 
 // Daftar peminjaman yang belum dikembalikan, difilter live sesuai keyword
 // (cari lewat loan_id atau nama anggota). Kalau backend sudah siap, ganti
@@ -32,12 +38,11 @@ const unreturnedLoans = computed(() => {
   )
 })
 
-=======
 const showReturnDialog = ref(false)
 const returnReceipt = ref(null)
 const showReceiptDialog = ref(false)
 const FINE_PER_DAY = 1000
->>>>>>> Stashed changes
+
 const columns = [
   { field: 'loan_id', header: 'No. Peminjaman' },
   { field: 'full_name', header: 'Nama Anggota' },
@@ -84,11 +89,7 @@ const totalFine = computed(() => statusInfo.value ? statusInfo.value.days * FINE
 
 function selectRow(loan) {
   selectedLoan.value = loan
-<<<<<<< Updated upstream
-  returnReceipt.value = null
-=======
   showReturnDialog.value = true
->>>>>>> Stashed changes
 }
 
 async function processReturn() {
@@ -109,39 +110,14 @@ async function processReturn() {
   } finally {
     submittingReturn.value = false
   }
-<<<<<<< Updated upstream
-
-  // TODO: ganti dengan panggilan service, misal:
-  // await updateBookLoan(payload.loan_id, payload)
-  console.log('Payload ke API:', payload)
-  toast.add({ severity: 'success', summary: 'Pengembalian berhasil dicatat (dummy)', life: 2500 })
-
-  // Simpan snapshot data buat bukti cetak, sebelum data hilang dari daftar.
-  returnReceipt.value = {
-    loan_id: selectedLoan.value.loan_id,
-    full_name: selectedLoan.value.full_name,
-    title: selectedLoan.value.title,
-    borrowed_at: selectedLoan.value.borrowed_at,
-    due_date: selectedLoan.value.due_date,
-    returned_at: returnedAt,
-    status: finalStatus,
-    fine_amount: totalFine.value,
-  }
-
-  // Hilangkan dari daftar yang belum kembali (dummy) -- ganti dengan
-  // refetch daftar dari API setelah request di atas berhasil.
-  dummyLoans.value = dummyLoans.value.filter((l) => l.loan_id !== selectedLoan.value.loan_id)
-  selectedLoan.value = null
 }
 
-function printReturnReceipt() {
-  if (!returnReceipt.value) return
-  window.print()
-=======
->>>>>>> Stashed changes
+function closeReceiptDialog() {
+  showReceiptDialog.value = false
 }
 
 function cancelForm() {
+  showReturnDialog.value = false
   selectedLoan.value = null
 }
 
@@ -165,20 +141,29 @@ onMounted(loadLoans)
           <template #actions="{ data }"><AppButton label="Proses" icon="pi pi-replay" variant="ghost" size="small" @click="selectRow(data)" /></template>
         </AppDataTable>
       </div>
-<<<<<<< Updated upstream
+    </div>
 
-      <div v-if="selectedLoan" class="card max-w-2xl">
-        <div class="flex items-center justify-between mb-4">
+    <!-- Dialog mengambang: form proses pengembalian -->
+    <Dialog
+      v-model:visible="showReturnDialog"
+      modal
+      header="Proses Pengembalian"
+      :style="{ width: '40rem' }"
+      class="mx-4"
+      :closable="true"
+      @hide="cancelForm"
+    >
+      <div v-if="selectedLoan">
+        <div class="mb-4">
           <h2 class="font-semibold text-neutral-800">No. Peminjaman: {{ selectedLoan.loan_id }}</h2>
-          <AppButton icon="pi pi-times" variant="ghost" size="small" @click="cancelForm" />
         </div>
 
-=======
+
     </div>
     <Dialog v-model:visible="showReturnDialog" modal header="Proses Pengembalian" :style="{ width: '40rem' }" class="mx-4" @hide="cancelForm">
       <div v-if="selectedLoan">
         <h2 class="font-semibold text-neutral-800 mb-4">No. Peminjaman: {{ selectedLoan.loan_id }}</h2>
->>>>>>> Stashed changes
+
         <div class="grid grid-cols-2 gap-4 text-sm mb-5">
           <div><p class="text-neutral-400 mb-0.5">Nama Anggota</p><p class="font-medium text-neutral-800">{{ selectedLoan.full_name }}</p></div>
           <div><p class="text-neutral-400 mb-0.5">Judul Buku</p><p class="font-medium text-neutral-800">{{ selectedLoan.title }}</p></div>
@@ -190,20 +175,48 @@ onMounted(loadLoans)
         <p class="text-xs text-neutral-400 mb-5">Rp {{ FINE_PER_DAY.toLocaleString('id-ID') }}/hari</p>
         <div class="flex justify-end gap-3"><AppButton label="Batal" variant="secondary" :disabled="submittingReturn" @click="cancelForm" /><AppButton label="Proses Pengembalian" variant="primary" :loading="submittingReturn" @click="processReturn" /></div>
       </div>
-<<<<<<< Updated upstream
+    </Dialog>
 
-      <!-- Muncul setelah transaksi pengembalian berhasil disimpan -->
-      <div v-if="returnReceipt" class="card max-w-2xl mt-4 flex items-center justify-between gap-3">
-        <div>
-          <p class="text-sm font-medium text-neutral-800">Pengembalian berhasil dicatat</p>
-          <p class="text-xs text-neutral-400">No. Peminjaman: {{ returnReceipt.loan_id }}</p>
+    <!-- Dialog mengambang: preview bukti pengembalian setelah berhasil diproses.
+         Klik "Proses Pengembalian" TIDAK langsung window.print(); yang muncul
+         cuma dialog preview ini. window.print() baru dipanggil kalau user
+         menekan tombol "Cetak Bukti" di dalamnya. -->
+    <Dialog
+      v-model:visible="showReceiptDialog"
+      modal
+      header="Bukti Pengembalian Buku"
+      :style="{ width: '32rem' }"
+      class="mx-4"
+      :closable="true"
+      @hide="closeReceiptDialog"
+    >
+      <div v-if="returnReceipt">
+        <div class="text-center mb-5">
+          <p class="text-sm text-neutral-500">Perpustakaan Desa</p>
         </div>
-        <AppButton label="Cetak Bukti Pengembalian" icon="pi pi-print" variant="secondary" @click="printReturnReceipt" />
+
+        <table class="w-full text-sm mb-6">
+          <tbody>
+            <tr><td class="py-1 pr-4 w-36 align-top text-neutral-500">No. Peminjaman</td><td class="align-top font-medium text-neutral-800">: {{ returnReceipt.loan_id }}</td></tr>
+            <tr><td class="py-1 pr-4 align-top text-neutral-500">Nama Anggota</td><td class="align-top font-medium text-neutral-800">: {{ returnReceipt.full_name }}</td></tr>
+            <tr><td class="py-1 pr-4 align-top text-neutral-500">Judul Buku</td><td class="align-top font-medium text-neutral-800">: {{ returnReceipt.title }}</td></tr>
+            <tr><td class="py-1 pr-4 align-top text-neutral-500">Tanggal Pinjam</td><td class="align-top font-medium text-neutral-800">: {{ returnReceipt.borrowed_at }}</td></tr>
+            <tr><td class="py-1 pr-4 align-top text-neutral-500">Jatuh Tempo</td><td class="align-top font-medium text-neutral-800">: {{ returnReceipt.due_date }}</td></tr>
+            <tr><td class="py-1 pr-4 align-top text-neutral-500">Tanggal Kembali</td><td class="align-top font-medium text-neutral-800">: {{ returnReceipt.returned_at }}</td></tr>
+            <tr><td class="py-1 pr-4 align-top text-neutral-500">Status</td><td class="align-top font-medium text-neutral-800">: {{ returnReceipt.status === 'Late' ? 'Terlambat' : 'Tepat Waktu' }}</td></tr>
+            <tr><td class="py-1 pr-4 align-top text-neutral-500">Denda</td><td class="align-top font-medium text-neutral-800">: Rp {{ returnReceipt.fine_amount.toLocaleString('id-ID') }}</td></tr>
+          </tbody>
+        </table>
+
+        <div class="flex justify-end gap-3">
+          <AppButton label="Tutup" variant="secondary" @click="closeReceiptDialog" />
+          <AppButton label="Cetak Bukti" icon="pi pi-print" variant="primary" @click="printReturnReceipt" />
+        </div>
       </div>
-    </div>
+    </Dialog>
 
     <!-- Area struk cetak -- tersembunyi di layar, hanya tampil saat window.print() -->
-=======
+
     </Dialog>
     <Dialog v-model:visible="showReceiptDialog" modal header="Bukti Pengembalian Buku" :style="{ width: '32rem' }" class="mx-4">
       <div v-if="returnReceipt">
@@ -220,7 +233,7 @@ onMounted(loadLoans)
         <div class="flex justify-end gap-3"><AppButton label="Tutup" variant="secondary" @click="showReceiptDialog = false" /><AppButton label="Cetak Bukti" icon="pi pi-print" variant="primary" @click="printReturnReceipt" /></div>
       </div>
     </Dialog>
->>>>>>> Stashed changes
+
     <div v-if="returnReceipt" class="hidden print:block text-sm text-black">
       <div class="text-center mb-6"><h2 class="text-lg font-bold uppercase">Bukti Pengembalian Buku</h2><p>Perpustakaan Desa</p></div>
       <table class="w-full mb-8"><tbody>
@@ -239,13 +252,21 @@ onMounted(loadLoans)
 
 <style>
 @media print {
-<<<<<<< Updated upstream
-  @page {
-    margin: 1.5cm;
-  }
-=======
   @page { margin: 1.5cm; }
   .p-dialog-mask, .p-overlay-mask { display: none !important; }
->>>>>>> Stashed changes
+
+  /* PrimeVue men-teleport Dialog ke <body> dan membungkusnya dengan mask
+     terpisah dari panel dialog itu sendiri -- class "print:hidden" yang
+     dipasang lewat prop `class` Dialog hanya nempel ke panel, BUKAN ke
+     mask/overlay-nya, sehingga modal (termasuk tombol Tutup/Cetak) tetap
+     kelihatan saat window.print() dipanggil. Ditarget langsung lewat CSS
+     global di sini supaya seluruh modal disembunyikan saat cetak, dan
+     yang tampil cuma area struk khusus print di atas.
+     Kalau versi PrimeVue kamu berbeda, cek nama class mask lewat inspect
+     element pada elemen pembungkus paling luar saat dialog terbuka. */
+  .p-dialog-mask,
+  .p-overlay-mask {
+    display: none !important;
+  }
 }
 </style>

@@ -1,40 +1,32 @@
-/**
- * Route module untuk Profil Desa (village-profile). Mengikuti tabel
- * `profile_sections` + `profile_contents` di ERD backend.
- *
- * Sejarah, Visi & Misi, dan Struktur Organisasi SEMUA memakai 2 komponen
- * yang sama (VillageProfileListView.vue, VillageProfileFormView.vue) --
- * yang membedakan cuma `meta.sectionSlug`. Ini supaya tidak perlu bikin
- * 6 file nyaris identik untuk 3 section yang skemanya sama persis.
- */
-import VillageProfileListView from '@/views/village-profile/VillageProfileListView.vue'
-import VillageProfileFormView from '@/views/village-profile/VillageProfileFormView.vue'
+import HistoryFormView from '@/views/village-profile/HistoryFormView.vue'
+import VisionMissionFormView from '@/views/village-profile/VisionMissionFormView.vue'
+import OrganizationalStructureFormView from '@/views/village-profile/OrganizationalStructureFormView.vue'
+import RegionDataView from '@/views/village-profile/RegionDataView.vue'
 
-function buildSectionRoutes(slug, breadcrumbLabel) {
-  return [
-    {
-      path: `village-profile/${slug}`,
-      name: `village-profile-${slug}-list`,
-      component: VillageProfileListView,
-      meta: { sectionSlug: slug, breadcrumb: ['Profil Desa', breadcrumbLabel] },
-    },
-    {
-      path: `village-profile/${slug}/create`,
-      name: `village-profile-${slug}-create`,
-      component: VillageProfileFormView,
-      meta: { sectionSlug: slug, breadcrumb: ['Profil Desa', breadcrumbLabel, 'Tambah'] },
-    },
-    {
-      path: `village-profile/${slug}/:id/edit`,
-      name: `village-profile-${slug}-edit`,
-      component: VillageProfileFormView,
-      meta: { sectionSlug: slug, breadcrumb: ['Profil Desa', breadcrumbLabel, 'Edit'] },
-    },
-  ]
-}
 
 export default [
-  ...buildSectionRoutes('history', 'Sejarah'),
-  ...buildSectionRoutes('vision-mission', 'Visi & Misi'),
-  ...buildSectionRoutes('organizational-structure', 'Struktur Organisasi'),
+  {
+    path: 'village-profile/history',
+    name: 'village-profile-history',
+    component: HistoryFormView,
+    meta: { breadcrumb: ['Profil Desa', 'Sejarah'] },
+  },
+  {
+    path: 'village-profile/vision-mission',
+    name: 'village-profile-vision-mission',
+    component: VisionMissionFormView,
+    meta: { breadcrumb: ['Profil Desa', 'Visi & Misi'] },
+  },
+  {
+    path: 'village-profile/organizational-structure',
+    name: 'village-profile-organizational-structure',
+    component: OrganizationalStructureFormView,
+    meta: { breadcrumb: ['Profil Desa', 'Struktur Organisasi'] },
+  },
+  {
+    path: 'village-profile/region',
+    name: 'village-profile-region',
+    component: RegionDataView,
+    meta: { breadcrumb: ['Profil Desa', 'Data Wilayah'] },
+  },
 ]

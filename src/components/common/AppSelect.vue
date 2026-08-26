@@ -1,15 +1,5 @@
 <script setup>
-/**
- * AppSelect - dropdown dengan label + error, pasangan dari AppInput.
- * Dipakai untuk field seperti status surat, tipe surat, kategori, dll.
- *
- * Contoh pakai:
- *   <AppSelect
- *     v-model="form.status"
- *     label="Status"
- *     :options="[{ label: 'Diajukan', value: 'diajukan' }, { label: 'Disetujui', value: 'disetujui' }]"
- *   />
- */
+
 import Select from 'primevue/select'
 
 defineProps({

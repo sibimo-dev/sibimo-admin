@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useConfirm } from 'primevue/useconfirm'
 
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
@@ -13,6 +14,7 @@ import Card from 'primevue/card'
 
 const route = useRoute()
 const router = useRouter()
+const confirm = useConfirm()
 
 const agendaId = computed(() => route.params.id ?? null)
 const isEditMode = computed(() => agendaId.value !== null)
@@ -126,19 +128,34 @@ function saveMain() {
 }
 
 function moveToTrash() {
-  router.push({ name: 'agenda-list' })
+  confirm.require({
+    message: `Pindahkan agenda "${eventName.value || 'ini'}" ke sampah?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: () => {
+      router.push({ name: 'agenda-list' })
+    },
+  })
 }
 </script>
 
 <template>
-  <div class="min-h-full px-6 py-6 text-slate-800 lg:px-8">
-    <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-      <h1 class="m-0 text-[22px] font-bold text-slate-900">
-        {{ pageTitle }}
-      </h1>
+  <div>
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h1 class="m-0 text-2xl font-bold text-gray-800">
+          {{ pageTitle }}
+        </h1>
+        <p class="m-0 mt-1 text-sm text-gray-500">
+          Lengkapi detail agenda kegiatan desa.
+        </p>
+      </div>
 
       <div class="flex flex-wrap items-center gap-2">
-        <label for="month" class="text-[13px] font-medium text-slate-600">
+        <label for="month" class="text-[13px] font-medium text-gray-600">
           Bulan
         </label>
 
@@ -157,6 +174,7 @@ function moveToTrash() {
           chooseIcon="pi pi-upload"
           :auto="false"
           :customUpload="true"
+          class="[&_input[type='file']]:hidden"
           @select="handleAttachmentSelect"
         />
       </div>
@@ -167,7 +185,7 @@ function moveToTrash() {
         <template #content>
           <div class="flex flex-col gap-5">
             <div class="flex flex-col gap-2">
-              <label for="eventName" class="text-[13px] font-semibold text-slate-700">
+              <label for="eventName" class="text-[13px] font-semibold text-gray-700">
                 Nama Acara
               </label>
               <InputText
@@ -179,7 +197,7 @@ function moveToTrash() {
             </div>
 
             <div class="flex flex-col gap-2">
-              <label for="letterOrigin" class="text-[13px] font-semibold text-slate-700">
+              <label for="letterOrigin" class="text-[13px] font-semibold text-gray-700">
                 Asal Surat
               </label>
               <InputText
@@ -191,7 +209,7 @@ function moveToTrash() {
             </div>
 
             <div class="flex flex-col gap-2">
-              <label for="place" class="text-[13px] font-semibold text-slate-700">
+              <label for="place" class="text-[13px] font-semibold text-gray-700">
                 Tempat
               </label>
               <InputText
@@ -203,7 +221,7 @@ function moveToTrash() {
             </div>
 
             <div class="flex flex-col gap-2">
-              <label for="attendees" class="text-[13px] font-semibold text-slate-700">
+              <label for="attendees" class="text-[13px] font-semibold text-gray-700">
                 Yang Menghadiri/Keterangan
               </label>
               <InputText
@@ -216,7 +234,7 @@ function moveToTrash() {
 
             <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
               <div class="flex flex-col gap-2">
-                <label for="eventDate" class="text-[13px] font-semibold text-slate-700">
+                <label for="eventDate" class="text-[13px] font-semibold text-gray-700">
                   Tanggal
                 </label>
                 <DatePicker
@@ -230,7 +248,7 @@ function moveToTrash() {
               </div>
 
               <div class="flex flex-col gap-2">
-                <span class="text-[13px] font-semibold text-slate-700">
+                <span class="text-[13px] font-semibold text-gray-700">
                   Waktu
                 </span>
 
@@ -241,7 +259,7 @@ function moveToTrash() {
                     hourFormat="24"
                     fluid
                   />
-                  <span class="text-[13px] text-slate-500">s/d</span>
+                  <span class="text-[13px] text-gray-500">s/d</span>
                   <DatePicker
                     v-model="endTime"
                     timeOnly
@@ -253,11 +271,11 @@ function moveToTrash() {
             </div>
 
             <div class="flex flex-col gap-2">
-              <span class="text-[13px] font-semibold text-slate-700">
+              <span class="text-[13px] font-semibold text-gray-700">
                 Gambar/Lampiran
               </span>
 
-              <div class="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
+              <div class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4">
                 <div
                   v-if="attachmentPreview"
                   class="relative overflow-hidden rounded-lg"
@@ -284,8 +302,8 @@ function moveToTrash() {
                   class="flex items-center justify-between gap-3 rounded-lg bg-white p-4"
                 >
                   <div class="flex min-w-0 items-center gap-3">
-                    <i class="pi pi-file text-xl text-slate-500" />
-                    <span class="truncate text-[13px] text-slate-700">
+                    <i class="pi pi-file text-xl text-gray-500" />
+                    <span class="truncate text-[13px] text-gray-700">
                       {{ attachmentName }}
                     </span>
                   </div>
@@ -301,8 +319,8 @@ function moveToTrash() {
                 </div>
 
                 <div v-else class="flex flex-col items-center gap-3 py-5 text-center">
-                  <i class="pi pi-cloud-upload text-3xl text-slate-400" />
-                  <span class="text-[13px] text-slate-400">
+                  <i class="pi pi-cloud-upload text-3xl text-gray-400" />
+                  <span class="text-[13px] text-gray-400">
                     Pilih gambar atau lampiran untuk agenda
                   </span>
 
@@ -314,6 +332,7 @@ function moveToTrash() {
                     chooseIcon="pi pi-upload"
                     :auto="false"
                     :customUpload="true"
+                    class="[&_input[type='file']]:hidden"
                     @select="handleAttachmentSelect"
                   />
                 </div>
@@ -323,7 +342,7 @@ function moveToTrash() {
         </template>
       </Card>
 
-      <aside class="flex flex-col gap-3.5">
+      <aside class="flex flex-col gap-5">
         <Card>
           <template #content>
             <div class="flex gap-2.5">
@@ -346,7 +365,7 @@ function moveToTrash() {
 
         <Card>
           <template #content>
-            <div class="flex items-center justify-between text-[13px] text-slate-700">
+            <div class="flex items-center justify-between text-[13px] text-gray-700">
               <span>Terbit</span>
 
               <Button
@@ -361,10 +380,10 @@ function moveToTrash() {
 
         <Card>
           <template #content>
-            <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-2.5">
               <button
                 type="button"
-                class="flex items-center justify-between text-left text-[13px] text-slate-700"
+                class="flex items-center justify-between text-left text-[13px] text-gray-700"
                 @click="statusOpen = !statusOpen"
               >
                 <span>
@@ -373,7 +392,7 @@ function moveToTrash() {
                 </span>
 
                 <i
-                  class="pi pi-chevron-down text-xs text-slate-400 transition-transform"
+                  class="pi pi-chevron-down text-xs text-gray-400 transition-transform"
                   :class="{ 'rotate-180': statusOpen }"
                 />
               </button>
@@ -392,15 +411,15 @@ function moveToTrash() {
 
         <Card>
           <template #content>
-            <div class="flex flex-col gap-3">
-              <span class="text-[13px] text-slate-700">
+            <div class="flex flex-col gap-2.5">
+              <span class="text-[13px] text-gray-700">
                 Keterlihatan:
                 <strong>
                   {{ visibilityOptions.find(item => item.value === visibility)?.label }}
                 </strong>
               </span>
 
-              <div class="flex flex-col gap-3">
+              <div class="flex flex-col gap-2">
                 <div
                   v-for="option in visibilityOptions"
                   :key="option.value"
@@ -414,7 +433,7 @@ function moveToTrash() {
                   />
                   <label
                     :for="`visibility-${option.value}`"
-                    class="cursor-pointer text-[13px] text-slate-700"
+                    class="cursor-pointer text-[13px] text-gray-700"
                   >
                     {{ option.label }}
                   </label>

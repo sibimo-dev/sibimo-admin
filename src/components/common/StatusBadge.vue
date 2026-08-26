@@ -1,15 +1,5 @@
 <script setup>
-/**
- * StatusBadge - pill status kecil di tabel (Pending, Diverifikasi,
- * Disetujui, Ditolak, Published, Draft, Active, Deactive, dll).
- *
- * Contoh pakai:
- *   <StatusBadge label="Pending" variant="warning" />
- *   <StatusBadge label="Disetujui" variant="success" />
- *
- * Kalau statusnya belum ada di `variant`, kirim string bebas dan
- * komponen akan fallback ke warna netral (variant="neutral").
- */
+
 defineProps({
   label: { type: String, required: true },
   variant: {

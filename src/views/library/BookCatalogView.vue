@@ -13,38 +13,15 @@ import Card from 'primevue/card'
 import AppModal from '@/components/common/AppModal.vue'
 import AppInput from '@/components/common/AppInput.vue'
 import AppSelect from '@/components/common/AppSelect.vue'
-<<<<<<< Updated upstream
+import { kategoriList, kategoriOptions, namaKategori, bookList, TAMBAH_KATEGORI_BARU } from './libraryData'
 
 const confirm = useConfirm()
 const toast = useToast()
 
-const TAMBAH_KATEGORI_BARU = '__new__'
+// rows = alias lokal ke bookList bersama (dari libraryData.js), supaya
+// Katalog Buku dan Peminjaman selalu baca data buku yang sama persis.
+const rows = bookList
 
-// Dummy data kategori -- ganti dengan GET /book-categories.
-// Karena tidak ada halaman terpisah, daftar ini HANYA dikelola dari sini.
-const kategoriList = ref([
-  { category_id: 1, category_name: 'Sejarah' },
-  { category_id: 2, category_name: 'Pertanian' },
-  { category_id: 3, category_name: 'Novel' },
-])
-
-const kategoriOptions = computed(() => [
-  ...kategoriList.value.map((k) => ({ label: k.category_name, value: k.category_id })),
-  { label: '+ Tambah kategori baru...', value: TAMBAH_KATEGORI_BARU },
-])
-
-function namaKategori(categoryId) {
-  return kategoriList.value.find((k) => k.category_id === categoryId)?.category_name || '-'
-}
-
-// Dummy data -- ganti dengan panggilan ke book.service.js
-const rows = ref([
-  { book_id: 1, category_id: 1, title: 'Sejarah Perjuangan Kemerdekaan', author: 'Ahmad Wibowo', isbn: '978-602-1234-56-7', stock: 3 },
-  { book_id: 2, category_id: 2, title: 'Teknik Pertanian Modern', author: 'Siti Rahayu', isbn: '978-602-9876-54-3', stock: 5 },
-  { book_id: 3, category_id: 3, title: 'Laskar Pelangi', author: 'Andrea Hirata', isbn: '978-979-1227-78-0', stock: 0 },
-])
-
-=======
 import {
   createBook,
   createBookCategory,
@@ -60,7 +37,7 @@ const confirm = useConfirm()
 const toast = useToast()
 const books = ref([])
 const categories = ref([])
->>>>>>> Stashed changes
+
 const selected = ref([])
 const loading = ref(false)
 const saving = ref(false)

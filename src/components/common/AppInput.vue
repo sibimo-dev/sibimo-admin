@@ -1,15 +1,8 @@
 <script setup>
-/**
- * AppInput - text input dengan label + pesan error terpasang.
- * Dipakai di semua form (login, tipe surat, berita, profil desa, dst)
- * supaya style label/error konsisten, tidak tiap dev bikin markup sendiri.
- *
- * Contoh pakai:
- *   <AppInput v-model="form.judul" label="Judul Berita" :error="errors.judul" required />
- */
+import { computed, ref } from 'vue'
 import InputText from 'primevue/inputtext'
 
-defineProps({
+const props = defineProps({
   modelValue: { type: [String, Number], default: '' },
   label: { type: String, default: '' },
   placeholder: { type: String, default: '' },
@@ -20,6 +13,19 @@ defineProps({
 })
 
 defineEmits(['update:modelValue'])
+
+const showPassword = ref(false)
+
+const isPassword = computed(() => props.type === 'password')
+
+const inputType = computed(() => {
+  if (!isPassword.value) return props.type
+  return showPassword.value ? 'text' : 'password'
+})
+
+function togglePassword() {
+  showPassword.value = !showPassword.value
+}
 </script>
 
 <template>
@@ -28,15 +34,30 @@ defineEmits(['update:modelValue'])
       {{ label }}
       <span v-if="required" class="text-danger-500">*</span>
     </label>
-    <InputText
-      :modelValue="modelValue"
-      :type="type"
-      :placeholder="placeholder"
-      :disabled="disabled"
-      :invalid="!!error"
-      class="w-full"
-      @update:modelValue="(val) => $emit('update:modelValue', val)"
-    />
+
+    <div class="relative">
+      <InputText
+        :modelValue="modelValue"
+        :type="inputType"
+        :placeholder="placeholder"
+        :disabled="disabled"
+        :invalid="!!error"
+        :class="['w-full', isPassword ? 'pr-10' : '']"
+        @update:modelValue="(val) => $emit('update:modelValue', val)"
+      />
+
+      <button
+        v-if="isPassword"
+        type="button"
+        tabindex="-1"
+        class="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 disabled:opacity-50 disabled:cursor-not-allowed"
+        :disabled="disabled"
+        @click="togglePassword"
+      >
+        <i :class="showPassword ? 'pi pi-eye-slash' : 'pi pi-eye'" class="text-sm" />
+      </button>
+    </div>
+
     <span v-if="error" class="text-xs text-danger-500">{{ error }}</span>
   </div>
 </template>

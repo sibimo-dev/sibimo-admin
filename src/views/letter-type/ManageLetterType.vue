@@ -1,15 +1,4 @@
 <script setup>
-/**
- * Letter Type Form (Create / Edit)
- * Route name: letter-type-manage, path: letter-type/:id (id = 'new' for create mode)
- *
- * NOTE: Fields below are mapped to assumed ERD tables:
- * - letter_types: code, number_prefix, letter_name, category, processing_time,
- *   signature_method, description, is_active, signer_id, updated_at, updated_by
- * - letter_type_documents: id, letter_type_id, document_name, description, is_required
- *
- * Confirm actual column/table names against your ERD and rename accordingly.
- */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
@@ -21,10 +10,12 @@ import Checkbox from 'primevue/checkbox'
 import AppButton from '@/components/common/AppButton.vue'
 import AppInput from '@/components/common/AppInput.vue'
 import AppModal from '@/components/common/AppModal.vue'
+import { useLetterTypeStore } from '@/stores/useLetterTypeStore'
 
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+const { getById, addLetterType, updateLetterType } = useLetterTypeStore()
 
 const isNew = computed(() => route.params.id === 'new' || !route.params.id)
 const isLoading = ref(false)
@@ -32,10 +23,11 @@ const isSaving = ref(false)
 
 // ====== Dropdown options (replace with master data fetch later) ======
 const categoryOptions = [
+  { label: 'Perintah', value: 'Perintah' },
   { label: 'Keterangan', value: 'Keterangan' },
   { label: 'Pengantar', value: 'Pengantar' },
   { label: 'Permohonan', value: 'Permohonan' },
-  { label: 'Rekomendasi', value: 'Rekomendasi' },
+  { label: 'Pernyataan', value: 'Pernyataan' },
 ]
 
 const signatureMethodOptions = [
@@ -48,6 +40,11 @@ const signerOptions = [
   { label: 'Rasyifa Anom S., AMd.Kes - Kasi Kesejahteraan', value: 2 },
   { label: 'Siti Aminah - Kasi Pemerintahan', value: 3 },
 ]
+// Dipakai untuk isi ulang `signer_name` (dibaca LetterCreateView.vue) tanpa
+// perlu join tabel signer sungguhan -- sementara sampai backend siap.
+const signerNameById = Object.fromEntries(
+  signerOptions.map((s) => [s.value, s.label.split(' - ')[0]]),
+)
 
 // ====== Main form ======
 const form = reactive({
@@ -112,21 +109,13 @@ onMounted(async () => {
   if (isNew.value) return
   isLoading.value = true
   try {
-    // TODO: replace with real API call
-    // const data = await letterTypeService.getById(route.params.id)
-    const dummy = {
-      letter_type_id: route.params.id,
-      code: 'SKU-01',
-      number_prefix: '581/SKU/',
-      letter_name: 'Surat Keterangan Usaha',
-      category: 'Keterangan',
-      processing_time: '15 menit',
-      signature_method: 'digital',
-      description: 'Surat keterangan yang menyatakan bahwa pemohon memiliki usaha aktif di wilayah desa.',
-      is_active: true,
-      signer_id: 1,
+    const data = getById(route.params.id)
+    if (!data) {
+      toast.add({ severity: 'error', summary: 'Tipe surat tidak ditemukan', life: 2500 })
+      router.push({ name: 'letter-type-list' })
+      return
     }
-    Object.assign(form, dummy)
+    Object.assign(form, data)
   } finally {
     isLoading.value = false
   }
@@ -145,10 +134,18 @@ async function handleSave() {
 
   isSaving.value = true
   try {
-    // TODO: replace with real API call
-    // if (isNew.value) await letterTypeService.create({ ...form, requirements: requirements.value })
-    // else await letterTypeService.update(form.letter_type_id, { ...form, requirements: requirements.value })
-    await new Promise((resolve) => setTimeout(resolve, 600))
+    const payload = {
+      ...form,
+      signer_name: signerNameById[form.signer_id] || '',
+      document_count: requirements.value.length,
+    }
+
+    if (isNew.value) {
+      addLetterType(payload)
+    } else {
+      updateLetterType(form.letter_type_id, payload)
+    }
+
     toast.add({ severity: 'success', summary: 'Perubahan berhasil disimpan', life: 2000 })
     router.push({ name: 'letter-type-list' })
   } finally {
@@ -167,160 +164,173 @@ async function handleSave() {
       </p>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
-      <!-- ==================== MAIN FORM (LEFT) ==================== -->
-      <div class="flex flex-col gap-5">
-        <!-- Basic Info -->
-        <Card>
-          <template #content>
-            <div class="flex items-center justify-between mb-5">
-              <h2 class="text-base font-semibold text-gray-800 m-0">Informasi Dasar</h2>
-              <div class="flex items-center gap-2">
-                <span class="text-xs font-medium text-gray-500 uppercase tracking-wide">Status:</span>
-                <ToggleSwitch v-model="form.is_active" />
-                <span class="text-sm font-medium text-gray-700">
-                  {{ form.is_active ? 'Aktif' : 'Nonaktif' }}
-                </span>
-              </div>
+    <!--
+      Informasi Dasar & Penandatangan: SENGAJA full-width, TIDAK di dalam
+      grid 2 kolom. Sebelumnya kedua section ini ada di kolom kiri (1fr)
+      sementara sidebar (Terakhir Diubah + tombol) ada di kolom kanan
+      (320px) untuk SELURUH tinggi halaman -- karena sidebar didorong ke
+      bawah (justify-end), area kanan jadi kosong melompong pas sejajar
+      dengan section ini. Wireframe-nya split 2 kolom cuma di baris
+      Persyaratan Dokumen (lihat di bawah), bukan dari atas.
+    -->
+    <div class="flex flex-col gap-5 mb-5">
+      <!-- Basic Info -->
+      <Card>
+        <template #content>
+          <div class="flex items-center justify-between mb-5">
+            <h2 class="text-base font-semibold text-gray-800 m-0">Informasi Dasar</h2>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-medium text-gray-500 uppercase tracking-wide">Status:</span>
+              <ToggleSwitch v-model="form.is_active" />
+              <span class="text-sm font-medium text-gray-700">
+                {{ form.is_active ? 'Aktif' : 'Nonaktif' }}
+              </span>
             </div>
+          </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <AppInput v-model="form.code" label="Kode Tipe Surat" placeholder="e.g., SKU-01" required />
-              <AppInput v-model="form.number_prefix" label="Prefix Penomoran" placeholder="e.g., 400/SKU/" required />
-            </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <AppInput v-model="form.code" label="Kode Tipe Surat" placeholder="e.g., SKU-01" required />
+            <AppInput v-model="form.number_prefix" label="Prefix Penomoran" placeholder="e.g., 400/SKU/" required />
+          </div>
 
-            <div class="mt-4">
-              <AppInput
-                v-model="form.letter_name"
-                label="Nama Layanan Surat"
-                placeholder="e.g., Surat Keterangan Usaha"
-                required
-              />
-            </div>
+          <div class="mt-4">
+            <AppInput
+              v-model="form.letter_name"
+              label="Nama Layanan Surat"
+              placeholder="e.g., Surat Keterangan Usaha"
+              required
+            />
+          </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Kategori Layanan <span class="text-red-500">*</span>
-                </label>
-                <Select
-                  v-model="form.category"
-                  :options="categoryOptions"
-                  option-label="label"
-                  option-value="value"
-                  placeholder="Pilih Kategori"
-                  class="w-full"
-                />
-              </div>
-              <AppInput v-model="form.processing_time" label="Estimasi Proses" placeholder="e.g., 15 menit" />
-            </div>
-
-            <div class="mt-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+            <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">
-                Metode Tanda Tangan <span class="text-red-500">*</span>
+                Kategori Layanan <span class="text-red-500">*</span>
               </label>
               <Select
-                v-model="form.signature_method"
-                :options="signatureMethodOptions"
+                v-model="form.category"
+                :options="categoryOptions"
                 option-label="label"
                 option-value="value"
-                placeholder="Pilih Metode"
+                placeholder="Pilih Kategori"
                 class="w-full"
               />
             </div>
+            <AppInput v-model="form.processing_time" label="Estimasi Proses" placeholder="e.g., 15 menit" />
+          </div>
 
-            <div class="mt-4">
-              <div class="flex items-center justify-between mb-1">
-                <label class="block text-sm font-medium text-gray-700">Deskripsi</label>
-                <span class="text-xs text-gray-400">{{ descriptionLength }}/255</span>
-              </div>
-              <Textarea
-                v-model="form.description"
-                :maxlength="255"
-                rows="3"
-                class="w-full"
-                placeholder="Jelaskan kegunaan dan informasi singkat mengenai layanan surat ini..."
-              />
+          <div class="mt-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              Metode Tanda Tangan <span class="text-red-500">*</span>
+            </label>
+            <Select
+              v-model="form.signature_method"
+              :options="signatureMethodOptions"
+              option-label="label"
+              option-value="value"
+              placeholder="Pilih Metode"
+              class="w-full"
+            />
+          </div>
+
+          <div class="mt-4">
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-sm font-medium text-gray-700">Deskripsi</label>
+              <span class="text-xs text-gray-400">{{ descriptionLength }}/255</span>
             </div>
-          </template>
-        </Card>
+            <Textarea
+              v-model="form.description"
+              :maxlength="255"
+              rows="3"
+              class="w-full"
+              placeholder="Jelaskan kegunaan dan informasi singkat mengenai layanan surat ini..."
+            />
+          </div>
+        </template>
+      </Card>
 
-        <!-- Signer -->
-        <Card>
-          <template #content>
-            <h2 class="text-base font-semibold text-gray-800 mb-5">Penandatangan</h2>
+      <!-- Signer -->
+      <Card>
+        <template #content>
+          <h2 class="text-base font-semibold text-gray-800 mb-5">Penandatangan</h2>
 
-            <div class="grid grid-cols-1 sm:grid-cols-[1fr_2fr] gap-4 items-start">
-              <label class="text-sm font-medium text-gray-700 pt-2 sm:text-right">
-                Pilih Pejabat Penandatangan <span class="text-red-500">*</span>
-              </label>
-              <Select
-                v-model="form.signer_id"
-                :options="signerOptions"
-                option-label="label"
-                option-value="value"
-                placeholder="Pilih Pejabat"
-                class="w-full"
-              />
-            </div>
-          </template>
-        </Card>
+          <div class="grid grid-cols-1 sm:grid-cols-[1fr_2fr] gap-4 items-start">
+            <label class="text-sm font-medium text-gray-700 pt-2 sm:text-right">
+              Pilih Pejabat Penandatangan <span class="text-red-500">*</span>
+            </label>
+            <Select
+              v-model="form.signer_id"
+              :options="signerOptions"
+              option-label="label"
+              option-value="value"
+              placeholder="Pilih Pejabat"
+              class="w-full"
+            />
+          </div>
+        </template>
+      </Card>
+    </div>
 
-        <!-- Document Requirements -->
-        <Card>
-          <template #content>
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="flex items-center gap-2 text-base font-semibold text-gray-800 m-0">
-                <i class="pi pi-folder text-gray-500"></i> Persyaratan Dokumen
-              </h2>
-              <AppButton
-                label="Tambah Dokumen"
-                icon="pi pi-plus"
-                size="small"
-                variant="secondary"
-                @click="openAddRequirement"
-              />
-            </div>
+    <!--
+      Baris terakhir: split 2 kolom SEKARANG mulai di sini saja --
+      Persyaratan Dokumen (kiri, lebar) + Terakhir Diubah & tombol
+      (kanan, sempit) -- sesuai wireframe.
+    -->
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 items-start">
+      <!-- Document Requirements -->
+      <Card>
+        <template #content>
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="flex items-center gap-2 text-base font-semibold text-gray-800 m-0">
+              <i class="pi pi-folder text-gray-500"></i> Persyaratan Dokumen
+            </h2>
+            <AppButton
+              label="Tambah Dokumen"
+              icon="pi pi-plus"
+              size="small"
+              variant="secondary"
+              @click="openAddRequirement"
+            />
+          </div>
 
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="text-left text-xs uppercase tracking-wide text-gray-400 border-b border-gray-200">
-                  <th class="py-2 font-medium">Nama Dokumen</th>
-                  <th class="py-2 font-medium">Deskripsi Singkat</th>
-                  <th class="py-2 font-medium text-center w-20">Wajib</th>
-                  <th class="py-2 font-medium text-center w-16">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="requirement in requirements"
-                  :key="requirement.id"
-                  class="border-b border-gray-100 last:border-0"
-                >
-                  <td class="py-3 pr-2 font-medium text-gray-800">{{ requirement.document_name }}</td>
-                  <td class="py-3 pr-2 text-gray-500">{{ requirement.description }}</td>
-                  <td class="py-3 text-center">
-                    <Checkbox v-model="requirement.is_required" :binary="true" />
-                  </td>
-                  <td class="py-3 text-center">
-                    <button class="text-gray-400 hover:text-red-500" @click="removeRequirement(requirement)">
-                      <i class="pi pi-trash"></i>
-                    </button>
-                  </td>
-                </tr>
-                <tr v-if="requirements.length === 0">
-                  <td colspan="4" class="py-6 text-center text-gray-400 text-sm">
-                    Belum ada persyaratan dokumen.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </template>
-        </Card>
-      </div>
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs uppercase tracking-wide text-gray-400 border-b border-gray-200">
+                <th class="py-2 font-medium">Nama Dokumen</th>
+                <th class="py-2 font-medium">Deskripsi Singkat</th>
+                <th class="py-2 font-medium text-center w-20">Wajib</th>
+                <th class="py-2 font-medium text-center w-16">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="requirement in requirements"
+                :key="requirement.id"
+                class="border-b border-gray-100 last:border-0"
+              >
+                <td class="py-3 pr-2 font-medium text-gray-800">{{ requirement.document_name }}</td>
+                <td class="py-3 pr-2 text-gray-500">{{ requirement.description }}</td>
+                <td class="py-3 text-center">
+                  <Checkbox v-model="requirement.is_required" :binary="true" />
+                </td>
+                <td class="py-3 text-center">
+                  <button class="text-gray-400 hover:text-red-500" @click="removeRequirement(requirement)">
+                    <i class="pi pi-trash"></i>
+                  </button>
+                </td>
+              </tr>
+              <tr v-if="requirements.length === 0">
+                <td colspan="4" class="py-6 text-center text-gray-400 text-sm">
+                  Belum ada persyaratan dokumen.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
+      </Card>
 
-      <!-- ==================== SIDEBAR (RIGHT) ==================== -->
-      <div class="flex flex-col justify-end gap-4">
+      <!-- Sidebar: meta info + tombol -->
+      <div class="flex flex-col gap-4">
         <Card v-if="!isNew">
           <template #content>
             <div class="flex items-start gap-3">

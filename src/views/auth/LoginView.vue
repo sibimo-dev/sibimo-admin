@@ -32,28 +32,39 @@ async function handleLogin() {
 </script>
 
 <template>
-  <div class="card">
-    <h1 class="page-title text-center">Masuk ke SIBIMO Admin</h1>
-    <p class="page-subtitle text-center">Kalurahan Bimomartani</p>
+  <div class="fixed inset-0 z-0 flex items-center justify-center overflow-hidden">
+    
+    <svg
+      class="absolute inset-0 w-full h-full z-0"
+      viewBox="0 0 1600 900"
+      preserveAspectRatio="xMidYMid slice"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#233A73" />
+          <stop offset="55%" stop-color="#1179C6" />
+          <stop offset="100%" stop-color="#3fb6d3" />
+        </linearGradient>
 
-    <form class="flex flex-col gap-4" @submit.prevent="handleLogin">
-      <AppInput v-model="form.email" type="email" label="Email" :error="errors.email" required />
-      <AppInput
-        v-model="form.password"
-        type="password"
-        label="Password"
-        :error="errors.password"
-        required
-      />
+        
+        <pattern id="dots" width="64" height="64" patternUnits="userSpaceOnUse">
+          <circle cx="8" cy="8" r="3" fill="#ffffff" fill-opacity="0.10" />
+          <circle cx="40" cy="32" r="5" fill="#ffffff" fill-opacity="0.07" />
+          <circle cx="20" cy="52" r="2.5" fill="#ffffff" fill-opacity="0.12" />
+        </pattern>
+      </defs>
 
-      <p v-if="serverError" class="text-sm text-danger-500">{{ serverError }}</p>
+      <rect x="0" y="0" width="1600" height="900" fill="url(#sky)" />
+      <rect x="0" y="0" width="1600" height="900" fill="url(#dots)" />
 
-      <AppButton label="Masuk" variant="primary" type="submit" :loading="loading" class="w-full" />
-    </form>
+      <!-- Beberapa lingkaran besar samar sebagai aksen, boleh dihapus kalau terlalu ramai -->
+      <circle cx="200" cy="150" r="220" fill="#ffffff" fill-opacity="0.04" />
+      <circle cx="1420" cy="720" r="280" fill="#ffffff" fill-opacity="0.05" />
+      <circle cx="1300" cy="120" r="120" fill="#ffffff" fill-opacity="0.06" />
+      <circle cx="120" cy="760" r="150" fill="#ffffff" fill-opacity="0.05" />
+    </svg>
 
-<<<<<<< Updated upstream
-   
-=======
     
     <div
       class="absolute inset-0 z-[1]"
@@ -73,7 +84,7 @@ async function handleLogin() {
         </p>
 
         <form class="flex flex-col gap-4" @submit.prevent="handleLogin">
-          <AppInput v-model="form.login" label="Email atau Username" :error="errors.login" required />
+          <AppInput v-model="form.email" type="email" label="Email" :error="errors.email" required />
           <AppInput
             v-model="form.password"
             type="password"
@@ -98,6 +109,5 @@ async function handleLogin() {
     <div class="absolute bottom-0 left-0 right-0 z-[2] text-center px-5 pb-6 sm:pb-7 text-white/72 text-xs">
       Melayani warga dengan lebih dekat &amp; transparan
     </div>
->>>>>>> Stashed changes
   </div>
 </template>

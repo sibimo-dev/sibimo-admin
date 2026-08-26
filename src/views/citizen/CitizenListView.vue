@@ -1,15 +1,14 @@
 <script setup>
 
-import { ref, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import * as XLSX from 'xlsx'
 import { FilterMatchMode } from '@primevue/core/api'
-<<<<<<< Updated upstream
-=======
 import { useConfirm } from 'primevue/useconfirm'
 import { createCitizen, deleteCitizen as removeCitizen, getCitizens } from '@/services/citizen.service'
->>>>>>> Stashed changes
+import api from '@/services/api'   // <-- axios instance yang udah ada
 
+import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import InputText from 'primevue/inputtext'
@@ -19,62 +18,11 @@ import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import FileUpload from 'primevue/fileupload'
 import Message from 'primevue/message'
+import Dialog from 'primevue/dialog' 
 
 const router = useRouter()
+const confirm = useConfirm()
 
-<<<<<<< Updated upstream
-// Data dummy — tidak diubah dari versi sebelumnya
-const residents = ref([
-  {
-    id: 1,
-    name: 'Budi Santoso',
-    nationalId: '3273123456789012',
-    gender: 'Laki-laki',
-    address: 'Jl. Merdeka No. 1, RT 01/RW 02',
-    status: 'Active',
-  },
-  {
-    id: 2,
-    name: 'Siti Aminah',
-    nationalId: '3273987654321098',
-    gender: 'Perempuan',
-    address: 'Jl. Pahlawan No. 45, RT 02/RW 01',
-    status: 'Pindah',
-  },
-  {
-    id: 3,
-    name: 'Agus Setiawan',
-    nationalId: '3273112223445566',
-    gender: 'Laki-laki',
-    address: 'Jl. Sudirman No. 10, RT 03/RW 03',
-    status: 'Active',
-  },
-  {
-    id: 4,
-    name: 'Dewi Lestari',
-    nationalId: '3273119876543210',
-    gender: 'Perempuan',
-    address: 'Jl. Kenanga No. 7, RT 01/RW 04',
-    status: 'Active',
-  },
-  {
-    id: 5,
-    name: 'Rudi Hartono',
-    nationalId: '3273115566778899',
-    gender: 'Laki-laki',
-    address: 'Jl. Anggrek No. 12, RT 04/RW 02',
-    status: 'Active',
-  },
-  {
-    id: 6,
-    name: 'Ani Wulandari',
-    nationalId: '3273119988776655',
-    gender: 'Perempuan',
-    address: 'Jl. Mawar No. 3, RT 02/RW 03',
-    status: 'Pindah',
-  },
-])
-=======
 // GANTI: dari array dummy statis -> ref kosong, diisi lewat fetchCitizens()
 const residents = ref([])
 const loading = ref(false)
@@ -119,8 +67,8 @@ async function fetchCitizens() {
   loading.value = true
   loadError.value = ''
   try {
-    const data = await getCitizens()
-    residents.value = data.map(mapCitizenFromApi)
+    const res = await api.get('/citizens')
+    residents.value = res.data.data.map(mapCitizenFromApi)
   } catch (err) {
     loadError.value = err.response?.data?.message || 'Gagal memuat data warga.'
   } finally {
@@ -130,7 +78,6 @@ async function fetchCitizens() {
 
 // Panggil sekali waktu halaman dibuka
 onMounted(fetchCitizens)
->>>>>>> Stashed changes
 
 const selectedResidents = ref([])
 const rowsPerPage = ref(10)
@@ -154,17 +101,6 @@ function editResident(id) {
   router.push({ name: 'citizen-edit', params: { id } })
 }
 
-<<<<<<< Updated upstream
-function deleteResident(id) {
-  residents.value = residents.value.filter(resident => resident.id !== id)
-  selectedResidents.value = selectedResidents.value.filter(resident => resident.id !== id)
-}
-
-function deleteSelected() {
-  const idsToDelete = new Set(selectedResidents.value.map(resident => resident.id))
-  residents.value = residents.value.filter(resident => !idsToDelete.has(resident.id))
-  selectedResidents.value = []
-=======
 
 // GANTI: deleteResident sekarang beneran panggil API, bukan cuma filter array lokal
 async function deleteResident(data) {
@@ -187,6 +123,28 @@ async function deleteResident(data) {
   })
 }
 
+
+// GANTI: deleteResident sekarang beneran panggil API, bukan cuma filter array lokal
+async function deleteResident(data) {
+  confirm.require({
+    message: `Hapus data warga "${data.name}" dengan NIK "${data.nationalId}"?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      try {
+        await api.delete(`/citizens/${data.id}`)
+        residents.value = residents.value.filter(resident => resident.id !== data.id)
+        selectedResidents.value = selectedResidents.value.filter(resident => resident.id !== data.id)
+      } catch (err) {
+        loadError.value = err.response?.data?.message || 'Gagal menghapus data warga.'
+      }
+    },
+  })
+}
+
 // GANTI: hapus banyak sekaligus -> panggil API satu-satu (backend belum ada endpoint bulk-delete)
 async function deleteSelected() {
   confirm.require({
@@ -199,7 +157,7 @@ async function deleteSelected() {
     accept: async () => {
       const idsToDelete = selectedResidents.value.map(resident => resident.id)
       try {
-        await Promise.all(idsToDelete.map((id) => removeCitizen(id)))
+        await Promise.all(idsToDelete.map(id => api.delete(`/citizens/${id}`)))
         const idSet = new Set(idsToDelete)
         residents.value = residents.value.filter(resident => !idSet.has(resident.id))
         selectedResidents.value = []
@@ -209,8 +167,10 @@ async function deleteSelected() {
       }
     },
   })
->>>>>>> Stashed changes
 }
+
+// --- Bagian import Excel (handleFileSelect, mapRowToResident, normalizeKey)
+// TETAP SAMA PERSIS, tidak perlu diubah -- itu logic baca file, bukan komunikasi API.
 
 function normalizeKey(key) {
   return key.trim().toLowerCase().replace(/[\s_]+/g, '')
@@ -223,27 +183,40 @@ function mapRowToResident(row, nextId) {
     normalized[normalizeKey(key)] = row[key]
   })
 
-  const name = normalized['namalengkap'] ?? normalized['nama'] ?? normalized['name'] ?? ''
-  const nationalId = normalized['nik'] ?? normalized['nationalid'] ?? ''
+  const full_name = normalized['namalengkap'] ?? normalized['nama'] ?? normalized['name'] ?? ''
+  const national_id = normalized['nik'] ?? normalized['nationalid'] ?? ''
+  const family_card_number = normalized['nomorkk'] ?? normalized['kk'] ?? normalized['familycardnumber'] ?? ''
   const gender = normalized['jeniskelamin'] ?? normalized['gender'] ?? normalized['jk'] ?? ''
+  const birth_place = normalized['tempatlahir'] ?? normalized['birthplace'] ?? ''
+  const birth_date = normalized['tanggallahir'] ?? normalized['birthdate'] ?? null
+  const phone_number = normalized['notelepon'] ?? normalized['nomortelepon'] ?? normalized['phonenumber'] ?? ''
   const address = normalized['alamat'] ?? normalized['address'] ?? ''
+  const occupation = normalized['pekerjaan'] ?? normalized['occupation'] ?? ''
+  const education = normalized['pendidikan'] ?? normalized['education'] ?? ''
+  const marital_status = normalized['statuspernikahan'] ?? normalized['maritalstatus'] ?? ''
   let status = normalized['status'] ?? 'Active'
 
   status = String(status).trim().toLowerCase() === 'pindah' ? 'Pindah' : 'Active'
 
-  if (!name && !nationalId) return null
+  if (!full_name && !national_id) return null
 
   return {
-    id: nextId,
-    name: String(name).trim(),
-    nationalId: String(nationalId).trim(),
+    full_name: String(full_name).trim(),
+    national_id: String(national_id).trim(),
+    family_card_number: String(family_card_number).trim(),
     gender: String(gender).trim(),
+    birth_place: String(birth_place).trim(),
+    birth_date: birth_date ? String(birth_date).trim() : null,
+    phone_number: String(phone_number).trim(),
     address: String(address).trim(),
+    occupation: String(occupation).trim(),
+    education: String(education).trim(),
+    marital_status: String(marital_status).trim(),
     status,
   }
 }
 
-function handleFileSelect(event) {
+async function handleFileSelect(event) {
   const file = event.files?.[0]
   if (!file) return
 
@@ -252,7 +225,7 @@ function handleFileSelect(event) {
 
   const reader = new FileReader()
 
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
       const data = new Uint8Array(e.target.result)
       const workbook = XLSX.read(data, { type: 'array' })
@@ -265,32 +238,19 @@ function handleFileSelect(event) {
         return
       }
 
-      let nextId = residents.value.reduce((max, resident) => Math.max(max, resident.id), 0) + 1
-      const imported = []
+      const payloads = rows.map(row => mapRowToResident(row)).filter(p => p !== null)
 
-      rows.forEach(row => {
-        const mapped = mapRowToResident(row, nextId)
-        if (mapped) {
-          imported.push(mapped)
-          nextId += 1
-        }
-      })
-
-      if (imported.length === 0) {
+      if (payloads.length === 0) {
         importError.value = 'Tidak ada baris valid ditemukan. Pastikan kolom Nama Lengkap dan NIK terisi.'
         return
       }
 
-<<<<<<< Updated upstream
-      residents.value = [...residents.value, ...imported]
-      importSuccess.value = `${imported.length} data warga berhasil diimpor.`
-=======
       let successCount = 0
       let failCount = 0
 
       for (const payload of payloads) {
         try {
-          await createCitizen(payload)
+          await api.post('/citizens', payload)
           successCount++
         } catch {
           failCount++
@@ -304,7 +264,6 @@ function handleFileSelect(event) {
       } else {
         importSuccess.value = `${successCount} data berhasil diimpor, ${failCount} gagal (kemungkinan NIK duplikat/tidak valid).`
       }
->>>>>>> Stashed changes
     } catch (err) {
       importError.value = 'Gagal membaca file. Pastikan format file adalah .xlsx, .xls, atau .csv.'
     }
@@ -315,83 +274,88 @@ function handleFileSelect(event) {
 </script>
 
 <template>
-  <div class="min-h-full px-6 py-6 text-neutral-800 lg:px-8">
+  <div>
 
-    <h1 class="m-0 mb-1 text-[22px] font-bold text-primary-900">
-      Kelola Data Warga
-    </h1>
+    <div class="mb-6">
+      <h1 class="m-0 text-2xl font-bold text-primary-900">
+        Kelola Data Warga
+      </h1>
 
-    <p class="m-0 mb-5 text-sm text-neutral-500">
-      Kelola data kependudukan warga desa.
-    </p>
+      <p class="m-0 mt-1 text-sm text-neutral-500">
+        Kelola data kependudukan warga desa.
+      </p>
+    </div>
 
-    <div class="rounded-xl border border-neutral-200 bg-white shadow-sm">
+    <Card
+      :pt="{
+        root: { class: 'rounded-lg border border-neutral-200 bg-white shadow-sm' },
+        body: { class: 'p-5' },
+        content: { class: 'p-0' },
+      }"
+    >
+      <template #content>
 
-      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 px-6 py-4">
+        <div class="mb-4 flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
+          <div class="flex flex-wrap items-center gap-2">
 
-        <h2 class="m-0 text-base font-semibold text-primary-900">
-          Data Warga
-        </h2>
-
-        <div class="flex flex-wrap items-center gap-2">
-
-          <IconField>
-            <InputIcon class="pi pi-search text-neutral-400" />
-            <InputText
-              v-model="filters.global.value"
-              placeholder="Cari nama, NIK, atau alamat"
-              class="w-[220px] rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
+            <Button
+              label="Tambah Warga"
+              icon="pi pi-plus"
+              class="rounded-lg border border-transparent bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
+              @click="createResident"
             />
-          </IconField>
 
-          <Button
-            label="Hapus"
-            icon="pi pi-trash"
-            severity="secondary"
-            outlined
-            :disabled="selectedResidents.length === 0"
-            class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
-            @click="deleteSelected"
-          />
+            <Button
+              label="Hapus"
+              icon="pi pi-trash"
+              severity="secondary"
+              outlined
+              :disabled="selectedResidents.length === 0"
+              class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
+              @click="deleteSelected"
+            />
 
-          <FileUpload
-            mode="basic"
-            accept=".xlsx,.xls,.csv"
-            chooseLabel="Import Data Warga"
-            chooseIcon="pi pi-upload"
-            :auto="false"
-            customUpload
-            :pt="{
-              root: { class: 'inline-flex' },
-              chooseButton: {
-                class:
-                  'inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100',
-              },
-            }"
-            @select="handleFileSelect"
-          />
+          </div>
 
-          <Button
-            label="Tambah Warga"
-            icon="pi pi-plus"
-            class="rounded-lg border border-transparent bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
-            @click="createResident"
-          />
+          <div class="flex flex-wrap items-center gap-2">
+            <IconField class="w-full sm:w-72">
+              <InputIcon class="pi pi-search text-neutral-400" />
+              <InputText
+                v-model="filters.global.value"
+                placeholder="Cari nama, NIK, atau alamat"
+                class="w-full rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
+              />
+            </IconField>
 
+            <FileUpload
+              mode="basic"
+              accept=".xlsx,.xls,.csv"
+              chooseLabel="Import Data Warga"
+              chooseIcon="pi pi-upload"
+              :auto="false"
+              customUpload
+              :pt="{
+                root: { class: 'inline-flex' },
+                chooseButton: {
+                  class:
+                    'inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100',
+                },
+              }"
+              @select="handleFileSelect"
+            />
+          </div>
         </div>
-      </div>
 
-      <div v-if="importError || importSuccess" class="px-6 pt-4">
-        <Message v-if="importError" severity="error" :closable="false" class="text-[13px]">
-          {{ importError }}
-        </Message>
+        <div v-if="importError || importSuccess" class="mb-4">
+          <Message v-if="importError" severity="error" :closable="false" class="text-[13px]">
+            {{ importError }}
+          </Message>
 
-        <Message v-if="importSuccess" severity="success" :closable="false" class="text-[13px]">
-          {{ importSuccess }}
-        </Message>
-      </div>
+          <Message v-if="importSuccess" severity="success" :closable="false" class="text-[13px]">
+            {{ importSuccess }}
+          </Message>
+        </div>
 
-      <div class="px-6 py-4">
         <DataTable
           v-model:selection="selectedResidents"
           :value="residents"
@@ -439,9 +403,18 @@ function handleFileSelect(event) {
             </template>
           </Column>
 
-          <Column header="Aksi" headerStyle="width: 6rem">
+          <Column header="Aksi" headerStyle="width: 8rem">
             <template #body="{ data }">
               <div class="flex items-center gap-1">
+                <Button
+                  icon="pi pi-eye"
+                  text
+                  rounded
+                  severity="secondary"
+                  class="h-8 w-8 text-neutral-500 hover:bg-neutral-100 hover:text-primary-700"
+                  title="Detail"
+                  @click="viewDetail(data)"
+                />
                 <Button
                   icon="pi pi-pencil"
                   text
@@ -458,14 +431,107 @@ function handleFileSelect(event) {
                   severity="danger"
                   class="h-8 w-8 text-neutral-500 hover:bg-danger-50 hover:text-danger-600"
                   title="Hapus"
-                  @click="deleteResident(data.id)"
+                  @click="deleteResident(data)"
                 />
               </div>
             </template>
           </Column>
         </DataTable>
+
+      </template>
+    </Card>
+
+    <Dialog
+      v-model:visible="detailDialogVisible"
+      header="Detail Data Warga"
+      modal
+      :style="{ width: '32rem' }"
+      class="rounded-lg"
+      :pt="{
+        header: { class: 'border-b border-neutral-100 px-5 py-4' },
+        title: { class: 'text-base font-bold text-primary-900' },
+        content: { class: 'px-5 py-5' },
+        footer: { class: 'border-t border-neutral-100 px-5 py-3' },
+      }"
+    >
+      <div v-if="selectedDetailResident" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+        <div class="flex flex-col gap-1 sm:col-span-2">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nama Lengkap</span>
+          <span class="text-[13px] font-medium text-neutral-800">{{ selectedDetailResident.name }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">NIK</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.nationalId || '-' }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor KK</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.familyCardNumber || '-' }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Jenis Kelamin</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.gender || '-' }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor Telepon</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.phoneNumber || '-' }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tempat Lahir</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.birthPlace || '-' }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tanggal Lahir</span>
+          <span class="text-[13px] text-neutral-800">{{ formatDate(selectedDetailResident.birthDate) }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Pekerjaan</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.occupation || '-' }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Pendidikan</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.education || '-' }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Status Pernikahan</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.maritalStatus || '-' }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Status</span>
+          <Tag
+            :value="selectedDetailResident.status"
+            :severity="statusSeverity(selectedDetailResident.status)"
+            class="w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide"
+          />
+        </div>
+
+        <div class="flex flex-col gap-1 sm:col-span-2">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Alamat</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.address || '-' }}</span>
+        </div>
+
       </div>
 
-    </div>
+      <template #footer>
+        <Button
+          label="Tutup"
+          severity="secondary"
+          outlined
+          class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
+          @click="detailDialogVisible = false"
+        />
+      </template>
+    </Dialog>
+
   </div>
 </template>
