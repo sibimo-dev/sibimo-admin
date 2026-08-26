@@ -37,6 +37,7 @@ function fakeDelay(ms = 500) {
 }
 
 export async function login(credentials) {
+<<<<<<< Updated upstream
   // GANTI KE API ASLI: return api.post('/auth/login', credentials)
   await fakeDelay()
 
@@ -76,4 +77,18 @@ export async function logout() {
   // GANTI KE API ASLI: return api.post('/auth/logout')
   await fakeDelay(150)
   return { data: { message: 'Logout dummy berhasil.' } }
+=======
+  return api.post('/auth/login', {
+    login: credentials.login,
+    password: credentials.password,
+  })
+}
+
+export async function getCurrentUser() {
+  return api.get('/auth/me')
+}
+
+export async function logout() {
+  return api.post('/auth/logout')
+>>>>>>> Stashed changes
 }

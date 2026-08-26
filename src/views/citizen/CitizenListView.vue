@@ -4,6 +4,11 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import * as XLSX from 'xlsx'
 import { FilterMatchMode } from '@primevue/core/api'
+<<<<<<< Updated upstream
+=======
+import { useConfirm } from 'primevue/useconfirm'
+import { createCitizen, deleteCitizen as removeCitizen, getCitizens } from '@/services/citizen.service'
+>>>>>>> Stashed changes
 
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -17,6 +22,7 @@ import Message from 'primevue/message'
 
 const router = useRouter()
 
+<<<<<<< Updated upstream
 // Data dummy — tidak diubah dari versi sebelumnya
 const residents = ref([
   {
@@ -68,6 +74,63 @@ const residents = ref([
     status: 'Pindah',
   },
 ])
+=======
+// GANTI: dari array dummy statis -> ref kosong, diisi lewat fetchCitizens()
+const residents = ref([])
+const loading = ref(false)
+const loadError = ref('')
+
+const detailDialogVisible = ref(false)
+const selectedDetailResident = ref(null)
+
+function viewDetail(data) {
+  selectedDetailResident.value = data
+  detailDialogVisible.value = true
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '-'
+  return new Date(dateStr).toLocaleDateString('id-ID', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  })
+}
+
+// Mapping field backend (snake_case) -> field yang dipakai UI (camelCase)
+// Kenapa perlu mapping: biar KODE TEMPLATE DI BAWAH (Column, dst) TIDAK PERLU DIUBAH SAMA SEKALI.
+function mapCitizenFromApi(item) {
+  return {
+    id: item.citizen_id,
+    name: item.full_name,
+    nationalId: item.national_id, 
+    familyCardNumber: item.family_card_number,
+    gender: item.gender,
+    address: item.address,
+    status: item.status,
+    occupation: item.occupation,
+    education: item.education,
+    maritalStatus: item.marital_status,
+    phoneNumber: item.phone_number,
+    birthPlace: item.birth_place,
+    birthDate: item.birth_date,
+  }
+}
+
+async function fetchCitizens() {
+  loading.value = true
+  loadError.value = ''
+  try {
+    const data = await getCitizens()
+    residents.value = data.map(mapCitizenFromApi)
+  } catch (err) {
+    loadError.value = err.response?.data?.message || 'Gagal memuat data warga.'
+  } finally {
+    loading.value = false
+  }
+}
+
+// Panggil sekali waktu halaman dibuka
+onMounted(fetchCitizens)
+>>>>>>> Stashed changes
 
 const selectedResidents = ref([])
 const rowsPerPage = ref(10)
@@ -91,6 +154,7 @@ function editResident(id) {
   router.push({ name: 'citizen-edit', params: { id } })
 }
 
+<<<<<<< Updated upstream
 function deleteResident(id) {
   residents.value = residents.value.filter(resident => resident.id !== id)
   selectedResidents.value = selectedResidents.value.filter(resident => resident.id !== id)
@@ -100,6 +164,52 @@ function deleteSelected() {
   const idsToDelete = new Set(selectedResidents.value.map(resident => resident.id))
   residents.value = residents.value.filter(resident => !idsToDelete.has(resident.id))
   selectedResidents.value = []
+=======
+
+// GANTI: deleteResident sekarang beneran panggil API, bukan cuma filter array lokal
+async function deleteResident(data) {
+  confirm.require({
+    message: `Hapus data warga "${data.name}" dengan NIK "${data.nationalId}"?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      try {
+        await removeCitizen(data.id)
+        residents.value = residents.value.filter(resident => resident.id !== data.id)
+        selectedResidents.value = selectedResidents.value.filter(resident => resident.id !== data.id)
+      } catch (err) {
+        loadError.value = err.response?.data?.message || 'Gagal menghapus data warga.'
+      }
+    },
+  })
+}
+
+// GANTI: hapus banyak sekaligus -> panggil API satu-satu (backend belum ada endpoint bulk-delete)
+async function deleteSelected() {
+  confirm.require({
+    message: `Hapus ${selectedResidents.value.length} data warga terpilih?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      const idsToDelete = selectedResidents.value.map(resident => resident.id)
+      try {
+        await Promise.all(idsToDelete.map((id) => removeCitizen(id)))
+        const idSet = new Set(idsToDelete)
+        residents.value = residents.value.filter(resident => !idSet.has(resident.id))
+        selectedResidents.value = []
+      } catch (err) {
+        loadError.value = err.response?.data?.message || 'Sebagian data gagal dihapus.'
+        await fetchCitizens() // sinkronin ulang biar data yg berhasil kehapus tetap ke-refresh
+      }
+    },
+  })
+>>>>>>> Stashed changes
 }
 
 function normalizeKey(key) {
@@ -171,8 +281,30 @@ function handleFileSelect(event) {
         return
       }
 
+<<<<<<< Updated upstream
       residents.value = [...residents.value, ...imported]
       importSuccess.value = `${imported.length} data warga berhasil diimpor.`
+=======
+      let successCount = 0
+      let failCount = 0
+
+      for (const payload of payloads) {
+        try {
+          await createCitizen(payload)
+          successCount++
+        } catch {
+          failCount++
+        }
+      }
+
+      await fetchCitizens()
+
+      if (failCount === 0) {
+        importSuccess.value = `${successCount} data warga berhasil diimpor.`
+      } else {
+        importSuccess.value = `${successCount} data berhasil diimpor, ${failCount} gagal (kemungkinan NIK duplikat/tidak valid).`
+      }
+>>>>>>> Stashed changes
     } catch (err) {
       importError.value = 'Gagal membaca file. Pastikan format file adalah .xlsx, .xls, atau .csv.'
     }

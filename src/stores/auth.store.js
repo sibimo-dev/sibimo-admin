@@ -22,6 +22,20 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('sibimo_user', JSON.stringify(data.user))
   }
 
+  async function fetchCurrentUser() {
+    if (!token.value) return null
+
+    try {
+      const { data } = await authService.getCurrentUser()
+      user.value = data.data.user
+      localStorage.setItem('sibimo_user', JSON.stringify(user.value))
+      return user.value
+    } catch (error) {
+      logout()
+      throw error
+    }
+  }
+
   function logout() {
     token.value = null
     user.value = null
@@ -29,5 +43,5 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('sibimo_user')
   }
 
-  return { token, user, isAuthenticated, login, logout }
+  return { token, user, isAuthenticated, login, fetchCurrentUser, logout }
 })
