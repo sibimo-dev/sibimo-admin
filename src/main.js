@@ -8,6 +8,7 @@ import ToastService from 'primevue/toastservice'
 
 import App from './App.vue'
 import router from './router'
+import { useAuthStore } from './stores/auth.store'
 import 'primeicons/primeicons.css'
 import './assets/main.css'
 
@@ -73,8 +74,9 @@ const SibimoPreset = definePreset(Aura, {
 })
 
 const app = createApp(App)
+const pinia = createPinia()
 
-app.use(createPinia())
+app.use(pinia)
 app.use(router)
 
 app.use(PrimeVue, {
@@ -90,5 +92,8 @@ app.use(PrimeVue, {
 
 app.use(ConfirmationService)
 app.use(ToastService)
+
+const authStore = useAuthStore(pinia)
+authStore.fetchCurrentUser().catch(() => undefined)
 
 app.mount('#app')

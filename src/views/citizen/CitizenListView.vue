@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import * as XLSX from 'xlsx'
 import { FilterMatchMode } from '@primevue/core/api'
 import { useConfirm } from 'primevue/useconfirm'
+import { createCitizen, deleteCitizen as removeCitizen, getCitizens } from '@/services/citizen.service'
 import api from '@/services/api'   // <-- axios instance yang udah ada
 
 import Card from 'primevue/card'
@@ -98,6 +99,28 @@ function createResident() {
 
 function editResident(id) {
   router.push({ name: 'citizen-edit', params: { id } })
+}
+
+
+// GANTI: deleteResident sekarang beneran panggil API, bukan cuma filter array lokal
+async function deleteResident(data) {
+  confirm.require({
+    message: `Hapus data warga "${data.name}" dengan NIK "${data.nationalId}"?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      try {
+        await removeCitizen(data.id)
+        residents.value = residents.value.filter(resident => resident.id !== data.id)
+        selectedResidents.value = selectedResidents.value.filter(resident => resident.id !== data.id)
+      } catch (err) {
+        loadError.value = err.response?.data?.message || 'Gagal menghapus data warga.'
+      }
+    },
+  })
 }
 
 

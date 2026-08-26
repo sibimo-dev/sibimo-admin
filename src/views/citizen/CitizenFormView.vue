@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
+import { createCitizen, deleteCitizen as removeCitizen, getCitizen, updateCitizen } from '@/services/citizen.service'
 import api from '@/services/api'
 
 import Card from 'primevue/card'

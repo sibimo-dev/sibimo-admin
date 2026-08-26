@@ -8,15 +8,15 @@ import AppButton from '@/components/common/AppButton.vue'
 const router = useRouter()
 const authStore = useAuthStore()
 
-const form = reactive({ email: '', password: '' })
-const errors = reactive({ email: '', password: '' })
+const form = reactive({ login: '', password: '' })
+const errors = reactive({ login: '', password: '' })
 const loading = ref(false)
 const serverError = ref('')
 
 async function handleLogin() {
-  errors.email = form.email ? '' : 'Email wajib diisi'
+  errors.login = form.login ? '' : 'Email atau username wajib diisi'
   errors.password = form.password ? '' : 'Password wajib diisi'
-  if (errors.email || errors.password) return
+  if (errors.login || errors.password) return
 
   loading.value = true
   serverError.value = ''
