@@ -13,14 +13,17 @@ import Checkbox from 'primevue/checkbox'
 import Button from 'primevue/button'
 import FileUpload from 'primevue/fileupload'
 import Editor from 'primevue/editor'
+import { useAuthStore } from '@/stores/auth.store'
+import { newsService, newsCategoryService } from '@/services/content.service'
 
 const route = useRoute()
 const router = useRouter()
 const confirm = useConfirm()
 const toast = useToast()
+const authStore = useAuthStore()
 
 const newsId = computed(() => route.params.id ?? null)
-const isEditMode = computed(() => newsId.value !== null)
+const isEditMode = computed(() => route.name === 'news-edit' || Boolean(route.params.id))
 const pageTitle = computed(() => (
   isEditMode.value ? 'Edit Berita' : 'Buat Berita Baru'
 ))
@@ -34,17 +37,18 @@ const content = ref('')
 const status = ref('Draft')
 const visibility = ref('publik')
 const publishDate = ref(new Date())
-const authorOptions = ['User Name']
-const author = ref('User Name')
+const authorOptions = ref([])
+const author = ref(null)
 
 const categoryOptions = ref([
   { id: 'infrastruktur', label: 'Infrastruktur', checked: false },
   { id: 'pertanian', label: 'Pertanian', checked: false },
   { id: 'kesehatan', label: 'Kesehatan', checked: false },
-  { id: 'sosial', label: 'Sosial', checked: true },
-  { id: 'keuangan', label: 'Keuangan', checked: true },
+  { id: 'sosial', label: 'Sosial', checked: false },
+  { id: 'keuangan', label: 'Keuangan', checked: false },
   { id: 'teknologi', label: 'Teknologi', checked: false },
 ])
+const newsCategories = ref([])
 
 const tags = ref(['Sosial', 'Keuangan'])
 const tagInput = ref('')
@@ -61,12 +65,22 @@ const visibilityLabel = computed(() => (
       : 'Privat'
 ))
 
-onMounted(() => {
+onMounted(async () => {
+  newsCategories.value = await newsCategoryService.list()
+  if (authStore.user) {
+    authorOptions.value = [{ label: authStore.user.full_name, value: authStore.user.user_id }]
+    author.value = authStore.user.user_id
+  }
   if (!isEditMode.value) return
 
-  title.value = 'Judul berita'
-  content.value = '<p>Isi konten berita yang sudah tersimpan sebelumnya...</p>'
-  status.value = 'Published'
+  const existing = await newsService.get(newsId.value)
+  title.value = existing.title ?? ''
+  content.value = existing.content ?? ''
+  status.value = existing.status ?? 'Draft'
+  categoryOptions.value.forEach(option => {
+    const normalize = value => String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+    option.checked = normalize(existing.category?.slug) === normalize(option.id) || normalize(existing.category?.category_name) === normalize(option.label)
+  })
 })
 
 function handleImageSelect(event) {
@@ -122,8 +136,15 @@ function saveDraft() {
   router.push({ name: 'news-list' })
 }
 
-function publishNews() {
+async function publishNews() {
   status.value = 'Published'
+  const selected = categoryOptions.value.find(option => option.checked)
+  if (!selected) { toast.add({ severity: 'warn', summary: 'Pilih kategori berita terlebih dahulu', life: 3000 }); return }
+  const normalize = value => String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const category = newsCategories.value.find(item => normalize(item.slug) === normalize(selected.id) || normalize(item.category_name) === normalize(selected.label))
+  const payload = { category_id: category?.category_id, category_name: selected.label, title: title.value, slug: isEditMode.value ? undefined : `${title.value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`, content: content.value, thumbnail: imageFile.value, status: 'Published', published_at: publishDate.value.toISOString() }
+  if (isEditMode.value) await newsService.update(newsId.value, payload)
+  else await newsService.create(payload)
   router.push({ name: 'news-list' })
 }
 
@@ -345,6 +366,8 @@ function moveToTrash() {
               <Select
                 v-model="author"
                 :options="authorOptions"
+                optionLabel="label"
+                optionValue="value"
                 class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
                 :pt="{ label: { class: 'px-3 py-2.5' } }"
               />

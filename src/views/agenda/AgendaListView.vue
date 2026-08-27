@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 
@@ -11,13 +11,20 @@ import InputIcon from 'primevue/inputicon'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import Card from 'primevue/card'
+import { agendaService } from '@/services/content.service'
 
 const router = useRouter()
 const confirm = useConfirm()
 
+async function loadAgendas() {
+  const data = await agendaService.list()
+  agendas.value = data.map(item => { const rawDate = String(item.event_date ?? '').slice(0, 10); const date = rawDate ? new Date(`${rawDate}T00:00:00`) : null; return { id: item.agenda_id, name: item.title, date: rawDate || '-', day: date && !Number.isNaN(date.getTime()) ? dayNames[date.getDay()] : '-', time: `${item.start_time ?? ''}${item.end_time ? ` - ${item.end_time}` : ''}`, location: item.location ?? '-', status: item.status ?? 'PUBLISHED' } })
+}
+onMounted(loadAgendas)
+
 const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
 
-const agendas = ref([
+/* const agendasDummy = [
   {
     id: 1,
     name: 'Musyawarah Perencanaan Desa (Musrenbangdes)',
@@ -82,7 +89,9 @@ const agendas = ref([
     location: 'Balai Desa',
     status: 'PUBLISHED',
   },
-])
+]
+*/
+const agendas = ref([])
 
 const selected = ref([])
 const filters = ref({
@@ -92,12 +101,15 @@ const filters = ref({
 const rowsPerPage = ref(10)
 
 function parseDate(dateString) {
+  if (!dateString) return new Date(NaN)
+  if (dateString.includes('-')) return new Date(`${dateString.slice(0, 10)}T00:00:00`)
   const [day, month, year] = dateString.split('/').map(Number)
   return new Date(year, month - 1, day)
 }
 
 function getDayName(dateString) {
-  return dayNames[parseDate(dateString).getDay()]
+  const date = parseDate(dateString)
+  return Number.isNaN(date.getTime()) ? '-' : dayNames[date.getDay()]
 }
 
 function statusSeverity(status) {

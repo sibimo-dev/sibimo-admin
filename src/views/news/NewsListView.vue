@@ -1,6 +1,6 @@
 <script setup>
 
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { FilterMatchMode } from '@primevue/core/api'
 import { useConfirm } from 'primevue/useconfirm'
@@ -13,11 +13,18 @@ import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
+import { newsService } from '@/services/content.service'
 
 const router = useRouter()
 const confirm = useConfirm()
 
-const news = ref([
+async function loadNews() {
+  const data = await newsService.list()
+  news.value = data.map(item => ({ id: item.news_id, title: item.title, author: item.author?.full_name ?? item.author?.name ?? '-', image: item.thumbnail, date: item.published_at ? new Date(item.published_at).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-', category: item.category?.category_name ?? item.category?.name ?? '-', status: item.status?.toUpperCase() }))
+}
+onMounted(loadNews)
+
+/* const newsDummy = [
   {
     id: 1,
     title: 'Musyawarah Perencanaan Desa Tetapkan Prioritas Pembangunan 2027',
@@ -126,7 +133,9 @@ const news = ref([
     category: 'Sosial',
     status: 'PUBLISHED',
   },
-])
+]
+*/
+const news = ref([])
 
 const selectedNews = ref([])
 const rowsPerPage = ref(10)
@@ -155,9 +164,14 @@ function deleteNews(data) {
     acceptLabel: 'Hapus',
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
-    accept: () => {
-      news.value = news.value.filter(newsItem => newsItem.id !== data.id)
-      selectedNews.value = selectedNews.value.filter(newsItem => newsItem.id !== data.id)
+    accept: async () => {
+      try {
+        await newsService.remove(data.id)
+        news.value = news.value.filter(newsItem => newsItem.id !== data.id)
+        selectedNews.value = selectedNews.value.filter(newsItem => newsItem.id !== data.id)
+      } catch (error) {
+        window.alert(error.response?.data?.message ?? 'Gagal menghapus berita.')
+      }
     },
   })
 }
@@ -170,10 +184,16 @@ function deleteSelected() {
     acceptLabel: 'Hapus',
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
-    accept: () => {
+    accept: async () => {
       const idsToDelete = new Set(selectedNews.value.map(newsItem => newsItem.id))
-      news.value = news.value.filter(newsItem => !idsToDelete.has(newsItem.id))
-      selectedNews.value = []
+      try {
+        await Promise.all([...idsToDelete].map(id => newsService.remove(id)))
+        news.value = news.value.filter(newsItem => !idsToDelete.has(newsItem.id))
+        selectedNews.value = []
+      } catch (error) {
+        window.alert(error.response?.data?.message ?? 'Gagal menghapus sebagian berita.')
+        await loadNews()
+      }
     },
   })
 }
