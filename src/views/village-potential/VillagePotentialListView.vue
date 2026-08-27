@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { FilterMatchMode } from '@primevue/core/api'
 import { useConfirm } from 'primevue/useconfirm'
@@ -12,11 +12,18 @@ import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
+import { potentialService } from '@/services/content.service'
 
 const router = useRouter()
 const confirm = useConfirm()
 
-const potentials = ref([
+async function loadPotentials() {
+  const data = await potentialService.list()
+  potentials.value = data.map(item => ({ id: item.potential_id, title: item.title, image: item.image, date: item.created_at ?? item.updated_at ?? '-', category: item.category, status: item.status ?? 'PUBLISHED' }))
+}
+onMounted(loadPotentials)
+
+/* const potentialsDummy = [
   { id: 1, title: 'Sentra Kerajinan Anyaman Bambu Desa Sukamaju', image: null, date: '9/08/2026', category: 'UMKM', status: 'PUBLISHED' },
   { id: 2, title: 'Budidaya Ikan Nila Air Tawar Desa Mekarsari', image: null, date: '7/08/2026', category: 'Perikanan', status: 'PUBLISHED' },
   { id: 3, title: 'Pengembangan Lahan Pertanian Jagung Unggul', image: null, date: '5/08/2026', category: 'Pertanian', status: 'DRAFT' },
@@ -37,7 +44,9 @@ const potentials = ref([
   { id: 18, title: 'Lahan Produktif Padi Organik Desa Makmur', image: null, date: '4/07/2026', category: 'Pertanian', status: 'PUBLISHED' },
   { id: 19, title: 'BUMDes Harapan Jaya Unit Pengelolaan Sampah', image: null, date: '2/07/2026', category: 'Bumdes', status: 'PUBLISHED' },
   { id: 20, title: 'Wisata Sungai dan Susur Alam Desa Lestari', image: null, date: '30/06/2026', category: 'Pariwisata', status: 'PUBLISHED' },
-])
+]
+*/
+const potentials = ref([])
 
 const selectedPotentials = ref([])
 const rowsPerPage = ref(10)

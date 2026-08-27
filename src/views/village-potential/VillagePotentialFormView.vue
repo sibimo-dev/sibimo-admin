@@ -13,11 +13,14 @@ import Checkbox from 'primevue/checkbox'
 import Button from 'primevue/button'
 import FileUpload from 'primevue/fileupload'
 import Editor from 'primevue/editor'
+import { potentialService } from '@/services/content.service'
+import { useAuthStore } from '@/stores/auth.store'
 
 const route = useRoute()
 const router = useRouter()
 const confirm = useConfirm()
 const toast = useToast()
+const authStore = useAuthStore()
 
 const potentialId = computed(() => route.params.id ?? null)
 const isEditMode = computed(() => potentialId.value !== null)
@@ -39,8 +42,8 @@ const content = ref('')
 const status = ref('Draft')
 const visibility = ref('publik')
 const publishDate = ref(new Date())
-const authorOptions = ['User Name']
-const author = ref('User Name')
+const authorOptions = ref([])
+const author = ref(null)
 
 const categoryOptions = ref([
   { id: 'pertanian', label: 'Pertanian', checked: false },
@@ -57,24 +60,23 @@ const visibilityLabel = computed(() => (
       : 'Privat'
 ))
 
-onMounted(() => {
+onMounted(async () => {
+  if (authStore.user) { authorOptions.value = [{ label: authStore.user.full_name, value: authStore.user.user_id }]; author.value = authStore.user.user_id }
   if (!isEditMode.value) return
 
-  title.value = 'Judul Potensi desa'
-
-  content.value = `
-    <p>Lorem ipsum dolor sit amet, id enim eiusmod elit dolore aute.
-    Non qui labore in in ea id pariatur consequat velit qui sunt
-    sit exercitation commodo excepteur.</p>
-  `
-
-  status.value = 'Published'
-  visibility.value = 'publik'
-
-  const agricultureCategory = categoryOptions.value.find(
-    category => category.id === 'pertanian'
-  )
-  if (agricultureCategory) agricultureCategory.checked = true
+  try {
+    const existing = await potentialService.get(potentialId.value)
+    title.value = existing.title ?? ''
+    content.value = existing.description ?? ''
+    photoPreview.value = existing.image ?? null
+    const categoryMap = { Agriculture: 'pertanian', BUMDes: 'bumdes', Tourism: 'pariwisata', UMKM: 'umkm' }
+    const selectedId = categoryMap[existing.category]
+    categoryOptions.value.forEach(category => { category.checked = category.id === selectedId })
+    status.value = existing.status ?? 'Published'
+    visibility.value = 'publik'
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Gagal memuat data potensi', detail: error.response?.data?.message ?? 'Coba lagi.', life: 3000 })
+  }
 })
 
 function handlePhotoSelect(event) {
@@ -115,8 +117,14 @@ function saveDraft() {
   router.push({ name: 'village-potential-list' })
 }
 
-function saveMain() {
+async function saveMain() {
   status.value = 'Published'
+  const selectedCategory = categoryOptions.value.find(category => category.checked)
+  const categoryMap = { pertanian: 'Agriculture', bumdes: 'BUMDes', pariwisata: 'Tourism', umkm: 'UMKM' }
+  if (!selectedCategory) { toast.add({ severity: 'warn', summary: 'Pilih kategori potensi terlebih dahulu', life: 3000 }); return }
+  await (potentialId.value
+    ? potentialService.update(potentialId.value, { category: categoryMap[selectedCategory.id], title: title.value, description: content.value, location: '' })
+    : potentialService.create({ category: categoryMap[selectedCategory.id], title: title.value, description: content.value, location: '' }))
   router.push({ name: 'village-potential-list' })
 }
 
@@ -338,6 +346,8 @@ function moveToTrash() {
               <Select
                 v-model="author"
                 :options="authorOptions"
+                optionLabel="label"
+                optionValue="value"
                 class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-600 focus:ring-4 focus:ring-primary-100"
                 :pt="{ label: { class: 'px-3 py-2.5' } }"
               />

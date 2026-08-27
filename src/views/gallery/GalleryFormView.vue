@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import { useAuthStore } from '@/stores/auth.store'
 import { useGalleryStore } from '@/stores/gallery.store'
+import { getGallery } from '@/services/gallery.service'
 
 import Card from 'primevue/card'
 import Button from 'primevue/button'
@@ -35,10 +36,9 @@ const errors = reactive({ title: '' })
 const pageTitle = computed(() => (isEdit.value ? 'Edit Foto' : 'Tambah Foto'))
 const mainButtonLabel = computed(() => (isEdit.value ? 'Perbarui' : 'Tambah Foto'))
 
-onMounted(() => {
+onMounted(async () => {
   if (isEdit.value) {
-    // TODO: ganti dengan fetch API asli begitu backend siap
-    const existing = galleryStore.getById(route.params.id)
+    const existing = await getGallery(route.params.id)
     if (existing) {
       form.title = existing.title
       form.description = existing.description

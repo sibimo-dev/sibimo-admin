@@ -11,6 +11,7 @@ import Button from 'primevue/button'
 import FileUpload from 'primevue/fileupload'
 import RadioButton from 'primevue/radiobutton'
 import Card from 'primevue/card'
+import { agendaService } from '@/services/content.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -122,8 +123,11 @@ function saveDraft() {
   router.push({ name: 'agenda-list' })
 }
 
-function saveMain() {
+async function saveMain() {
   status.value = 'Published'
+  await (agendaId.value
+    ? agendaService.update(agendaId.value, { title: eventName.value, description: attendees.value, event_date: eventDate.value.toISOString().slice(0, 10), start_time: startTime.value.toTimeString().slice(0, 5), end_time: endTime.value.toTimeString().slice(0, 5), location: place.value })
+    : agendaService.create({ title: eventName.value, description: attendees.value, event_date: eventDate.value.toISOString().slice(0, 10), start_time: startTime.value.toTimeString().slice(0, 5), end_time: endTime.value.toTimeString().slice(0, 5), location: place.value }))
   router.push({ name: 'agenda-list' })
 }
 

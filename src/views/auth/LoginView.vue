@@ -84,7 +84,7 @@ async function handleLogin() {
         </p>
 
         <form class="flex flex-col gap-4" @submit.prevent="handleLogin">
-          <AppInput v-model="form.email" type="email" label="Email" :error="errors.email" required />
+          <AppInput v-model="form.login" type="text" label="Email atau Username" :error="errors.login" required />
           <AppInput
             v-model="form.password"
             type="password"

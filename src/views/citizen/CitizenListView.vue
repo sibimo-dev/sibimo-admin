@@ -6,7 +6,6 @@ import * as XLSX from 'xlsx'
 import { FilterMatchMode } from '@primevue/core/api'
 import { useConfirm } from 'primevue/useconfirm'
 import { createCitizen, deleteCitizen as removeCitizen, getCitizens } from '@/services/citizen.service'
-import api from '@/services/api'   // <-- axios instance yang udah ada
 
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
@@ -67,8 +66,8 @@ async function fetchCitizens() {
   loading.value = true
   loadError.value = ''
   try {
-    const res = await api.get('/citizens')
-    residents.value = res.data.data.map(mapCitizenFromApi)
+    const data = await getCitizens()
+    residents.value = data.map(mapCitizenFromApi)
   } catch (err) {
     loadError.value = err.response?.data?.message || 'Gagal memuat data warga.'
   } finally {
@@ -124,27 +123,6 @@ async function deleteResident(data) {
 }
 
 
-// GANTI: deleteResident sekarang beneran panggil API, bukan cuma filter array lokal
-async function deleteResident(data) {
-  confirm.require({
-    message: `Hapus data warga "${data.name}" dengan NIK "${data.nationalId}"?`,
-    header: 'Konfirmasi Hapus',
-    icon: 'pi pi-exclamation-triangle',
-    acceptLabel: 'Hapus',
-    rejectLabel: 'Batal',
-    acceptClass: 'p-button-danger',
-    accept: async () => {
-      try {
-        await api.delete(`/citizens/${data.id}`)
-        residents.value = residents.value.filter(resident => resident.id !== data.id)
-        selectedResidents.value = selectedResidents.value.filter(resident => resident.id !== data.id)
-      } catch (err) {
-        loadError.value = err.response?.data?.message || 'Gagal menghapus data warga.'
-      }
-    },
-  })
-}
-
 // GANTI: hapus banyak sekaligus -> panggil API satu-satu (backend belum ada endpoint bulk-delete)
 async function deleteSelected() {
   confirm.require({
@@ -157,7 +135,7 @@ async function deleteSelected() {
     accept: async () => {
       const idsToDelete = selectedResidents.value.map(resident => resident.id)
       try {
-        await Promise.all(idsToDelete.map(id => api.delete(`/citizens/${id}`)))
+        await Promise.all(idsToDelete.map(id => removeCitizen(id)))
         const idSet = new Set(idsToDelete)
         residents.value = residents.value.filter(resident => !idSet.has(resident.id))
         selectedResidents.value = []
@@ -250,7 +228,7 @@ async function handleFileSelect(event) {
 
       for (const payload of payloads) {
         try {
-          await api.post('/citizens', payload)
+          await createCitizen(payload)
           successCount++
         } catch {
           failCount++
