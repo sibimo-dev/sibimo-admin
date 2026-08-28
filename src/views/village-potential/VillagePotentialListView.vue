@@ -13,15 +13,57 @@ import InputIcon from 'primevue/inputicon'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import { potentialService } from '@/services/content.service'
+import { getListCache, setListCache } from '@/services/list-cache'
+import { mediaUrl } from '@/services/media'
 
 const router = useRouter()
 const confirm = useConfirm()
+const cachedPotentials = getListCache('village-potentials')
+const loading = ref(!cachedPotentials)
+const loadError = ref('')
 
-async function loadPotentials() {
-  const data = await potentialService.list()
-  potentials.value = data.map(item => ({ id: item.potential_id, title: item.title, image: item.image, date: item.created_at ?? item.updated_at ?? '-', category: item.category, status: item.status ?? 'PUBLISHED' }))
+function formatDate(value) {
+  if (!value) return '-'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? '-'
+    : date.toLocaleDateString('id-ID', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
 }
-onMounted(loadPotentials)
+
+const potentials = ref((cachedPotentials ?? []).map(mapPotentialItem))
+
+function mapPotentialItem(item) {
+  return {
+    id: item.potential_id,
+    title: item.title,
+    image: mediaUrl(item.image),
+    date: formatDate(item.created_at ?? item.updated_at),
+    category: item.category ?? '-',
+    status: item.status?.toUpperCase() ?? 'PUBLISHED',
+  }
+}
+
+async function loadPotentials({ background = false } = {}) {
+  if (!background) loading.value = true
+  try {
+    const data = await potentialService.list()
+    const normalized = Array.isArray(data) ? data : []
+    setListCache('village-potentials', normalized)
+    potentials.value = normalized.map(mapPotentialItem)
+    loadError.value = ''
+  } catch (error) {
+    loadError.value = 'Data potensi belum dapat dimuat.'
+    if (!background) potentials.value = []
+    console.error('Gagal memuat potensi:', error)
+  } finally {
+    if (!background) loading.value = false
+  }
+}
+onMounted(() => loadPotentials({ background: Boolean(cachedPotentials) }))
 
 /* const potentialsDummy = [
   { id: 1, title: 'Sentra Kerajinan Anyaman Bambu Desa Sukamaju', image: null, date: '9/08/2026', category: 'UMKM', status: 'PUBLISHED' },
@@ -46,8 +88,6 @@ onMounted(loadPotentials)
   { id: 20, title: 'Wisata Sungai dan Susur Alam Desa Lestari', image: null, date: '30/06/2026', category: 'Pariwisata', status: 'PUBLISHED' },
 ]
 */
-const potentials = ref([])
-
 const selectedPotentials = ref([])
 const rowsPerPage = ref(10)
 
@@ -75,9 +115,14 @@ function deletePotential(data) {
     acceptLabel: 'Hapus',
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
-    accept: () => {
-      potentials.value = potentials.value.filter(potential => potential.id !== data.id)
-      selectedPotentials.value = selectedPotentials.value.filter(potential => potential.id !== data.id)
+    accept: async () => {
+      try {
+        await potentialService.remove(data.id)
+        await loadPotentials()
+        selectedPotentials.value = selectedPotentials.value.filter(potential => potential.id !== data.id)
+      } catch (error) {
+        window.alert(error.response?.data?.message ?? 'Gagal menghapus potensi.')
+      }
     },
   })
 }
@@ -90,10 +135,17 @@ function deleteSelected() {
     acceptLabel: 'Hapus',
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
-    accept: () => {
+    accept: async () => {
       const idsToDelete = new Set(selectedPotentials.value.map(potential => potential.id))
-      potentials.value = potentials.value.filter(potential => !idsToDelete.has(potential.id))
-      selectedPotentials.value = []
+
+      try {
+        await Promise.all([...idsToDelete].map(id => potentialService.remove(id)))
+        await loadPotentials()
+        selectedPotentials.value = []
+      } catch (error) {
+        window.alert(error.response?.data?.message ?? 'Gagal menghapus sebagian potensi.')
+        await loadPotentials()
+      }
     },
   })
 }
@@ -201,6 +253,7 @@ function exportData() {
         <DataTable
           v-model:selection="selectedPotentials"
           :value="potentials"
+          :loading="loading"
           :filters="filters"
           :paginator="true"
           :rows="rowsPerPage"
@@ -222,7 +275,7 @@ function exportData() {
         >
           <template #empty>
             <div class="px-3 py-8 text-center text-neutral-400">
-              Tidak ada potensi yang cocok dengan pencarian.
+              {{ loadError || 'Tidak ada potensi yang cocok dengan pencarian.' }}
             </div>
           </template>
 
@@ -231,8 +284,15 @@ function exportData() {
           <Column field="title" header="Judul" sortable />
 
           <Column header="Gambar" headerStyle="width: 4rem">
-            <template #body>
-              <div class="h-7 w-10 rounded bg-neutral-200" />
+            <template #body="{ data }">
+              <div class="flex h-7 w-10 items-center justify-center overflow-hidden rounded bg-neutral-200">
+                <img
+                  v-if="data.image"
+                  :src="data.image"
+                  :alt="data.title"
+                  class="h-full w-full object-cover"
+                />
+              </div>
             </template>
           </Column>
 

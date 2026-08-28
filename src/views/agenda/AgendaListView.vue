@@ -12,17 +12,77 @@ import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import Card from 'primevue/card'
 import { agendaService } from '@/services/content.service'
+import { getListCache, setListCache } from '@/services/list-cache'
 
 const router = useRouter()
 const confirm = useConfirm()
-
-async function loadAgendas() {
-  const data = await agendaService.list()
-  agendas.value = data.map(item => { const rawDate = String(item.event_date ?? '').slice(0, 10); const date = rawDate ? new Date(`${rawDate}T00:00:00`) : null; return { id: item.agenda_id, name: item.title, date: rawDate || '-', day: date && !Number.isNaN(date.getTime()) ? dayNames[date.getDay()] : '-', time: `${item.start_time ?? ''}${item.end_time ? ` - ${item.end_time}` : ''}`, location: item.location ?? '-', status: item.status ?? 'PUBLISHED' } })
-}
-onMounted(loadAgendas)
+const cachedAgendas = getListCache('agendas')
+const loading = ref(!cachedAgendas)
+const loadError = ref('')
 
 const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
+
+function parseDate(dateString) {
+  if (!dateString) return new Date(NaN)
+  const value = String(dateString)
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return new Date(`${value.slice(0, 10)}T00:00:00`)
+  }
+
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
+    const [day, month, year] = value.split('/').map(Number)
+    return new Date(year, month - 1, day)
+  }
+
+  return new Date(NaN)
+}
+
+function formatDate(dateString) {
+  const date = parseDate(dateString)
+  return Number.isNaN(date.getTime())
+    ? '-'
+    : date.toLocaleDateString('id-ID', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+}
+
+const agendas = ref((cachedAgendas ?? []).map(mapAgendaItem))
+
+function mapAgendaItem(item) {
+  const rawDate = item.event_date ?? item.date
+  const parsedDate = parseDate(rawDate)
+
+  return {
+    id: item.agenda_id,
+    name: item.title,
+    date: formatDate(rawDate),
+    day: Number.isNaN(parsedDate.getTime()) ? '-' : dayNames[parsedDate.getDay()],
+    time: `${item.start_time ?? ''}${item.end_time ? ` - ${item.end_time}` : ''}`.trim() || '-',
+    location: item.location ?? '-',
+    status: item.status?.toUpperCase() ?? 'PUBLISHED',
+  }
+}
+
+async function loadAgendas({ background = false } = {}) {
+  if (!background) loading.value = true
+  try {
+    const data = await agendaService.list()
+    const normalized = Array.isArray(data) ? data : []
+    setListCache('agendas', normalized)
+    agendas.value = normalized.map(mapAgendaItem)
+    loadError.value = ''
+  } catch (error) {
+    loadError.value = 'Data agenda belum dapat dimuat.'
+    if (!background) agendas.value = []
+    console.error('Gagal memuat agenda:', error)
+  } finally {
+    if (!background) loading.value = false
+  }
+}
+onMounted(() => loadAgendas({ background: Boolean(cachedAgendas) }))
 
 /* const agendasDummy = [
   {
@@ -91,21 +151,12 @@ const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'
   },
 ]
 */
-const agendas = ref([])
-
 const selected = ref([])
 const filters = ref({
   global: { value: null },
 })
 
 const rowsPerPage = ref(10)
-
-function parseDate(dateString) {
-  if (!dateString) return new Date(NaN)
-  if (dateString.includes('-')) return new Date(`${dateString.slice(0, 10)}T00:00:00`)
-  const [day, month, year] = dateString.split('/').map(Number)
-  return new Date(year, month - 1, day)
-}
 
 function getDayName(dateString) {
   const date = parseDate(dateString)
@@ -139,12 +190,14 @@ function deleteAgenda(data) {
     acceptLabel: 'Hapus',
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
-    accept: () => {
-      agendas.value = agendas.value.filter(
-        agendaItem => agendaItem.id !== data.id
-      )
-
-      selected.value = selected.value.filter(item => item.id !== data.id)
+    accept: async () => {
+      try {
+        await agendaService.remove(data.id)
+        await loadAgendas()
+        selected.value = selected.value.filter(item => item.id !== data.id)
+      } catch (error) {
+        window.alert(error.response?.data?.message ?? 'Gagal menghapus agenda.')
+      }
     },
   })
 }
@@ -157,14 +210,17 @@ function deleteSelected() {
     acceptLabel: 'Hapus',
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
-    accept: () => {
+    accept: async () => {
       const selectedIds = new Set(selected.value.map(item => item.id))
 
-      agendas.value = agendas.value.filter(
-        agendaItem => !selectedIds.has(agendaItem.id)
-      )
-
-      selected.value = []
+      try {
+        await Promise.all([...selectedIds].map(id => agendaService.remove(id)))
+        await loadAgendas()
+        selected.value = []
+      } catch (error) {
+        window.alert(error.response?.data?.message ?? 'Gagal menghapus sebagian agenda.')
+        await loadAgendas()
+      }
     },
   })
 }
@@ -292,6 +348,7 @@ function exportData() {
           v-model:selection="selected"
           v-model:filters="filters"
           :value="agendas"
+          :loading="loading"
           dataKey="id"
           :paginator="true"
           :rows="rowsPerPage"
@@ -315,7 +372,7 @@ function exportData() {
         >
           <template #empty>
             <div class="px-3 py-8 text-center text-neutral-400">
-              Tidak ada agenda yang cocok dengan pencarian.
+              {{ loadError || 'Tidak ada agenda yang cocok dengan pencarian.' }}
             </div>
           </template>
 

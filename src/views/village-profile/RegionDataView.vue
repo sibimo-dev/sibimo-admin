@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref, computed, onMounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import * as XLSX from 'xlsx'
 
@@ -12,6 +12,8 @@ import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
+import { getRegions, createRegion, updateRegion, deleteRegion } from '@/services/region.service'
+import { getListCache, setListCache, updateListCache } from '@/services/list-cache'
 
 const toast = useToast()
 
@@ -35,7 +37,11 @@ const importingExcel = ref(false)
 // Dummy data dusun -- ganti dengan GET /hamlets via region.service.js.
 // Field kkCount, population, maleCount, femaleCount sementara manual;
 // idealnya dihitung backend dari data warga per dusun.
-const hamlets = ref([
+const cachedRegions = getListCache('regions')
+const hamlets = ref((cachedRegions ?? []).map(toHamletView))
+const loadingRegions = ref(!cachedRegions)
+const regionLoadError = ref('')
+/* const hamletsDummy = [
   { id: 1, name: 'BALONG', headName: '', rwCount: 3, rtCount: 6, kkCount: 354, population: 1014, maleCount: 513, femaleCount: 501 },
   { id: 2, name: 'BANJARHARJO', headName: 'BASUKI WIBOWO', rwCount: 4, rtCount: 6, kkCount: 265, population: 709, maleCount: 362, femaleCount: 347 },
   { id: 3, name: 'COKROGATEN', headName: 'MUCHAROM', rwCount: 4, rtCount: 6, kkCount: 327, population: 929, maleCount: 452, femaleCount: 477 },
@@ -48,10 +54,11 @@ const hamlets = ref([
   { id: 10, name: 'PONDOK SURUH', headName: 'SUKIRMAN', rwCount: 4, rtCount: 7, kkCount: 255, population: 700, maleCount: 344, femaleCount: 356 },
   { id: 11, name: 'ROGOBANGSAN', headName: 'ANGGA WAHYU INDRA IRAWAN', rwCount: 3, rtCount: 5, kkCount: 291, population: 736, maleCount: 350, femaleCount: 386 },
   { id: 12, name: 'SORASAN', headName: 'JAZIM THOYIBI', rwCount: 3, rtCount: 5, kkCount: 300, population: 828, maleCount: 412, femaleCount: 416 },
-])
+]
+*/
 
 // Ringkasan kartu di atas -- dihitung dari hamlets, bukan dari store terpisah.
-const totalArea = ref(12.5) // km² -- ganti angka sesuai data desa Kak
+const totalArea = ref(0)
 const totalRw = computed(() => hamlets.value.reduce((sum, h) => sum + h.rwCount, 0))
 const totalRt = computed(() => hamlets.value.reduce((sum, h) => sum + h.rtCount, 0))
 
@@ -59,18 +66,37 @@ const totalRt = computed(() => hamlets.value.reduce((sum, h) => sum + h.rtCount,
 // bg pakai token warna tema Sibimo (primary/secondary/success/warning), bukan
 // warna Tailwind generik, biar konsisten dengan dashboard dan file main.css.
 const areaStats = computed(() => [
-  { label: 'Luas Wilayah', value: totalArea.value, unit: 'km²', icon: 'pi pi-map', bg: 'bg-primary-500' },
-  { label: 'Jumlah RW', value: totalRw.value, unit: 'RW', icon: 'pi pi-sitemap', bg: 'bg-secondary-600' },
-  { label: 'Jumlah RT', value: totalRt.value, unit: 'RT', icon: 'pi pi-building', bg: 'bg-success-600' },
-  { label: 'Batas Wilayah', value: neighborCount.value, unit: 'Desa Tetangga', icon: 'pi pi-compass', bg: 'bg-warning-500' },
+  {
+    label: 'Luas Wilayah',
+    value: totalArea.value,
+    unit: 'km²',
+    icon: 'pi pi-map',
+    bg: 'bg-primary-500',
+  },
+  {
+    label: 'Jumlah RW',
+    value: totalRw.value,
+    unit: 'RW',
+    icon: 'pi pi-sitemap',
+    bg: 'bg-secondary-600',
+  },
+  {
+    label: 'Jumlah RT',
+    value: totalRt.value,
+    unit: 'RT',
+    icon: 'pi pi-building',
+    bg: 'bg-success-600',
+  },
+  {
+    label: 'Batas Wilayah',
+    value: neighborCount.value,
+    unit: 'Desa Tetangga',
+    icon: 'pi pi-compass',
+    bg: 'bg-warning-500',
+  },
 ])
 
-const boundaries = reactive({
-  north: 'Desa Sukamaju',
-  south: 'Desa Margoluwih',
-  east: 'Desa Sidoarum',
-  west: 'Desa Sidokarto',
-})
+const boundaries = reactive({ north: '', south: '', east: '', west: '' })
 const neighborCount = computed(
   () => Object.values(boundaries).filter((v) => v && v.trim()).length,
 )
@@ -84,6 +110,7 @@ const currentPage = ref(0)
 
 const hamletDialogOpen = ref(false)
 const editingHamletId = ref(null)
+const savingHamlet = ref(false)
 
 const hamletForm = reactive({
   name: '',
@@ -103,6 +130,50 @@ const boundaryForm = reactive({
   south: '',
   east: '',
   west: '',
+})
+
+function toHamletView(item) {
+  return {
+    id: item.region_id,
+    name: item.name,
+    headName: item.head_name ?? '',
+    rwCount: item.rw_count ?? 0,
+    rtCount: item.rt_count ?? 0,
+    kkCount: item.kk_count ?? 0,
+    population: item.population ?? 0,
+    maleCount: item.male_count ?? 0,
+    femaleCount: item.female_count ?? 0,
+  }
+}
+
+async function loadRegions({ background = false } = {}) {
+  try {
+    const data = await getRegions()
+    const normalized = Array.isArray(data) ? data : []
+    setListCache('regions', normalized)
+    hamlets.value = normalized.map(toHamletView)
+    regionLoadError.value = ''
+  } catch (error) {
+    regionLoadError.value =
+      'Data wilayah belum dapat dimuat. Pastikan backend aktif dan migration regions sudah dijalankan.'
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal memuat data wilayah',
+      detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+      life: 5000,
+    })
+    throw error
+  } finally {
+    if (!background) loadingRegions.value = false
+  }
+}
+
+onMounted(async () => {
+  try {
+    await loadRegions({ background: Boolean(cachedRegions) })
+  } catch {
+    // Pesan error sudah ditampilkan oleh loadRegions().
+  }
 })
 
 const directionLabels = [
@@ -138,7 +209,7 @@ function openEditHamlet(hamlet) {
   hamletDialogOpen.value = true
 }
 
-function saveHamlet() {
+async function saveHamlet() {
   if (!hamletForm.name.trim()) {
     toast.add({
       severity: 'warn',
@@ -149,45 +220,82 @@ function saveHamlet() {
     return
   }
 
-  if (editingHamletId.value === null) {
-    
-    currentPage.value = 0 
-
-    toast.add({
-      severity: 'success',
-      summary: 'Berhasil',
-      detail: `Dusun ${hamletForm.name} ditambahkan`,
-      life: 3000,
-    })
-  } else {
-    const idx = hamlets.value.findIndex((h) => h.id === editingHamletId.value)
-    if (idx !== -1) hamlets.value[idx] = { ...hamlets.value[idx], ...hamletForm }
-
-    toast.add({
-      severity: 'success',
-      summary: 'Berhasil',
-      detail: `Dusun ${hamletForm.name} diperbarui`,
-      life: 3000,
-    })
+  const isCreating = editingHamletId.value === null
+  const editingId = editingHamletId.value
+  const name = hamletForm.name
+  const payload = {
+    name: hamletForm.name,
+    head_name: hamletForm.headName,
+    rw_count: hamletForm.rwCount,
+    rt_count: hamletForm.rtCount,
+    kk_count: hamletForm.kkCount,
+    population: hamletForm.population,
+    male_count: hamletForm.maleCount,
+    female_count: hamletForm.femaleCount,
   }
 
-  hamletDialogOpen.value = false
+  savingHamlet.value = true
+  try {
+    const saved = isCreating
+      ? await createRegion(payload)
+      : await updateRegion(editingId, payload)
+
+    updateListCache('regions', (items) => isCreating
+      ? [saved, ...items]
+      : items.map((item) => item.region_id === editingId ? { ...item, ...saved } : item))
+    hamlets.value = isCreating
+      ? [toHamletView(saved), ...hamlets.value]
+      : hamlets.value.map((item) => item.id === editingId
+          ? toHamletView({ ...item, ...saved })
+          : item)
+
+    currentPage.value = 0
+    hamletDialogOpen.value = false
+
+    toast.add({
+      severity: 'success',
+      summary: 'Berhasil',
+      detail: `Dusun ${name} ${isCreating ? 'ditambahkan' : 'diperbarui'}`,
+      life: 3000,
+    })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal menyimpan data',
+      detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+      life: 4000,
+    })
+  } finally {
+    savingHamlet.value = false
+  }
 }
 
-function deleteHamlet(id) {
+async function deleteHamlet(id) {
   const hamlet = hamlets.value.find((h) => h.id === id)
-  hamlets.value = hamlets.value.filter((h) => h.id !== id)
+  try {
+    await deleteRegion(id)
+    hamlets.value = hamlets.value.filter((item) => item.id !== id)
+    updateListCache('regions', (items) => items.filter((item) => item.region_id !== id))
 
- 
-  const maxFirst = Math.max(0, Math.ceil(hamlets.value.length / rowsPerPage.value) - 1) * rowsPerPage.value
-  if (currentPage.value > maxFirst) currentPage.value = maxFirst
+    const maxFirst =
+      Math.max(0, Math.ceil(hamlets.value.length / rowsPerPage.value) - 1) *
+      rowsPerPage.value
+    if (currentPage.value > maxFirst) currentPage.value = maxFirst
 
-  toast.add({
-    severity: 'success',
-    summary: 'Berhasil',
-    detail: `Dusun ${hamlet?.name ?? ''} dihapus`,
-    life: 3000,
-  })
+    toast.add({
+      severity: 'success',
+      summary: 'Berhasil',
+      detail: `Dusun ${hamlet?.name ?? ''} dihapus`,
+      life: 3000,
+    })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal menghapus data',
+      detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+      life: 4000,
+    })
+  }
 }
 
 function downloadExcelTemplate() {
@@ -341,6 +449,13 @@ function saveBoundaries() {
       Kelola Data Wilayah desa, termasuk dusun, RW, RT, dan batas wilayah desa.
     </p>
 
+    <div
+      v-if="regionLoadError"
+      class="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+    >
+      {{ regionLoadError }}
+    </div>
+
     <div class="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <div
         v-for="s in areaStats"
@@ -419,6 +534,7 @@ function saveBoundaries() {
               v-model:filters="filters"
               v-model:first="currentPage"
               :value="hamlets"
+              :loading="loadingRegions"
               dataKey="id"
               :paginator="true"
               :rows="rowsPerPage"
@@ -689,6 +805,8 @@ function saveBoundaries() {
         />
         <Button
           label="Simpan"
+          :loading="savingHamlet"
+          :disabled="savingHamlet"
           @click="saveHamlet"
         />
       </template>

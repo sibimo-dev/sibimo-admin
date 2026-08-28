@@ -10,6 +10,7 @@ import Button from 'primevue/button'
 import Card from 'primevue/card'
 
 import { SECTION_MAP, profileContents } from './villageProfileData'
+import { createProfileContent, getProfileContents, updateProfileContent } from '@/services/profile.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -78,7 +79,9 @@ function removePhoto() {
 }
 // --- end Upload Foto ---
 
-onMounted(() => {
+onMounted(async () => {
+  const apiContents = await getProfileContents()
+  profileContents.value = apiContents
   if (!isEdit.value) return
 
   const existing = profileContents.value.find(
@@ -122,8 +125,6 @@ async function persist(nextStatus) {
     payload.append('published_at', form.published_at ?? '')
     if (form.photo_file) payload.append('photo', form.photo_file)
 
-    // TODO: ganti dengan panggilan ke profileContent.service.js (create/update),
-    // kirim `payload` (FormData) di atas.
     const plainPayload = {
       section_id: section.value.section_id,
       title: form.title,
@@ -131,12 +132,8 @@ async function persist(nextStatus) {
       status: form.status,
       published_at: form.published_at,
     }
-    if (isEdit.value) {
-      const idx = profileContents.value.findIndex((c) => c.profile_content_id === form.profile_content_id)
-      profileContents.value[idx] = { ...profileContents.value[idx], ...plainPayload }
-    } else {
-      profileContents.value.push({ ...plainPayload, profile_content_id: Date.now() })
-    }
+    if (isEdit.value) await updateProfileContent(form.profile_content_id, plainPayload)
+    else await createProfileContent(plainPayload)
 
     toast.add({ severity: 'success', summary: 'Berhasil disimpan', life: 2000 })
     goBack()

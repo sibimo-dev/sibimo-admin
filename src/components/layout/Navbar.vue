@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import Menu from 'primevue/menu'
 import Button from 'primevue/button'
@@ -11,6 +11,14 @@ const router = useRouter()
 const authStore = useAuthStore()
 const uiStore = useUiStore()
 const menuRef = ref()
+
+const displayName = computed(() => (
+  authStore.user?.full_name
+  || authStore.user?.username
+  || authStore.user?.email
+  || 'Admin Desa'
+))
+const displayInitial = computed(() => displayName.value.trim().charAt(0).toUpperCase())
 
 const menuItems = [
   {
@@ -55,10 +63,10 @@ function toggleMenu(event) {
         <div
           class="w-7 h-7 rounded-full flex items-center justify-center bg-primary-600 text-white text-xs font-semibold shrink-0"
         >
-          {{ (authStore.user?.nama || 'Super Admin').charAt(0).toUpperCase() }}
+          {{ displayInitial }}
         </div>
         <span class="font-medium text-neutral-900">{{
-          authStore.user?.nama || 'Super Admin'
+          displayName
         }}</span>
         <i class="pi pi-chevron-down text-xs text-neutral-400" />
       </button>

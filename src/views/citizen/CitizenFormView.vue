@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import { createCitizen, deleteCitizen as removeCitizen, getCitizen, updateCitizen } from '@/services/citizen.service'
 import api from '@/services/api'
+import { updateListCache } from '@/services/list-cache'
 
 import Card from 'primevue/card'
 import InputText from 'primevue/inputtext'
@@ -128,11 +129,19 @@ async function saveCitizen() {
   }
 
   try {
-    if (isEditMode.value) {
-      await api.put(`/citizens/${citizenId.value}`, payload)
-    } else {
-      await api.post('/citizens', payload)
-    }
+    const saved = isEditMode.value
+      ? await updateCitizen(citizenId.value, payload)
+      : await createCitizen(payload)
+
+    updateListCache('citizens', items => {
+      if (isEditMode.value) {
+        return items.map(item => item.citizen_id === Number(citizenId.value)
+          ? { ...item, ...saved }
+          : item)
+      }
+
+      return [saved, ...items]
+    })
     router.push({ name: 'citizen-list' })
   } catch (err) {
     errorMessage.value = err.response?.data?.message || 'Gagal menyimpan data warga.'

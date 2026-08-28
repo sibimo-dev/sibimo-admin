@@ -15,6 +15,8 @@ import FileUpload from 'primevue/fileupload'
 import Editor from 'primevue/editor'
 import { useAuthStore } from '@/stores/auth.store'
 import { newsService, newsCategoryService } from '@/services/content.service'
+import { updateListCache } from '@/services/list-cache'
+import { mediaUrl } from '@/services/media'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,6 +33,7 @@ const pageTitle = computed(() => (
 const imagePreview = ref(null)
 const imageFile = ref(null)
 const fileUploadRef = ref(null)
+const saving = ref(false)
 const title = ref('')
 const content = ref('')
 
@@ -76,6 +79,7 @@ onMounted(async () => {
   const existing = await newsService.get(newsId.value)
   title.value = existing.title ?? ''
   content.value = existing.content ?? ''
+  imagePreview.value = mediaUrl(existing.thumbnail)
   status.value = existing.status ?? 'Draft'
   categoryOptions.value.forEach(option => {
     const normalize = value => String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -137,15 +141,46 @@ function saveDraft() {
 }
 
 async function publishNews() {
+  if (saving.value) return
   status.value = 'Published'
   const selected = categoryOptions.value.find(option => option.checked)
   if (!selected) { toast.add({ severity: 'warn', summary: 'Pilih kategori berita terlebih dahulu', life: 3000 }); return }
   const normalize = value => String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
   const category = newsCategories.value.find(item => normalize(item.slug) === normalize(selected.id) || normalize(item.category_name) === normalize(selected.label))
   const payload = { category_id: category?.category_id, category_name: selected.label, title: title.value, slug: isEditMode.value ? undefined : `${title.value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`, content: content.value, thumbnail: imageFile.value, status: 'Published', published_at: publishDate.value.toISOString() }
-  if (isEditMode.value) await newsService.update(newsId.value, payload)
-  else await newsService.create(payload)
-  router.push({ name: 'news-list' })
+
+  saving.value = true
+  try {
+    const saved = isEditMode.value
+      ? await newsService.update(newsId.value, payload)
+      : await newsService.create(payload)
+
+    updateListCache('news', items => {
+      const cachedItem = {
+        ...saved,
+        category: { category_name: selected.label },
+        author: { full_name: authStore.user?.full_name ?? authStore.user?.username ?? '-' },
+      }
+
+      if (isEditMode.value) {
+        return items.map(item => item.news_id === Number(newsId.value)
+          ? { ...item, ...cachedItem }
+          : item)
+      }
+
+      return [cachedItem, ...items]
+    })
+    router.push({ name: 'news-list' })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: isEditMode.value ? 'Gagal memperbarui berita' : 'Gagal menerbitkan berita',
+      detail: error.response?.data?.message ?? 'Periksa data dan koneksi backend.',
+      life: 4000,
+    })
+  } finally {
+    saving.value = false
+  }
 }
 
 function moveToTrash() {
@@ -280,12 +315,15 @@ function moveToTrash() {
                 label="Simpan Draft"
                 severity="secondary"
                 outlined
+                :disabled="saving"
                 class="flex-1 rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
                 @click="saveDraft"
               />
 
               <Button
                 :label="mainButtonLabel"
+                :loading="saving"
+                :disabled="saving"
                 class="flex-1 rounded-lg border border-primary-700 bg-primary-700 px-3.5 py-2.5 text-[13px] font-medium text-white hover:bg-primary-800"
                 @click="publishNews"
               />

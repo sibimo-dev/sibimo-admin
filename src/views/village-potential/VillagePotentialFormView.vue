@@ -15,6 +15,8 @@ import FileUpload from 'primevue/fileupload'
 import Editor from 'primevue/editor'
 import { potentialService } from '@/services/content.service'
 import { useAuthStore } from '@/stores/auth.store'
+import { updateListCache } from '@/services/list-cache'
+import { mediaUrl } from '@/services/media'
 
 const route = useRoute()
 const router = useRouter()
@@ -36,6 +38,7 @@ const mainButtonLabel = computed(() => (
 const photoPreview = ref(null)
 const photoFile = ref(null)
 const fileUploadRef = ref(null)
+const saving = ref(false)
 const title = ref('')
 const content = ref('')
 
@@ -68,7 +71,7 @@ onMounted(async () => {
     const existing = await potentialService.get(potentialId.value)
     title.value = existing.title ?? ''
     content.value = existing.description ?? ''
-    photoPreview.value = existing.image ?? null
+    photoPreview.value = mediaUrl(existing.image)
     const categoryMap = { Agriculture: 'pertanian', BUMDes: 'bumdes', Tourism: 'pariwisata', UMKM: 'umkm' }
     const selectedId = categoryMap[existing.category]
     categoryOptions.value.forEach(category => { category.checked = category.id === selectedId })
@@ -118,14 +121,52 @@ function saveDraft() {
 }
 
 async function saveMain() {
+  if (saving.value) return
   status.value = 'Published'
   const selectedCategory = categoryOptions.value.find(category => category.checked)
   const categoryMap = { pertanian: 'Agriculture', bumdes: 'BUMDes', pariwisata: 'Tourism', umkm: 'UMKM' }
   if (!selectedCategory) { toast.add({ severity: 'warn', summary: 'Pilih kategori potensi terlebih dahulu', life: 3000 }); return }
-  await (potentialId.value
-    ? potentialService.update(potentialId.value, { category: categoryMap[selectedCategory.id], title: title.value, description: content.value, location: '' })
-    : potentialService.create({ category: categoryMap[selectedCategory.id], title: title.value, description: content.value, location: '' }))
-  router.push({ name: 'village-potential-list' })
+  const payload = {
+    category: categoryMap[selectedCategory.id],
+    title: title.value,
+    description: content.value,
+    location: '',
+    image: photoFile.value,
+  }
+
+  saving.value = true
+  try {
+    const saved = potentialId.value
+      ? await potentialService.update(potentialId.value, payload)
+      : await potentialService.create(payload)
+
+    updateListCache('village-potentials', items => {
+      const cachedItem = {
+        ...payload,
+        ...saved,
+        image: saved?.image ?? null,
+        status: saved?.status ?? 'Published',
+      }
+
+      if (potentialId.value) {
+        return items.map(item => item.potential_id === Number(potentialId.value)
+          ? { ...item, ...cachedItem, image: saved?.image ?? item.image }
+          : item)
+      }
+
+      return [cachedItem, ...items]
+    })
+    router.push({ name: 'village-potential-list' })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: potentialId.value ? 'Gagal memperbarui potensi' : 'Gagal menerbitkan potensi',
+      detail: error.response?.data?.message ?? 'Periksa data dan koneksi backend.',
+      life: 4000,
+    })
+  } finally {
+    saving.value = false
+  }
 }
 
 function moveToTrash() {
@@ -260,12 +301,15 @@ function moveToTrash() {
                 label="Simpan Draft"
                 severity="secondary"
                 outlined
+                :disabled="saving"
                 class="flex-1 rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
                 @click="saveDraft"
               />
 
               <Button
                 :label="mainButtonLabel"
+                :loading="saving"
+                :disabled="saving"
                 class="flex-1 rounded-lg border border-transparent bg-primary-600 px-3.5 py-2.5 text-[13px] font-medium text-white hover:bg-primary-700"
                 @click="saveMain"
               />

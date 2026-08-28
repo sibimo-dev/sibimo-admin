@@ -15,6 +15,13 @@ const newsFormData = (payload) => {
   })
   return data
 }
+const potentialFormData = (payload) => {
+  const data = new FormData()
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') data.append(key, value)
+  })
+  return data
+}
 export const newsService = {
   list: () => unwrap(api.get('/news')),
   get: (id) => unwrap(api.get(`/news/${id}`)),
@@ -29,6 +36,16 @@ export const newsService = {
 }
 export const newsCategoryService = { list: () => unwrap(api.get('/news-categories')) }
 export const agendaService = crud('/agendas')
-export const potentialService = crud('/village-potentials')
+export const potentialService = {
+  list: () => unwrap(api.get('/village-potentials')),
+  get: (id) => unwrap(api.get(`/village-potentials/${id}`)),
+  create: (payload) => unwrap(api.post('/village-potentials', potentialFormData(payload), { headers: { 'Content-Type': 'multipart/form-data' } })),
+  update: (id, payload) => {
+    const data = potentialFormData(payload)
+    data.append('_method', 'PUT')
+    return unwrap(api.post(`/village-potentials/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } }))
+  },
+  remove: (id) => unwrap(api.delete(`/village-potentials/${id}`)),
+}
 export const serviceService = crud('/services')
 export const feedbackService = crud('/feedbacks')
