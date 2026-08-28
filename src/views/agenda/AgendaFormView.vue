@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
+import { useToast } from 'primevue/usetoast'
 
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
@@ -12,10 +13,12 @@ import FileUpload from 'primevue/fileupload'
 import RadioButton from 'primevue/radiobutton'
 import Card from 'primevue/card'
 import { agendaService } from '@/services/content.service'
+import { updateListCache } from '@/services/list-cache'
 
 const route = useRoute()
 const router = useRouter()
 const confirm = useConfirm()
+const toast = useToast()
 
 const agendaId = computed(() => route.params.id ?? null)
 const isEditMode = computed(() => agendaId.value !== null)
@@ -46,6 +49,7 @@ const endTime = ref(new Date())
 const attachmentPreview = ref(null)
 const attachmentName = ref(null)
 const attachmentFile = ref(null)
+const saving = ref(false)
 
 const status = ref('Draft')
 const statusOpen = ref(true)
@@ -66,23 +70,39 @@ const statusDisplay = computed(() => (
   statusOptions.find(item => item.value === status.value)?.label ?? status.value
 ))
 
-onMounted(() => {
+onMounted(async () => {
   if (!isEditMode.value) return
 
-  eventName.value = 'Pelatihan UMKM Kerajinan'
-  letterOrigin.value = 'Dinas UMKM'
-  place.value = 'Aula Balai Desa Bimomartani'
-  attendees.value = 'Pelaku Usaha Lokal'
-  eventDate.value = new Date('2026-08-04')
-  startTime.value = createTime('09:00')
-  endTime.value = createTime('09:00')
-  status.value = 'Published'
+  try {
+    const existing = await agendaService.get(agendaId.value)
+    eventName.value = existing.title ?? ''
+    attendees.value = existing.description ?? ''
+    place.value = existing.location ?? ''
+    eventDate.value = parseDateValue(existing.event_date)
+    startTime.value = createTime(existing.start_time)
+    endTime.value = createTime(existing.end_time)
+    status.value = existing.status ?? 'Published'
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal memuat agenda',
+      detail: error.response?.data?.message ?? 'Periksa koneksi backend.',
+      life: 4000,
+    })
+  }
 })
 
+function parseDateValue(value) {
+  if (!value) return new Date()
+  const rawDate = String(value).slice(0, 10)
+  const date = new Date(`${rawDate}T00:00:00`)
+  return Number.isNaN(date.getTime()) ? new Date() : date
+}
+
 function createTime(value) {
-  const [hours, minutes] = value.split(':').map(Number)
+  const [hours, minutes] = String(value ?? '00:00').split(':').map(Number)
   const date = new Date()
-  date.setHours(hours, minutes, 0, 0)
+  date.setHours(Number.isNaN(hours) ? 0 : hours, Number.isNaN(minutes) ? 0 : minutes, 0, 0)
   return date
 }
 
@@ -124,11 +144,45 @@ function saveDraft() {
 }
 
 async function saveMain() {
+  if (saving.value) return
   status.value = 'Published'
-  await (agendaId.value
-    ? agendaService.update(agendaId.value, { title: eventName.value, description: attendees.value, event_date: eventDate.value.toISOString().slice(0, 10), start_time: startTime.value.toTimeString().slice(0, 5), end_time: endTime.value.toTimeString().slice(0, 5), location: place.value })
-    : agendaService.create({ title: eventName.value, description: attendees.value, event_date: eventDate.value.toISOString().slice(0, 10), start_time: startTime.value.toTimeString().slice(0, 5), end_time: endTime.value.toTimeString().slice(0, 5), location: place.value }))
-  router.push({ name: 'agenda-list' })
+  const payload = {
+    title: eventName.value,
+    description: attendees.value,
+    event_date: eventDate.value.toISOString().slice(0, 10),
+    start_time: startTime.value.toTimeString().slice(0, 5),
+    end_time: endTime.value.toTimeString().slice(0, 5),
+    location: place.value,
+  }
+
+  saving.value = true
+  try {
+    const saved = agendaId.value
+      ? await agendaService.update(agendaId.value, payload)
+      : await agendaService.create(payload)
+
+    updateListCache('agendas', items => {
+      const cachedItem = { ...saved, status: saved?.status ?? 'Published' }
+
+      if (agendaId.value) {
+        return items.map(item => item.agenda_id === Number(agendaId.value)
+          ? { ...item, ...cachedItem }
+          : item)
+      }
+
+      return [cachedItem, ...items]
+    })
+    router.push({ name: 'agenda-list' })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: agendaId.value ? 'Gagal memperbarui agenda' : 'Gagal menerbitkan agenda',
+      detail: error.response?.data?.message ?? 'Periksa data dan koneksi backend.',
+      life: 4000,
+    })
+  } finally {
+    saving.value = false
+  }
 }
 
 function moveToTrash() {
@@ -354,12 +408,15 @@ function moveToTrash() {
                 label="Simpan Draft"
                 severity="secondary"
                 outlined
+                :disabled="saving"
                 class="flex-1"
                 @click="saveDraft"
               />
 
               <Button
                 :label="mainButtonLabel"
+                :loading="saving"
+                :disabled="saving"
                 class="flex-1"
                 @click="saveMain"
               />

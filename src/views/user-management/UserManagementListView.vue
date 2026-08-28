@@ -1,22 +1,75 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import Tag from 'primevue/tag'
 import Checkbox from 'primevue/checkbox'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
+import Dialog from 'primevue/dialog'
+import InputText from 'primevue/inputtext'
+import Select from 'primevue/select'
 import AppButton from '@/components/common/AppButton.vue'
 import AppInput from '@/components/common/AppInput.vue'
-import { useAdminRoles } from '@/composables/useAdminRoles'
+import { createUser, deleteUser, getRoles, getUsers, updateUser } from '@/services/rbac.service'
+import { getListCache, setListCache, updateListCache } from '@/services/list-cache'
 
 const route = useRoute()
-const router = useRouter()
 const confirm = useConfirm()
 const toast = useToast()
 
-const { roles, toggleRoleStatus, removeRole } = useAdminRoles()
+const cachedUsers = getListCache('users')
+const cachedRoles = getListCache('roles')
+const users = ref((cachedUsers ?? []).map(mapUser))
+const roles = ref(cachedRoles ?? [])
+const loading = ref(!cachedUsers && !cachedRoles)
+const dialogVisible = ref(false)
+const editingUserId = ref(null)
+const saving = ref(false)
+const form = reactive({
+  full_name: '',
+  username: '',
+  email: '',
+  password: '',
+  role_id: null,
+  phone_number: '',
+  is_active: true,
+})
+
+function mapUser(user) {
+  const roleName = user.role?.name ?? '-'
+  return {
+    ...user,
+    id: user.user_id,
+    userName: user.full_name ?? user.username ?? '-',
+    positionTitle: roleName,
+    department: '-',
+    accessLabel: roleName === '-' ? 'No Access' : roleName,
+    status: user.is_active ? 'active' : 'inactive',
+    isProtected: roleName.toLowerCase() === 'superadmin',
+  }
+}
+
+async function loadData({ background = false } = {}) {
+  if (!background) loading.value = true
+  try {
+    const [userData, roleData] = await Promise.all([getUsers(), getRoles()])
+    users.value = (Array.isArray(userData) ? userData : []).map(mapUser)
+    roles.value = roleData
+    setListCache('users', userData)
+    setListCache('roles', roleData)
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal memuat pengguna',
+      detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+      life: 4000,
+    })
+  } finally {
+    if (!background) loading.value = false
+  }
+}
 
 // --- Search ---
 const searchQuery = ref('')
@@ -31,12 +84,11 @@ onMounted(() => {
 
 const filteredUsers = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
-  if (!query) return roles.value
+  if (!query) return users.value
 
-  return roles.value.filter(
+  return users.value.filter(
     (r) =>
       r.userName.toLowerCase().includes(query) ||
-      r.name.toLowerCase().includes(query) ||
       r.positionTitle.toLowerCase().includes(query) ||
       r.department.toLowerCase().includes(query),
   )
@@ -71,18 +123,82 @@ function handleToggleStatus(role) {
     })
     return
   }
-  toggleRoleStatus(role)
+  updateUser(role.id, { is_active: role.status !== 'active' })
+    .then((updated) => {
+      const isActive = updated?.is_active ?? role.status !== 'active'
+      role.status = isActive ? 'active' : 'inactive'
+      updateListCache('users', (items) => items.map((item) => item.user_id === role.id
+        ? { ...item, ...updated }
+        : item))
+    })
+    .catch((error) => toast.add({
+      severity: 'error',
+      summary: 'Gagal mengubah status',
+      detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+      life: 4000,
+    }))
 }
 
 // --- Navigasi ---
 function goToAddNew() {
-  // Add New -> halaman Kelola Admin (super admin atur peran & hak akses)
-  router.push({ name: 'admin-role-management' })
+  editingUserId.value = null
+  Object.assign(form, {
+    full_name: '',
+    username: '',
+    email: '',
+    password: '',
+    role_id: roles.value[0]?.role_id ?? null,
+    phone_number: '',
+    is_active: true,
+  })
+  dialogVisible.value = true
 }
 
-function goToEdit(role) {
-  // Edit (pensil) -> halaman Kelola Admin juga, bawa konteks peran RBAC-nya
-  router.push({ name: 'admin-role-management', query: { role: role.name } })
+function goToEdit(user) {
+  editingUserId.value = user.id
+  Object.assign(form, {
+    full_name: user.full_name ?? '',
+    username: user.username ?? '',
+    email: user.email ?? '',
+    password: '',
+    role_id: user.role_id ?? null,
+    phone_number: user.phone_number ?? '',
+    is_active: user.is_active,
+  })
+  dialogVisible.value = true
+}
+
+async function saveUser() {
+  if (!form.full_name || !form.username || !form.email || !form.role_id) {
+    toast.add({ severity: 'warn', summary: 'Data pengguna belum lengkap', life: 2500 })
+    return
+  }
+
+  saving.value = true
+  try {
+    const payload = { ...form }
+    if (!payload.password) delete payload.password
+    const saved = editingUserId.value
+      ? await updateUser(editingUserId.value, payload)
+      : await createUser(payload)
+    updateListCache('users', (items) => editingUserId.value
+      ? items.map((item) => item.user_id === editingUserId.value ? { ...item, ...saved } : item)
+      : [saved, ...items])
+    users.value = editingUserId.value
+      ? users.value.map((item) => item.id === editingUserId.value ? mapUser({ ...item, ...saved }) : item)
+      : [mapUser(saved), ...users.value]
+    dialogVisible.value = false
+    toast.add({ severity: 'success', summary: 'Pengguna berhasil disimpan', life: 2500 })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal menyimpan pengguna',
+      detail: error.response?.data?.message ?? 'Periksa data dan koneksi backend.',
+      life: 4000,
+    })
+  } finally {
+    saving.value = false
+  }
 }
 
 function handleDelete(role) {
@@ -98,12 +214,23 @@ function handleDelete(role) {
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
     accept: () => {
-      // TODO: panggil userManagement.service.js -> deleteUser(role.id)
-      removeRole(role.id)
-      toast.add({ severity: 'success', summary: 'Berhasil dihapus', life: 2000 })
+      deleteUser(role.id)
+        .then(async () => {
+          users.value = users.value.filter((item) => item.id !== role.id)
+          updateListCache('users', (items) => items.filter((item) => item.user_id !== role.id))
+          toast.add({ severity: 'success', summary: 'Berhasil dihapus', life: 2000 })
+        })
+        .catch((error) => toast.add({
+          severity: 'error',
+          summary: 'Gagal menghapus pengguna',
+          detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+          life: 4000,
+        }))
     },
   })
 }
+
+onMounted(() => loadData({ background: Boolean(cachedUsers || cachedRoles) }))
 </script>
 
 <template>
@@ -133,6 +260,7 @@ function handleDelete(role) {
       <!-- Tabel: DataTable/Column PrimeVue langsung, sorting bawaan per kolom -->
       <DataTable
         :value="filteredUsers"
+        :loading="loading"
         data-key="id"
         class="p-datatable-sm"
         responsive-layout="scroll"
@@ -214,5 +342,42 @@ function handleDelete(role) {
         </template>
       </DataTable>
     </div>
+
+    <Dialog
+      v-model:visible="dialogVisible"
+      modal
+      :header="editingUserId ? 'Edit Pengguna' : 'Tambah Pengguna'"
+      :style="{ width: '34rem', maxWidth: '95vw' }"
+    >
+      <div class="flex flex-col gap-3">
+        <InputText v-model="form.full_name" placeholder="Nama lengkap" />
+        <InputText v-model="form.username" placeholder="Username" />
+        <InputText v-model="form.email" type="email" placeholder="Email" />
+        <InputText
+          v-model="form.password"
+          type="password"
+          :placeholder="editingUserId ? 'Password (kosongkan jika tidak diubah)' : 'Password'"
+        />
+        <InputText v-model="form.phone_number" placeholder="Nomor telepon (opsional)" />
+        <Select
+          v-model="form.role_id"
+          :options="roles"
+          option-label="name"
+          option-value="role_id"
+          placeholder="Pilih role"
+          fluid
+        />
+      </div>
+
+      <template #footer>
+        <AppButton label="Batal" variant="outline" @click="dialogVisible = false" />
+        <AppButton
+          label="Simpan"
+          variant="dark"
+          :loading="saving"
+          @click="saveUser"
+        />
+      </template>
+    </Dialog>
   </div>
 </template>

@@ -19,15 +19,35 @@ const confirm = useConfirm()
 const toast = useToast()
 const galleryStore = useGalleryStore()
 
-const loading = ref(false)
+const loading = ref(galleryStore.photos.length === 0)
 const search = ref('')
 const first = ref(0)
 const rowsPerPage = 8
 
 onMounted(async () => {
-  loading.value = true
-  await galleryStore.fetchAll()
-  loading.value = false
+  const hasCachedPhotos = galleryStore.photos.length > 0
+  loading.value = !hasCachedPhotos
+
+  try {
+    // Bila store sudah berisi data dari kunjungan sebelumnya, tampilkan
+    // langsung dan segarkan dari API di background.
+    const refresh = galleryStore.fetchAll()
+    if (hasCachedPhotos) {
+      loading.value = false
+      await refresh
+    } else {
+      await refresh
+    }
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal memuat galeri',
+      detail: error.response?.data?.message ?? 'Periksa koneksi backend.',
+      life: 4000,
+    })
+  } finally {
+    loading.value = false
+  }
 })
 
 const filtered = computed(() => {
@@ -97,8 +117,14 @@ function handleDelete(item) {
             </IconField>
           </div>
 
+          <!-- Loading state -->
+          <div v-if="loading" class="py-14 text-center text-slate-400">
+            <i class="pi pi-spin pi-spinner mb-3 block text-4xl text-slate-300" />
+            Memuat foto...
+          </div>
+
           <!-- Empty state -->
-          <div v-if="paged.length === 0" class="py-14 text-center text-slate-400">
+          <div v-else-if="paged.length === 0" class="py-14 text-center text-slate-400">
             <i class="pi pi-images mb-3 block text-4xl text-slate-300" />
             Belum ada foto yang cocok.
           </div>

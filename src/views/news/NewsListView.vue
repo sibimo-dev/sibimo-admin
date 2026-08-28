@@ -14,15 +14,51 @@ import InputIcon from 'primevue/inputicon'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import { newsService } from '@/services/content.service'
+import { getListCache, setListCache } from '@/services/list-cache'
+import { mediaUrl } from '@/services/media'
 
 const router = useRouter()
 const confirm = useConfirm()
+const cachedNews = getListCache('news')
+const loading = ref(!cachedNews)
+const loadError = ref('')
+const news = ref((cachedNews ?? []).map(mapNewsItem))
 
-async function loadNews() {
-  const data = await newsService.list()
-  news.value = data.map(item => ({ id: item.news_id, title: item.title, author: item.author?.full_name ?? item.author?.name ?? '-', image: item.thumbnail, date: item.published_at ? new Date(item.published_at).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-', category: item.category?.category_name ?? item.category?.name ?? '-', status: item.status?.toUpperCase() }))
+function mapNewsItem(item) {
+  return {
+    id: item.news_id,
+    title: item.title,
+    author: item.author?.full_name ?? item.author?.name ?? '-',
+      image: mediaUrl(item.thumbnail),
+    date: item.published_at
+      ? new Date(item.published_at).toLocaleDateString('id-ID', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        })
+      : '-',
+    category: item.category?.category_name ?? item.category?.name ?? '-',
+    status: item.status?.toUpperCase() ?? '-',
+  }
 }
-onMounted(loadNews)
+
+async function loadNews({ background = false } = {}) {
+  if (!background) loading.value = true
+  try {
+    const data = await newsService.list()
+    const normalized = Array.isArray(data) ? data : []
+    setListCache('news', normalized)
+    news.value = normalized.map(mapNewsItem)
+    loadError.value = ''
+  } catch (error) {
+    loadError.value = 'Data berita belum dapat dimuat.'
+    if (!background) news.value = []
+    console.error('Gagal memuat berita:', error)
+  } finally {
+    if (!background) loading.value = false
+  }
+}
+onMounted(() => loadNews({ background: Boolean(cachedNews) }))
 
 /* const newsDummy = [
   {
@@ -135,8 +171,6 @@ onMounted(loadNews)
   },
 ]
 */
-const news = ref([])
-
 const selectedNews = ref([])
 const rowsPerPage = ref(10)
 
@@ -167,7 +201,7 @@ function deleteNews(data) {
     accept: async () => {
       try {
         await newsService.remove(data.id)
-        news.value = news.value.filter(newsItem => newsItem.id !== data.id)
+        await loadNews()
         selectedNews.value = selectedNews.value.filter(newsItem => newsItem.id !== data.id)
       } catch (error) {
         window.alert(error.response?.data?.message ?? 'Gagal menghapus berita.')
@@ -188,7 +222,7 @@ function deleteSelected() {
       const idsToDelete = new Set(selectedNews.value.map(newsItem => newsItem.id))
       try {
         await Promise.all([...idsToDelete].map(id => newsService.remove(id)))
-        news.value = news.value.filter(newsItem => !idsToDelete.has(newsItem.id))
+        await loadNews()
         selectedNews.value = []
       } catch (error) {
         window.alert(error.response?.data?.message ?? 'Gagal menghapus sebagian berita.')
@@ -302,6 +336,7 @@ function exportData() {
         <DataTable
           v-model:selection="selectedNews"
           :value="news"
+          :loading="loading"
           :filters="filters"
           :paginator="true"
           :rows="rowsPerPage"
@@ -323,7 +358,7 @@ function exportData() {
         >
           <template #empty>
             <div class="px-3 py-8 text-center text-neutral-400">
-              Tidak ada berita yang cocok dengan pencarian.
+              {{ loadError || 'Tidak ada berita yang cocok dengan pencarian.' }}
             </div>
           </template>
 
@@ -333,8 +368,15 @@ function exportData() {
           <Column field="author" header="Penulis" sortable />
 
           <Column header="Gambar" headerStyle="width: 4rem">
-            <template #body>
-              <div class="h-7 w-10 rounded bg-neutral-200" />
+            <template #body="{ data }">
+              <div class="flex h-7 w-10 items-center justify-center overflow-hidden rounded bg-neutral-200">
+                <img
+                  v-if="data.image"
+                  :src="data.image"
+                  :alt="data.title"
+                  class="h-full w-full object-cover"
+                />
+              </div>
             </template>
           </Column>
 

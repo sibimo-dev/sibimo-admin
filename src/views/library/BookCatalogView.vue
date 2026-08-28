@@ -17,13 +17,16 @@ import {
   createBook, createBookCategory, deleteBook, deleteBookCategory,
   getBookCategories, getBooks, updateBook, updateBookCategory,
 } from '@/services/library.service'
+import { getListCache, setListCache, updateListCache } from '@/services/list-cache'
 
 const confirm = useConfirm()
 const toast = useToast()
-const books = ref([])
-const categories = ref([])
+const cachedBooks = getListCache('books')
+const cachedCategories = getListCache('book-categories')
+const books = ref(cachedBooks ?? [])
+const categories = ref(cachedCategories ?? [])
 const selected = ref([])
-const loading = ref(false)
+const loading = ref(!cachedBooks && !cachedCategories)
 const saving = ref(false)
 const categorySaving = ref(false)
 const showBookModal = ref(false)
@@ -38,16 +41,18 @@ function messageFrom(error, fallback) {
   return error.response?.data?.message ?? error.response?.data?.errors?.book_id?.[0] ?? fallback
 }
 
-async function loadData() {
-  loading.value = true
+async function loadData({ background = false } = {}) {
+  if (!background) loading.value = true
   try {
     const [categoryData, bookData] = await Promise.all([getBookCategories(), getBooks()])
     categories.value = categoryData
     books.value = bookData
+    setListCache('book-categories', categoryData)
+    setListCache('books', bookData)
   } catch (error) {
     toast.add({ severity: 'error', summary: 'Gagal memuat katalog', detail: messageFrom(error, 'Coba lagi.'), life: 3500 })
   } finally {
-    loading.value = false
+    if (!background) loading.value = false
   }
 }
 
@@ -79,13 +84,19 @@ async function saveBook() {
     if (!bookForm.book_id && bookForm.new_category_name.trim()) {
       const category = await createBookCategory({ category_name: bookForm.new_category_name.trim(), description: null })
       categoryId = category.category_id
+      categories.value = [category, ...categories.value]
+      updateListCache('book-categories', (items) => [category, ...items])
     }
     const payload = { category_id: categoryId, title: bookForm.title.trim(), author: bookForm.author.trim() || null, isbn: bookForm.isbn.trim() || null, stock: Number(bookForm.stock) || 0 }
-    if (bookForm.book_id) await updateBook(bookForm.book_id, payload)
-    else await createBook(payload)
+    const saved = bookForm.book_id
+      ? await updateBook(bookForm.book_id, payload)
+      : await createBook(payload)
+    updateListCache('books', items => bookForm.book_id
+      ? items.map(item => item.book_id === Number(bookForm.book_id) ? { ...item, ...saved, category_id: categoryId } : item)
+      : [saved, ...items])
     toast.add({ severity: 'success', summary: 'Buku berhasil disimpan', life: 2500 })
     showBookModal.value = false
-    await loadData()
+    void loadData({ background: true })
   } catch (error) {
     toast.add({ severity: 'error', summary: 'Buku gagal disimpan', detail: messageFrom(error, 'Periksa data buku.'), life: 3500 })
   } finally { saving.value = false }
@@ -99,11 +110,15 @@ async function saveCategory() {
   categorySaving.value = true
   try {
     const payload = { category_name: categoryForm.category_name.trim(), description: categoryForm.description.trim() || null }
-    if (categoryForm.category_id) await updateBookCategory(categoryForm.category_id, payload)
-    else await createBookCategory(payload)
+    const saved = categoryForm.category_id
+      ? await updateBookCategory(categoryForm.category_id, payload)
+      : await createBookCategory(payload)
+    updateListCache('book-categories', items => categoryForm.category_id
+      ? items.map(item => item.category_id === Number(categoryForm.category_id) ? { ...item, ...saved } : item)
+      : [saved, ...items])
     toast.add({ severity: 'success', summary: 'Kategori berhasil disimpan', life: 2500 })
     showCategoryModal.value = false
-    await loadData()
+    void loadData({ background: true })
   } catch (error) {
     toast.add({ severity: 'error', summary: 'Kategori gagal disimpan', detail: messageFrom(error, 'Periksa data kategori.'), life: 3500 })
   } finally { categorySaving.value = false }
@@ -129,7 +144,7 @@ function deleteSelected() {
   } })
 }
 function stockSeverity(stock) { return stock > 0 ? 'success' : 'danger' }
-onMounted(loadData)
+onMounted(() => loadData({ background: Boolean(cachedBooks || cachedCategories) }))
 </script>
 
 <template>

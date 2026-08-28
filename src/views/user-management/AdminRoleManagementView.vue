@@ -1,76 +1,170 @@
 <script setup>
-/**
- * Halaman Kelola Admin (Role-Based Access Control).
- * Ganti dummyData di useAdminRoles.js dengan data asli dari
- * userManagement.service.js begitu backend siap.
- * Diakses dari UserManagementListView.vue lewat tombol "Add New" atau icon pensil.
- *
- * Data roles sekarang berasal dari composable singleton `useAdminRoles`,
- * BUKAN local ref lagi -- supaya perubahan status yang dilakukan di
- * UserManagementListView.vue (Manajemen Pengguna) langsung kelihatan di
- * sini juga, dan sebaliknya, tanpa perlu reload atau lewat query param.
- */
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import Checkbox from 'primevue/checkbox'
 import ToggleSwitch from 'primevue/toggleswitch'
 import AppButton from '@/components/common/AppButton.vue'
-import { useAdminRoles } from '@/composables/useAdminRoles'
+import {
+  createRole,
+  getPermissions,
+  getRoles,
+  syncRolePermissions,
+} from '@/services/rbac.service'
+import { getListCache, setListCache } from '@/services/list-cache'
 
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
-const {
-  roles,
-  modules,
-  permissionKeys,
-  permissionLabels,
-  findRoleByName,
-  toggleRoleStatus,
-  addRole,
-} = useAdminRoles()
+const modules = [
+  { key: 'villageProfile', label: 'Profile Desa', slug: 'profil-desa' },
+  { key: 'agenda', label: 'Kelola Agenda', slug: 'agenda' },
+  { key: 'news', label: 'Berita & Pengumuman', slug: 'berita' },
+  { key: 'library', label: 'Kelola Perpustakaan', slug: 'perpustakaan' },
+  { key: 'letterService', label: 'Kelola Layanan', slug: 'surat' },
+  { key: 'villagePotential', label: 'Kelola Potensi', slug: 'potensi-desa' },
+  { key: 'gallery', label: 'Kelola Gallery', slug: 'gallery' },
+  { key: 'userManagement', label: 'Manajemen Admin', slug: 'user-management' },
+]
+const permissionKeys = ['view', 'create', 'edit', 'delete']
+const permissionLabels = { view: 'LIHAT', create: 'BUAT', edit: 'EDIT', delete: 'HAPUS' }
+const cachedRoles = getListCache('roles')
+const cachedPermissions = getListCache('permissions')
+const roles = ref([])
+const permissions = ref(cachedPermissions ?? [])
+const activeRoleId = ref(null)
+const saving = ref(false)
+const loading = ref(!cachedRoles && !cachedPermissions)
 
-// --- Peran yang sedang dipilih ---
-const activeRoleId = ref(roles.value[0].id)
-const activeRole = computed(() => roles.value.find((r) => r.id === activeRoleId.value))
+const emptyModulePermissions = () => Object.fromEntries(
+  modules.map((module) => [module.key, {
+    view: false,
+    create: false,
+    edit: false,
+    delete: false,
+  }]),
+)
 
-// Kalau datang dari UserManagementListView dengan query ?role=..., pilih role yang sesuai
-onMounted(() => {
-  const roleFromQuery = route.query.role
-  if (roleFromQuery) {
-    const matched = findRoleByName(roleFromQuery)
-    if (matched) activeRoleId.value = matched.id
+function mapRole(role) {
+  const permissionIds = (role.permissions ?? []).map((permission) => permission.permission_id)
+  const selectedSlugs = new Set((role.permissions ?? []).map((permission) => permission.slug))
+  const matrix = emptyModulePermissions()
+
+  modules.forEach((module) => {
+    if (selectedSlugs.has(module.slug)) {
+      permissionKeys.forEach((key) => { matrix[module.key][key] = true })
+    }
+  })
+
+  return {
+    id: role.role_id,
+    name: role.name ?? '-',
+    description: role.description ?? '',
+    status: 'active',
+    isProtected: String(role.name ?? '').toLowerCase() === 'superadmin',
+    permissionIds,
+    permissions: matrix,
   }
-})
+}
+
+// Map cache setelah seluruh helper di atas selesai diinisialisasi.
+// Sebelumnya mapRole dipanggil sebelum emptyModulePermissions tersedia,
+// sehingga halaman role crash ketika cache role sudah terisi.
+roles.value = (cachedRoles ?? []).map(mapRole)
+
+const activeRole = computed(() => roles.value.find((role) => role.id === activeRoleId.value))
+
+function selectInitialRole() {
+  const requestedName = String(route.query.role ?? '').toLowerCase()
+  const requestedRole = roles.value.find((role) => String(role.name ?? '').toLowerCase() === requestedName)
+  activeRoleId.value = requestedRole?.id ?? roles.value[0]?.id ?? null
+}
+
+// Pilih role dari cache saat komponen dibuat agar matrix permission langsung
+// terlihat tanpa menunggu request API selesai.
+selectInitialRole()
+
+async function loadData({ background = false } = {}) {
+  if (!background) loading.value = true
+  try {
+    const [roleData, permissionData] = await Promise.all([getRoles(), getPermissions()])
+    permissions.value = permissionData
+    roles.value = roleData.map(mapRole)
+    setListCache('roles', roleData)
+    setListCache('permissions', permissionData)
+
+    selectInitialRole()
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal memuat role',
+      detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+      life: 4000,
+    })
+  } finally {
+    if (!background) loading.value = false
+  }
+}
+
+onMounted(() => loadData({ background: Boolean(cachedRoles || cachedPermissions) }))
 
 function selectRole(roleId) {
   activeRoleId.value = roleId
 }
 
-// --- Tambah peran baru ---
-function handleAddRole() {
-  const newRole = addRole()
-  activeRoleId.value = newRole.id
+function toggleRoleStatus(role) {
+  role.status = role.status === 'active' ? 'inactive' : 'active'
 }
 
-// --- Simpan / Batal ---
-const saving = ref(false)
+async function handleAddRole() {
+  try {
+    const created = await createRole({
+      name: `Role Baru ${Date.now()}`,
+      description: 'Role baru',
+    })
+    roles.value.push(mapRole({ ...created, permissions: [] }))
+    setListCache('roles', [created, ...(getListCache('roles') ?? [])])
+    activeRoleId.value = created.role_id
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal membuat role',
+      detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+      life: 4000,
+    })
+  }
+}
 
 async function saveChanges() {
+  if (!activeRole.value) return
+
   saving.value = true
   try {
-    // TODO: panggil userManagement.service.js -> updateRolePermissions(activeRole.value)
-    // Backend juga wajib validasi ulang: kalau role.status === 'inactive',
-    // permission apapun yang tersimpan harus dianggap tidak berlaku.
-    console.log('Simpan hak akses untuk peran', activeRole.value)
-    toast.add({ severity: 'success', summary: 'Perubahan hak akses disimpan', life: 2000 })
+    const selectedIds = modules
+      .filter((module) => Object.values(activeRole.value.permissions[module.key]).some(Boolean))
+      .map((module) => permissions.value.find((permission) => permission.slug === module.slug)?.permission_id)
+      .filter(Boolean)
 
-    // Kasih jeda sebentar biar toast sempat kelihatan sebelum pindah halaman
-    setTimeout(() => {
-      router.push({ name: 'user-management-list' })
-    }, 800)
+    const updated = await syncRolePermissions(activeRole.value.id, selectedIds)
+    const index = roles.value.findIndex((role) => role.id === activeRole.value.id)
+    if (index !== -1) roles.value[index] = mapRole(updated)
+    setListCache('roles', roles.value.map((role) => ({
+      role_id: role.id,
+      name: role.name,
+      description: role.description,
+      permissions: permissions.value.filter((permission) => role.permissionIds.includes(permission.permission_id)),
+    })))
+
+    toast.add({ severity: 'success', summary: 'Perubahan hak akses disimpan', life: 2000 })
+    setTimeout(() => router.push({ name: 'user-management-list' }), 800)
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal menyimpan hak akses',
+      detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+      life: 4000,
+    })
   } finally {
     saving.value = false
   }

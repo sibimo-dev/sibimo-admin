@@ -2,9 +2,9 @@
 /**
  * Dashboard - halaman utama admin SIBIMO.
  *
- * TODO: semua data dummy, sambungkan ke service masing-masing modul.
+ * Data dashboard diambil dari endpoint ringkasan backend.
  */
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import Tag from 'primevue/tag'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -18,6 +18,8 @@ import Tab from 'primevue/tab'
 import { useAuthStore } from '@/stores/auth.store'
 import AppButton from '@/components/common/AppButton.vue'
 import FilterPopover from '@/components/dashboard/FilterPopover.vue'
+import { getDashboardSummary } from '@/services/dashboard.service'
+import { getDataCache, setDataCache } from '@/services/list-cache'
 
 const authStore = useAuthStore()
 const filterPopoverRef = ref()
@@ -29,14 +31,44 @@ const periodOptions = [
   { label: 'Tahun Ini', value: 'this_year' },
 ]
 const period = ref('this_month')
+const loading = ref(false)
+const loadError = ref('')
 
 // === Ringkasan utama ===
-const stats = [
-  { label: 'Pengajuan Masuk', value: 120, delta: '+12 Surat', up: true, icon: 'pi pi-inbox', bg: 'bg-primary-500' },
-  { label: 'Menunggu Verifikasi', value: 40, delta: '-4 Surat', up: false, icon: 'pi pi-clock', bg: 'bg-amber-500' },
-  { label: 'Terverifikasi', value: 70, delta: '+8 Surat', up: true, icon: 'pi pi-check-circle', bg: 'bg-success-600' },
-  { label: 'Tercetak', value: 200, delta: '+15 Surat', up: true, icon: 'pi pi-print', bg: 'bg-secondary-600' },
-]
+const stats = ref([
+  {
+    label: 'Pengajuan Masuk',
+    value: 0,
+    delta: '+0 Surat',
+    up: true,
+    icon: 'pi pi-inbox',
+    bg: 'bg-primary-500',
+  },
+  {
+    label: 'Menunggu Verifikasi',
+    value: 0,
+    delta: '+0 Surat',
+    up: true,
+    icon: 'pi pi-clock',
+    bg: 'bg-amber-500',
+  },
+  {
+    label: 'Terverifikasi',
+    value: 0,
+    delta: '+0 Surat',
+    up: true,
+    icon: 'pi pi-check-circle',
+    bg: 'bg-success-600',
+  },
+  {
+    label: 'Tercetak',
+    value: 0,
+    delta: '+0 Surat',
+    up: true,
+    icon: 'pi pi-print',
+    bg: 'bg-secondary-600',
+  },
+])
 
 // === Tabel pengajuan surat terbaru ===
 const statusTabs = [
@@ -48,80 +80,7 @@ const statusTabs = [
 const activeTab = ref('semua')
 
 
-const allSubmissions = ref([
-  {
-    id: 1,
-    requestId: 'REQ-2026-0812',
-    citizenId: '3404xxxxxxxx0001',
-    purpose: 'Surat Permohonan Nikah',
-    status: 'Menunggu',
-    date: '2026-08-26T09:15:00',
-  },
-  {
-    id: 2,
-    requestId: 'REQ-2026-0811',
-    citizenId: '3404xxxxxxxx0002',
-    purpose: 'Surat Keterangan Domisili',
-    status: 'Terverifikasi',
-    date: '2026-08-25T13:40:00',
-  },
-  {
-    id: 3,
-    requestId: 'REQ-2026-0810',
-    citizenId: '3404xxxxxxxx0003',
-    purpose: 'Surat Pengantar KTP',
-    status: 'Menunggu',
-    date: '2026-08-25T08:05:00',
-  },
-  {
-    id: 4,
-    requestId: 'REQ-2026-0809',
-    citizenId: '3404xxxxxxxx0004',
-    purpose: 'Surat Keterangan Usaha',
-    status: 'Ditolak',
-    date: '2026-08-24T16:20:00',
-  },
-  {
-    id: 5,
-    requestId: 'REQ-2026-0808',
-    citizenId: '3404xxxxxxxx0005',
-    purpose: 'Surat Permohonan Nikah',
-    status: 'Terverifikasi',
-    date: '2026-08-23T10:50:00',
-  },
-  {
-    id: 6,
-    requestId: 'REQ-2026-0807',
-    citizenId: '3404xxxxxxxx0006',
-    purpose: 'Surat Keterangan Domisili',
-    status: 'Menunggu',
-    date: '2026-08-22T07:30:00',
-  },
-  {
-    id: 7,
-    requestId: 'REQ-2026-0806',
-    citizenId: '3404xxxxxxxx0007',
-    purpose: 'Surat Keterangan Tidak Mampu',
-    status: 'Terverifikasi',
-    date: '2026-08-21T11:10:00',
-  },
-  {
-    id: 8,
-    requestId: 'REQ-2026-0805',
-    citizenId: '3404xxxxxxxx0008',
-    purpose: 'Surat Pengantar SKCK',
-    status: 'Ditolak',
-    date: '2026-08-20T15:45:00',
-  },
-  {
-    id: 9,
-    requestId: 'REQ-2026-0804',
-    citizenId: '3404xxxxxxxx0009',
-    purpose: 'Surat Keterangan Kelahiran',
-    status: 'Menunggu',
-    date: '2026-08-19T09:00:00',
-  },
-])
+const allSubmissions = ref([])
 
 const statusSeverity = { Menunggu: 'warn', Terverifikasi: 'success', Ditolak: 'danger' }
 
@@ -134,9 +93,9 @@ const filteredSubmissions = computed(() => {
     const q = search.value.toLowerCase()
     rows = rows.filter(
       (r) =>
-        r.requestId.toLowerCase().includes(q) ||
-        r.citizenId.toLowerCase().includes(q) ||
-        r.purpose.toLowerCase().includes(q)
+        String(r.requestId ?? '').toLowerCase().includes(q) ||
+        String(r.citizenId ?? '').toLowerCase().includes(q) ||
+        String(r.purpose ?? '').toLowerCase().includes(q)
     )
   }
   return rows
@@ -144,9 +103,24 @@ const filteredSubmissions = computed(() => {
 
 function formatDate(isoString) {
   const d = new Date(isoString)
+  if (Number.isNaN(d.getTime())) return '-'
   const tanggal = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
   const jam = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
   return `${tanggal} · ${jam}`
+}
+
+function formatRelativeTime(isoString) {
+  const date = new Date(isoString)
+  if (Number.isNaN(date.getTime())) return '-'
+
+  const minutes = Math.max(1, Math.floor((Date.now() - date.getTime()) / 60000))
+  if (minutes < 60) return `${minutes} menit lalu`
+
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} jam lalu`
+
+  const days = Math.floor(hours / 24)
+  return `${days} hari lalu`
 }
 
 function handleApplyFilter(filter) {
@@ -154,23 +128,74 @@ function handleApplyFilter(filter) {
 }
 
 // === Widget: Aduan terbaru ===
-const recentComplaints = ref([
-  { id: 1, title: 'Jalan rusak di Dusun Kaliurang', reporter: 'Rudi Hartono', time: '2 jam lalu', status: 'Baru' },
-  { id: 2, title: 'Lampu jalan mati 3 hari', reporter: 'Wati Suryani', time: '5 jam lalu', status: 'Diproses' },
-  { id: 3, title: 'Sampah menumpuk di TPS RW 03', reporter: 'Agus Prasetyo', time: '1 hari lalu', status: 'Baru' },
-])
+const recentComplaints = ref([])
 const complaintBadge = {
   Baru: 'bg-white text-primary-700',
   Diproses: 'bg-white/25 text-white',
   Selesai: 'bg-white/15 text-white/90',
+  Ditolak: 'bg-danger-100/25 text-white',
 }
 
 // === Widget: Agenda terdekat (Timeline) ===
-const upcomingAgenda = ref([
-  { id: 1, name: 'Musyawarah Desa', date: '18 Agustus', time: '09:00 WIB', location: 'Balai Desa' },
-  { id: 2, name: 'Posyandu Balita', date: '20 Agustus', time: '08:00 WIB', location: 'Pos RW 02' },
-  { id: 3, name: 'Kerja Bakti Lingkungan', date: '23 Agustus', time: '07:00 WIB', location: 'Dusun Kaliurang' },
-])
+const upcomingAgenda = ref([])
+
+function formatAgendaDate(dateString) {
+  const date = new Date(`${dateString}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return '-'
+
+  return date.toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: 'long',
+  })
+}
+
+function formatAgendaTime(item) {
+  const start = item.startTime?.slice(0, 5) ?? ''
+  const end = item.endTime?.slice(0, 5) ?? ''
+  if (!start && !end) return '-'
+  return `${start}${end ? ` - ${end}` : ''} WIB`
+}
+
+function applyDashboardData(data) {
+  stats.value = data.stats ?? []
+  allSubmissions.value = data.submissions ?? []
+  recentComplaints.value = (data.complaints ?? []).map((complaint) => ({
+    ...complaint,
+    time: formatRelativeTime(complaint.time),
+  }))
+  upcomingAgenda.value = (data.upcomingAgenda ?? []).map((item) => ({
+    ...item,
+    date: formatAgendaDate(item.date),
+    time: formatAgendaTime(item),
+  }))
+}
+
+async function loadDashboard() {
+  const cacheKey = `dashboard:${period.value}`
+  const cached = getDataCache(cacheKey)
+
+  if (cached) {
+    applyDashboardData(cached)
+    loading.value = false
+  } else {
+    loading.value = true
+  }
+  loadError.value = ''
+
+  try {
+    const data = await getDashboardSummary(period.value)
+    setDataCache(cacheKey, data)
+    applyDashboardData(data)
+  } catch (error) {
+    loadError.value = error.response?.data?.message
+      ?? 'Data dashboard belum dapat dimuat. Pastikan backend aktif dan akun memiliki permission dashboard.'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadDashboard)
+watch(period, loadDashboard)
 </script>
 
 <template>
@@ -179,7 +204,7 @@ const upcomingAgenda = ref([
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div>
         <h1 class="text-2xl font-bold text-neutral-900">
-          Halo, {{ authStore.user?.nama || 'Super Admin' }}
+          Halo, {{ authStore.user?.full_name || authStore.user?.nama || 'Super Admin' }}
         </h1>
         <p class="text-sm text-neutral-500">Berikut ringkasan aktivitas SIBIMO.</p>
       </div>
@@ -190,9 +215,18 @@ const upcomingAgenda = ref([
           variant="ghost"
           aria-label="Muat ulang"
           class="!w-10 !h-10 !rounded-full !bg-primary-50 !text-primary-600 hover:!bg-primary-100"
+          :loading="loading"
+          @click="loadDashboard"
         />
       </div>
     </div>
+
+    <p
+      v-if="loadError"
+      class="m-0 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+    >
+      {{ loadError }}
+    </p>
 
     <!-- Stat cards -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -285,6 +319,7 @@ const upcomingAgenda = ref([
 
         <DataTable
           :value="filteredSubmissions"
+          :loading="loading"
           dataKey="id"
           sortField="date"
           :sortOrder="-1"

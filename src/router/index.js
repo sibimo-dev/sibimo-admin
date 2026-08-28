@@ -14,6 +14,7 @@ import villagePotentialRoutes from './modules/village-potential.routes'
 import citizenRoutes from './modules/citizen.routes'
 import villageProfileRoutes from './modules/village-profile.routes'
 import userManagementRoutes from './modules/user-management.routes'
+import permissionRoutes from './modules/permission.routes'
 
 
 const protectedRoutes = {
@@ -32,7 +33,8 @@ const protectedRoutes = {
     ...villagePotentialRoutes,
     ...citizenRoutes,
     ...villageProfileRoutes,
-    ...userManagementRoutes
+    ...userManagementRoutes,
+    ...permissionRoutes,
     // ...tambahkan modul baru di sini juga, dengan pola yang sama
   ],
 }

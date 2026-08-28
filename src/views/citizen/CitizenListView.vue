@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx'
 import { FilterMatchMode } from '@primevue/core/api'
 import { useConfirm } from 'primevue/useconfirm'
 import { createCitizen, deleteCitizen as removeCitizen, getCitizens } from '@/services/citizen.service'
+import { getListCache, setListCache } from '@/services/list-cache'
 
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
@@ -22,9 +23,9 @@ import Dialog from 'primevue/dialog'
 const router = useRouter()
 const confirm = useConfirm()
 
-// GANTI: dari array dummy statis -> ref kosong, diisi lewat fetchCitizens()
-const residents = ref([])
-const loading = ref(false)
+const cachedCitizens = getListCache('citizens')
+const residents = ref((cachedCitizens ?? []).map(mapCitizenFromApi))
+const loading = ref(!cachedCitizens)
 const loadError = ref('')
 
 const detailDialogVisible = ref(false)
@@ -62,21 +63,24 @@ function mapCitizenFromApi(item) {
   }
 }
 
-async function fetchCitizens() {
-  loading.value = true
+async function fetchCitizens({ background = false } = {}) {
+  if (!background) loading.value = true
   loadError.value = ''
   try {
     const data = await getCitizens()
-    residents.value = data.map(mapCitizenFromApi)
+    const normalized = Array.isArray(data) ? data : []
+    setListCache('citizens', normalized)
+    residents.value = normalized.map(mapCitizenFromApi)
   } catch (err) {
     loadError.value = err.response?.data?.message || 'Gagal memuat data warga.'
+    if (!background) residents.value = []
   } finally {
-    loading.value = false
+    if (!background) loading.value = false
   }
 }
 
 // Panggil sekali waktu halaman dibuka
-onMounted(fetchCitizens)
+onMounted(() => fetchCitizens({ background: Boolean(cachedCitizens) }))
 
 const selectedResidents = ref([])
 const rowsPerPage = ref(10)
@@ -114,6 +118,7 @@ async function deleteResident(data) {
       try {
         await removeCitizen(data.id)
         residents.value = residents.value.filter(resident => resident.id !== data.id)
+        setListCache('citizens', items => items.filter(item => item.citizen_id !== data.id))
         selectedResidents.value = selectedResidents.value.filter(resident => resident.id !== data.id)
       } catch (err) {
         loadError.value = err.response?.data?.message || 'Gagal menghapus data warga.'
@@ -138,6 +143,7 @@ async function deleteSelected() {
         await Promise.all(idsToDelete.map(id => removeCitizen(id)))
         const idSet = new Set(idsToDelete)
         residents.value = residents.value.filter(resident => !idSet.has(resident.id))
+        setListCache('citizens', items => items.filter(item => !idSet.has(item.citizen_id)))
         selectedResidents.value = []
       } catch (err) {
         loadError.value = err.response?.data?.message || 'Sebagian data gagal dihapus.'
@@ -337,6 +343,7 @@ async function handleFileSelect(event) {
         <DataTable
           v-model:selection="selectedResidents"
           :value="residents"
+          :loading="loading"
           :filters="filters"
           :paginator="true"
           :rows="rowsPerPage"
@@ -360,7 +367,7 @@ async function handleFileSelect(event) {
         >
           <template #empty>
             <div class="px-3 py-8 text-center text-neutral-400">
-              Tidak ada data warga yang cocok dengan pencarian.
+              {{ loadError || 'Tidak ada data warga yang cocok dengan pencarian.' }}
             </div>
           </template>
 

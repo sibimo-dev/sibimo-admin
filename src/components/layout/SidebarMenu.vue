@@ -2,6 +2,7 @@
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import PanelMenu from 'primevue/panelmenu'
+import { useAuthStore } from '@/stores/auth.store'
 
 const props = defineProps({
   collapsed: { type: Boolean, default: false },
@@ -9,12 +10,13 @@ const props = defineProps({
 
 const emit = defineEmits(['navigate'])
 const route = useRoute()
+const authStore = useAuthStore()
 
 const menuGroups = [
   {
     label: 'Utama',
     showLabel: false,
-    items: [{ label: 'Dashboard', icon: 'pi pi-home', route: '/dashboard' }],
+    items: [{ label: 'Dashboard', icon: 'pi pi-home', route: '/dashboard', permission: 'dashboard' }],
   },
   {
     label: 'Persuratan',
@@ -24,10 +26,10 @@ const menuGroups = [
         label: 'Persuratan',
         icon: 'pi pi-file',
         items: [
-          { label: 'Pengelolaan Surat', route: '/letter' },
-          { label: 'Verifikasi Surat', route: '/letter/verification' },
-          { label: 'Otorisasi Surat', route: '/letter/authorization' },
-          { label: 'Tipe Surat', route: '/letter-type' },
+          { label: 'Pengelolaan Surat', route: '/letter', permission: 'surat' },
+          { label: 'Verifikasi Surat', route: '/letter/verification', permission: 'surat' },
+          { label: 'Otorisasi Surat', route: '/letter/authorization', permission: 'surat' },
+          { label: 'Tipe Surat', route: '/letter-type', permission: 'surat' },
         ],
       },
     ],
@@ -35,15 +37,15 @@ const menuGroups = [
   {
     label: 'Pengaduan',
     showLabel: false,
-    items: [{ label: 'Kelola Aduan', icon: 'pi pi-comments', route: '/complaint' }],
+    items: [{ label: 'Kelola Aduan', icon: 'pi pi-comments', route: '/complaint', permission: 'pengaduan' }],
   },
   {
     label: 'Konten Publik',
     showLabel: false,
     items: [
-      { label: 'Berita & Pengumuman', icon: 'pi pi-megaphone', route: '/news' },
-      { label: 'Kelola Agenda', icon: 'pi pi-calendar', route: '/agenda' },
-      { label: 'Kelola Potensi', icon: 'pi pi-star', route: '/village-potential' },
+      { label: 'Berita & Pengumuman', icon: 'pi pi-megaphone', route: '/news', permission: 'berita' },
+      { label: 'Kelola Agenda', icon: 'pi pi-calendar', route: '/agenda', permission: 'agenda' },
+      { label: 'Kelola Potensi', icon: 'pi pi-star', route: '/village-potential', permission: 'potensi-desa' },
     ],
   },
   {
@@ -55,14 +57,14 @@ const menuGroups = [
     label: 'Galeri & Perpustakaan',
     showLabel: false,
     items: [
-      { label: 'Kelola Gallery', icon: 'pi pi-images', route: '/gallery' },
+      { label: 'Kelola Gallery', icon: 'pi pi-images', route: '/gallery', permission: 'gallery' },
       {
         label: 'Kelola Perpustakaan',
         icon: 'pi pi-book',
         items: [
-          { label: 'Katalog Buku', route: '/library/catalog' },
-          { label: 'Peminjaman', route: '/library/loan' },
-          { label: 'Pengembalian', route: '/library/return' },
+          { label: 'Katalog Buku', route: '/library/catalog', permission: 'perpustakaan' },
+          { label: 'Peminjaman', route: '/library/loan', permission: 'perpustakaan' },
+          { label: 'Pengembalian', route: '/library/return', permission: 'perpustakaan' },
         ],
       },
     ],
@@ -75,10 +77,10 @@ const menuGroups = [
         label: 'Profile Desa',
         icon: 'pi pi-building',
         items: [
-          { label: 'Sejarah', route: '/village-profile/history' },
-          { label: 'Visi & Misi', route: '/village-profile/vision-mission' },
-          { label: 'Struktur Organisasi', route: '/village-profile/organizational-structure' },
-          { label: 'Data Wilayah', route: '/village-profile/region' },
+          { label: 'Sejarah', route: '/village-profile/history', permission: 'profil-desa' },
+          { label: 'Visi & Misi', route: '/village-profile/vision-mission', permission: 'profil-desa' },
+          { label: 'Struktur Organisasi', route: '/village-profile/organizational-structure', permission: 'profil-desa' },
+          { label: 'Data Wilayah', route: '/village-profile/region', permission: 'profil-desa' },
         ],
       },
     ],
@@ -86,9 +88,39 @@ const menuGroups = [
   {
     label: 'User Management',
     showLabel: true,
-    items: [{ label: 'List Admin', icon: 'pi pi-user-edit', route: '/user-management' }],
+    items: [
+      {
+        label: 'List Admin',
+        icon: 'pi pi-user-edit',
+        permission: 'user-management',
+        items: [
+          { label: 'Daftar Pengguna', route: '/user-management', permission: 'user-management' },
+          { label: 'Role & Hak Akses', route: '/user-management/roles', permission: 'user-management' },
+          { label: 'Daftar Permission', route: '/user-management/permissions', permission: 'user-management' },
+          { label: 'Override User', route: '/user-management/user-permissions', permission: 'user-management' },
+        ],
+      },
+    ],
   },
 ]
+
+const visibleMenuGroups = computed(() => {
+  const permissions = authStore.user?.permissions
+  if (!Array.isArray(permissions)) return menuGroups
+
+  const filterItems = (items) => items
+    .map((item) => {
+      const children = item.items ? filterItems(item.items) : []
+      const allowed = !item.permission || permissions.includes(item.permission)
+      if (!allowed && children.length === 0) return null
+      return children.length > 0 ? { ...item, items: children } : item
+    })
+    .filter(Boolean)
+
+  return menuGroups
+    .map((group) => ({ ...group, items: filterItems(group.items) }))
+    .filter((group) => group.items.length > 0)
+})
 
 function isActive(to) {
   if (!to) return false
@@ -223,7 +255,7 @@ const panelMenuPt = computed(() => ({
 
 <template>
   <nav class="flex-1 overflow-y-auto py-3 px-2">
-    <div v-for="group in menuGroups" :key="group.label" class="mb-1">
+    <div v-for="group in visibleMenuGroups" :key="group.label" class="mb-1">
       <p
         v-if="group.showLabel && !collapsed"
         class="px-3 pt-4 pb-1 text-[11px] font-bold uppercase tracking-wide text-neutral-500"
