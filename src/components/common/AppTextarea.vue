@@ -27,7 +27,7 @@ defineEmits(['update:modelValue'])
       :placeholder="placeholder"
       :disabled="disabled"
       :invalid="!!error"
-      class="w-full"
+      class="w-full text-sm md:text-base"
       autoResize
       @update:modelValue="(val) => $emit('update:modelValue', val)"
     />

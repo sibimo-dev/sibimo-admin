@@ -42,7 +42,7 @@ function togglePassword() {
         :placeholder="placeholder"
         :disabled="disabled"
         :invalid="!!error"
-        :class="['w-full', isPassword ? 'pr-10' : '']"
+        :class="['w-full text-sm md:text-base py-1.5 md:py-2', isPassword ? 'pr-10' : '']"
         @update:modelValue="(val) => $emit('update:modelValue', val)"
       />
 

@@ -31,7 +31,7 @@ defineEmits(['update:modelValue'])
       :placeholder="placeholder"
       :disabled="disabled"
       :invalid="!!error"
-      class="w-full"
+      class="w-full text-sm md:text-base"
       @update:modelValue="(val) => $emit('update:modelValue', val)"
     />
     <span v-if="error" class="text-xs text-danger-500">{{ error }}</span>
