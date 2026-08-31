@@ -25,7 +25,7 @@ defineEmits(['click'])
 const variantMap = {
   primary: { severity: undefined, gradient: 'primary' },
   dark: { severity: 'contrast' },
-  
+
   secondary: { severity: undefined, gradient: 'secondary' },
   gold: { severity: undefined, gradient: 'secondary' },
   outline: { severity: undefined, outlined: true },
@@ -94,7 +94,6 @@ const buttonClass = computed(() => ({
   padding: 0;
 }
 
-
 :deep(.p-button-link .p-button-label) {
   color: var(--p-primary-600) !important;
 }
@@ -114,7 +113,6 @@ const buttonClass = computed(() => ({
   transform: translateY(-1px);
   box-shadow: 0 4px 14px color-mix(in srgb, var(--p-primary-700) 45%, transparent);
 }
-
 
 .app-btn-gradient-secondary {
   background: linear-gradient(135deg, var(--p-secondary-300), var(--p-secondary-600)) !important;
@@ -166,5 +164,20 @@ const buttonClass = computed(() => ({
 
 :deep(.p-button) {
   border-radius: 10px;
+}
+
+/* ===== Mobile: kecilkan padding & font tombol secara default ===== */
+@media (max-width: 767px) {
+  :deep(.p-button) {
+    font-size: 0.8125rem; /* 13px */
+    padding: 0.5rem 0.75rem;
+  }
+  :deep(.p-button .p-button-icon) {
+    font-size: 0.8125rem;
+  }
+  .app-btn-rounded-icon {
+    width: 2rem;
+    height: 2rem;
+  }
 }
 </style>

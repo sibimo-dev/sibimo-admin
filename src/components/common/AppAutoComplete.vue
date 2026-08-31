@@ -4,12 +4,12 @@ import { ref, computed } from 'vue'
 import AutoComplete from 'primevue/autocomplete'
 
 const props = defineProps({
-  modelValue: { type: [Number, String], default: null }, 
+  modelValue: { type: [Number, String], default: null },
   label: { type: String, default: '' },
-  options: { type: Array, required: true }, 
-  optionLabel: { type: String, default: 'label' }, 
-  optionValue: { type: String, default: 'value' }, 
-  searchFields: { type: Array, default: null }, 
+  options: { type: Array, required: true },
+  optionLabel: { type: String, default: 'label' },
+  optionValue: { type: String, default: 'value' },
+  searchFields: { type: Array, default: null },
   placeholder: { type: String, default: 'Ketik untuk mencari...' },
   emptyMessage: { type: String, default: 'Tidak ada hasil ditemukan' },
   error: { type: String, default: '' },
@@ -30,13 +30,12 @@ const selectedObject = computed({
   },
 })
 
-
 const effectiveSearchFields = computed(() => (props.searchFields?.length ? props.searchFields : [props.optionLabel]))
 
 function search(event) {
   const query = event.query.toLowerCase().trim()
   suggestions.value = !query
-    ? props.options.slice(0, 10) 
+    ? props.options.slice(0, 10)
     : props.options.filter((o) =>
         effectiveSearchFields.value.some((field) =>
           String(o[field] ?? '').toLowerCase().includes(query),
