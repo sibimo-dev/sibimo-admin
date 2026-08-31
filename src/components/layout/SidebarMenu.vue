@@ -19,8 +19,8 @@ const menuGroups = [
     items: [{ label: 'Dashboard', icon: 'pi pi-home', route: '/dashboard', permission: 'dashboard' }],
   },
   {
-    label: 'Persuratan',
-    showLabel: false,
+    label: 'Layanan',
+    showLabel: true,
     items: [
       {
         label: 'Persuratan',
@@ -32,34 +32,9 @@ const menuGroups = [
           { label: 'Tipe Surat', route: '/letter-type', permission: 'surat' },
         ],
       },
-    ],
-  },
-  {
-    label: 'Pengaduan',
-    showLabel: false,
-    items: [{ label: 'Kelola Aduan', icon: 'pi pi-comments', route: '/complaint', permission: 'pengaduan' }],
-  },
-  {
-    label: 'Konten Publik',
-    showLabel: false,
-    items: [
-      { label: 'Berita & Pengumuman', icon: 'pi pi-megaphone', route: '/news', permission: 'berita' },
-      { label: 'Kelola Agenda', icon: 'pi pi-calendar', route: '/agenda', permission: 'agenda' },
-      { label: 'Kelola Potensi', icon: 'pi pi-star', route: '/village-potential', permission: 'potensi-desa' },
-    ],
-  },
-  {
-    label: 'Data Desa',
-    showLabel: false,
-    items: [{ label: 'Kelola Data Warga', icon: 'pi pi-users', route: '/citizen' }],
-  },
-  {
-    label: 'Galeri & Perpustakaan',
-    showLabel: false,
-    items: [
-      { label: 'Kelola Gallery', icon: 'pi pi-images', route: '/gallery', permission: 'gallery' },
+      { label: 'Aduan', icon: 'pi pi-comments', route: '/complaint', permission: 'pengaduan' },
       {
-        label: 'Kelola Perpustakaan',
+        label: 'Perpustakaan',
         icon: 'pi pi-book',
         items: [
           { label: 'Katalog Buku', route: '/library/catalog', permission: 'perpustakaan' },
@@ -70,11 +45,28 @@ const menuGroups = [
     ],
   },
   {
-    label: 'Profil Desa',
-    showLabel: false,
+    label: 'Konten',
+    showLabel: true,
+    items: [
+      { label: 'Berita & Pengumuman', icon: 'pi pi-megaphone', route: '/news', permission: 'berita' },
+      { label: 'Agenda', icon: 'pi pi-calendar', route: '/agenda', permission: 'agenda' },
+      { label: 'Galeri', icon: 'pi pi-images', route: '/gallery', permission: 'gallery' },
+    ],
+  },
+  {
+    label: 'Data Kalurahan',
+    showLabel: true,
+    items: [
+      { label: 'Data Warga', icon: 'pi pi-users', route: '/citizen' },
+      { label: 'Potensi Kalurahan', icon: 'pi pi-star', route: '/village-potential', permission: 'potensi-desa' },
+    ],
+  },
+  {
+    label: 'Profil Kalurahan',
+    showLabel: true,
     items: [
       {
-        label: 'Profile Desa',
+        label: 'Profil Kalurahan',
         icon: 'pi pi-building',
         items: [
           { label: 'Sejarah', route: '/village-profile/history', permission: 'profil-desa' },
@@ -254,7 +246,7 @@ const panelMenuPt = computed(() => ({
 </script>
 
 <template>
-  <nav class="flex-1 overflow-y-auto py-3 px-2">
+  <nav class="flex-1 overflow-y-auto py-1 px-2">
     <div v-for="group in visibleMenuGroups" :key="group.label" class="mb-1">
       <p
         v-if="group.showLabel && !collapsed"

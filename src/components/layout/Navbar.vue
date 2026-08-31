@@ -5,7 +5,6 @@ import Menu from 'primevue/menu'
 import Button from 'primevue/button'
 import { useAuthStore } from '@/stores/auth.store'
 import { useUiStore } from '@/stores/ui.store'
-import Breadcrumb from './Breadcrumb.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -41,19 +40,29 @@ function toggleMenu(event) {
     class="h-16 bg-white border-b border-neutral-100 flex items-center justify-between px-4 md:px-6 gap-3"
   >
     <div class="flex items-center gap-3 min-w-0">
-      <Breadcrumb class="min-w-0" 
+      <Button
+        icon="pi pi-bars"
+        text
+        rounded
+        severity="secondary"
+        class="md:hidden! shrink-0"
+        aria-label="Buka menu"
+        @click="uiStore.toggleMobileSidebar()"
       />
+
+      <span class="w-px h-6 bg-neutral-100 hidden md:inline" />
+
+      <div class="min-w-0">
+        <p class="m-0 text-sm font-semibold text-neutral-900 truncate">
+          SIBIMO Admin
+        </p>
+        <p class="m-0 text-xs text-neutral-500 truncate hidden sm:block">
+          Kalurahan Bimomartani
+        </p>
+      </div>
     </div>
 
     <div class="flex items-center gap-3">
-      <Button
-      icon="pi pi-bell"
-      text
-      rounded
-      class="!text-primary-600 hover:!bg-primary-50 hover:!text-primary-700"
-      aria-label="Notifikasi"
-      />
-
       <span class="w-px h-6 bg-neutral-100" />
 
       <button
@@ -65,7 +74,7 @@ function toggleMenu(event) {
         >
           {{ displayInitial }}
         </div>
-        <span class="font-medium text-neutral-900">{{
+        <span class="font-medium text-neutral-900 hidden sm:inline">{{
           displayName
         }}</span>
         <i class="pi pi-chevron-down text-xs text-neutral-400" />
