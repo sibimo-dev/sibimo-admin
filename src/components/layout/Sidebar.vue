@@ -20,7 +20,7 @@ const uiStore = useUiStore()
         v-if="!uiStore.sidebarCollapsed"
         class="font-bold italic text-lg text-primary-800 tracking-tight"
       >
-        SIBIMO - Admin
+        Menu
       </span>
       <Button
         :icon="uiStore.sidebarCollapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'"
@@ -56,9 +56,10 @@ const uiStore = useUiStore()
     v-model:visible="uiStore.mobileSidebarOpen"
     position="left"
     class="!w-[280px] md:hidden"
+    :pt="{ content: { class: '!pt-0' } }"
   >
     <template #header>
-      <span class="font-bold italic text-lg text-primary-800 tracking-tight">SIBIMO</span>
+      <span class="font-bold italic text-lg text-primary-800 tracking-tight">Menu</span>
     </template>
 
     <SidebarMenu :collapsed="false" @navigate="uiStore.closeMobileSidebar()" />
