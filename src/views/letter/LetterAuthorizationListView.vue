@@ -12,13 +12,13 @@ const route = useRoute()
 const { rows } = useLetterStore()
 
 const columns = [
-  { field: 'requestId', header: 'Request ID' },
-  { field: 'citizenId', header: 'Citizen ID' },
+  { field: 'requestId', header: 'Request ID', sortable: true },
+  { field: 'citizenId', header: 'Citizen ID', sortable: true },
   { field: 'purpose', header: 'Purpose / Jenis Surat' },
-  { field: 'verifiedBy', header: 'Diverifikasi Oleh' },
-  { field: 'status', header: 'Status' },
-  { field: 'authorizedBy', header: 'Authorized By' },
-  { field: 'date', header: 'Tanggal' },
+  { field: 'verifiedBy', header: 'Diverifikasi Oleh', sortable: true },
+  { field: 'status', header: 'Status', sortable: true },
+  { field: 'authorizedBy', header: 'Authorized By', sortable: true },
+  { field: 'date', header: 'Tanggal', sortable: true },
 ]
 
 const tabs = [
@@ -43,6 +43,8 @@ const filteredRows = computed(() => {
     )
   }
 
+  // Default sort (dipakai saat user belum klik header manapun).
+  // Setelah header diklik, DataTable PrimeVue yang ambil alih sorting-nya.
   return [...result].sort((a, b) => new Date(b.dateValue) - new Date(a.dateValue))
 })
 
@@ -66,8 +68,6 @@ function scrollToHighlighted() {
   el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
-// Pastikan tab aktif sesuai status surat yang di-highlight, supaya barisnya
-// pasti kelihatan meski defaultnya tab lain yang aktif.
 function syncTabWithHighlight(id) {
   if (!id) return
   const target = rows.value.find((r) => r.requestId === id)
