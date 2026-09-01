@@ -11,17 +11,38 @@ const router = useRouter()
 const route = useRoute()
 const { rows } = useLetterStore()
 
+// sortable: true -> header kolom bisa diklik untuk sort, konsisten dengan
+// tabel Pengelolaan Surat & Berita. Sumber dibiarkan tanpa sort.
 const columns = [
-  { field: 'requestId', header: 'Request ID' },
-  { field: 'citizenName', header: 'Nama Pemohon' },
-  { field: 'citizenId', header: 'NIK' },
-  { field: 'purpose', header: 'Jenis Layanan' },
-  { field: 'category', header: 'Kategori' },
-  { field: 'date', header: 'Tanggal Pengajuan' },
+  { field: 'requestId', header: 'Request ID', sortable: true },
+  { field: 'citizenName', header: 'Nama Pemohon', sortable: true },
+  { field: 'citizenId', header: 'NIK', sortable: true },
+  { field: 'purpose', header: 'Jenis Layanan', sortable: true },
+  { field: 'category', header: 'Kategori', sortable: true },
+  { field: 'date', header: 'Tanggal Pengajuan', sortable: true },
   { field: 'source', header: 'Sumber' },
 ]
 
 const searchQuery = ref('')
+
+// --- Sort (klik header kolom) ---
+// Default: tanggal pengajuan paling lama dulu (antrean verifikasi diproses FIFO).
+const sortField = ref('dateValue')
+const sortOrder = ref(1)
+
+function handleSort(field) {
+  if (sortField.value === field) {
+    sortOrder.value *= -1
+  } else {
+    sortField.value = field
+    sortOrder.value = 1
+  }
+}
+
+function sortValue(row, field) {
+  if (field === 'date') return new Date(row.dateValue).getTime()
+  return row[field]
+}
 
 const pendingRows = computed(() => {
   let result = rows.value.filter((r) => r.status === 'Pending')
@@ -36,7 +57,16 @@ const pendingRows = computed(() => {
     )
   }
 
-  return result.sort((a, b) => new Date(a.dateValue) - new Date(b.dateValue))
+  const field = sortField.value === 'date' ? 'date' : sortField.value
+  result.sort((a, b) => {
+    const aVal = sortValue(a, field)
+    const bVal = sortValue(b, field)
+    if (aVal < bVal) return -1 * sortOrder.value
+    if (aVal > bVal) return 1 * sortOrder.value
+    return 0
+  })
+
+  return result
 })
 
 function openVerification(data) {
@@ -109,6 +139,9 @@ onBeforeUnmount(() => clearTimeout(highlightTimer))
           highlight-field="requestId"
           :highlight-value="highlightedId"
           :first="highlightFirst"
+          :sort-field="sortField"
+          :sort-order="sortOrder"
+          @sort="handleSort"
         >
           <template #category="{ data }">
             <Tag :value="data.category" severity="info" />
