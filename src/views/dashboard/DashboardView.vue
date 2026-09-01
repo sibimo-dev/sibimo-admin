@@ -301,7 +301,7 @@ watch(period, loadDashboard)
                 <InputIcon class="pi pi-search" />
                 <InputText
                   v-model="search"
-                  placeholder="Cari ID Permintaan / NIK / keperluan"
+                  placeholder="Cari Request ID / NIK / jenis layanan"
                   class="!text-sm w-36 lg:w-52 min-w-0"
                 />
               </IconField>
@@ -336,11 +336,11 @@ watch(period, loadDashboard)
             <div class="text-center text-sm text-neutral-400 py-8">Tidak ada pengajuan yang cocok.</div>
           </template>
 
-          <Column field="requestId" header="ID Permintaan" sortable />
+          <Column field="requestId" header="Request ID" />
 
-          <Column field="citizenId" header="NIK" sortable />
+          <Column field="citizenId" header="NIK"  />
 
-          <Column field="purpose" header="Keperluan" sortable />
+          <Column field="serviceType" header="Jenis Layanan"  />
 
           <Column field="date" header="Tanggal" sortable>
             <template #body="{ data }">
@@ -348,7 +348,7 @@ watch(period, loadDashboard)
             </template>
           </Column>
 
-          <Column field="status" header="Status" sortable>
+          <Column field="status" header="Status" >
             <template #body="{ data }">
               <Tag
                 :value="data.status"
