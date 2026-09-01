@@ -3,10 +3,10 @@ import { ref, reactive, computed } from 'vue'
 import { useToast } from 'primevue/usetoast'
 
 import InputText from 'primevue/inputtext'
+import Textarea from 'primevue/textarea'
 import Editor from 'primevue/editor'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
-import FileUpload from 'primevue/fileupload'
 import Card from 'primevue/card'
 
 import { visionMissionContent } from './villageProfileData'
@@ -14,8 +14,6 @@ import { visionMissionContent } from './villageProfileData'
 const toast = useToast()
 const saving = ref(false)
 
-// Mode otomatis: kalau data belum ada (null) -> create, kalau sudah ada -> edit.
-// Tidak ada route /create atau /edit terpisah, semua ditentukan dari isi data.
 const isEdit = computed(() => visionMissionContent.value !== null)
 
 const pageTitle = computed(() => (isEdit.value ? 'Edit Visi & Misi' : 'Tambah Visi & Misi'))
@@ -26,57 +24,60 @@ const statusOptions = [
   { label: 'Terbit', value: 'Published' },
 ]
 
+const MIN_MISSIONS = 4
+
+function createMissionItem(text = '') {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    text,
+  }
+}
+
+const existingMissions = visionMissionContent.value?.missions ?? []
+const initialMissions = existingMissions.length
+  ? existingMissions.map((text) => createMissionItem(text))
+  : Array.from({ length: MIN_MISSIONS }, () => createMissionItem())
+
 const form = reactive({
   profile_content_id: visionMissionContent.value?.profile_content_id ?? null,
   title: visionMissionContent.value?.title ?? '',
-  content: visionMissionContent.value?.content ?? '',
+  vision: visionMissionContent.value?.vision ?? visionMissionContent.value?.content ?? '',
   status: visionMissionContent.value?.status ?? 'Draft',
   published_at: visionMissionContent.value?.published_at ?? null,
-  photo_file: null,
 })
+
+const missions = ref(initialMissions)
 
 const statusOpen = ref(true)
 const statusDisplay = computed(() => (
   statusOptions.find((item) => item.value === form.status)?.label ?? form.status
 ))
 
-// --- Upload Foto (opsional) ---
-const photoPreview = ref(visionMissionContent.value?.thumbnail || null)
-const fileUploadRef = ref(null)
-
-function handleFileSelect(event) {
-  const file = event.files?.[0]
-  if (!file) return
-  form.photo_file = file
-  const reader = new FileReader()
-  reader.onload = () => {
-    photoPreview.value = reader.result
-  }
-  reader.readAsDataURL(file)
+// Kelola daftar Misi
+function addMission() {
+  missions.value.push(createMissionItem())
 }
 
-function handleValidationError(event) {
-  const message = event.files?.[0]?.name
-    ? `File "${event.files[0].name}" tidak valid (format/ukuran tidak sesuai)`
-    : 'File tidak valid'
-  toast.add({ severity: 'error', summary: message, life: 3000 })
+function removeMission(missionId) {
+  if (missions.value.length <= 1) return
+  missions.value = missions.value.filter((mission) => mission.id !== missionId)
 }
-
-function changePhoto(removeFileCallback) {
-  removeFileCallback?.(0)
-  fileUploadRef.value?.choose()
-}
-
-function removePhoto(removeFileCallback) {
-  removeFileCallback?.(0)
-  photoPreview.value = null
-  form.photo_file = null
-}
-// --- end Upload Foto ---
+// end kelola Misi
 
 async function persist(nextStatus) {
   if (!form.title.trim()) {
     toast.add({ severity: 'error', summary: 'Judul wajib diisi', life: 2500 })
+    return
+  }
+
+  if (!form.vision.trim()) {
+    toast.add({ severity: 'error', summary: 'Visi wajib diisi', life: 2500 })
+    return
+  }
+
+  const filledMissions = missions.value.map((mission) => mission.text.trim()).filter(Boolean)
+  if (!filledMissions.length) {
+    toast.add({ severity: 'error', summary: 'Minimal isi salah satu misi', life: 2500 })
     return
   }
 
@@ -87,12 +88,11 @@ async function persist(nextStatus) {
       form.published_at = new Date().toISOString().slice(0, 10)
     }
 
-   
     visionMissionContent.value = {
       profile_content_id: form.profile_content_id ?? Date.now(),
       title: form.title,
-      content: form.content,
-      thumbnail: photoPreview.value ?? '',
+      vision: form.vision,
+      missions: filledMissions,
       status: form.status,
       published_at: form.published_at,
     }
@@ -139,77 +139,60 @@ function saveMain() {
 
             <div class="flex flex-col gap-2">
               <label class="text-[13px] font-semibold text-slate-700">
-                Isi Visi & Misi
+                Visi
               </label>
 
               <Editor
-                v-model="form.content"
-                editorStyle="height: 220px"
-                placeholder="Tulis isi visi dan misi desa di sini"
+                v-model="form.vision"
+                editorStyle="height: 160px"
+                placeholder="Tulis visi desa di sini"
               />
             </div>
 
             <div class="flex flex-col gap-2">
-              <span class="text-[13px] font-semibold text-slate-700">
-                Foto (opsional)
-              </span>
+              <div class="flex items-center justify-between">
+                <span class="text-[13px] font-semibold text-slate-700">
+                  Misi
+                </span>
+                <Button
+                  label="Tambah Misi"
+                  icon="pi pi-plus"
+                  text
+                  size="small"
+                  @click="addMission"
+                />
+              </div>
 
-              <FileUpload
-                ref="fileUploadRef"
-                mode="advanced"
-                accept="image/*"
-                :maxFileSize="5000000"
-                :multiple="false"
-                :auto="false"
-                :showUploadButton="false"
-                :showCancelButton="false"
-                customUpload
-                :pt="{
-                  root: { class: 'border-none bg-transparent p-0' },
-                  header: { class: 'hidden' },
-                  content: { class: 'border-none bg-transparent p-0' },
-                }"
-                @select="handleFileSelect"
-                @file-validation-failed="handleValidationError"
+              <div
+                v-for="(mission, index) in missions"
+                :key="mission.id"
+                class="flex items-start gap-2.5"
               >
-                <template #empty>
-                  <div
-                    v-if="!photoPreview"
-                    class="rounded-xl border-2 border-dashed border-primary-200 bg-primary-50/40 flex flex-col items-center justify-center py-10 cursor-pointer hover:bg-primary-50 transition-colors"
-                    @click="fileUploadRef?.choose()"
-                  >
-                    <i class="pi pi-cloud-upload text-3xl text-primary-400 mb-2" />
-                    <p class="text-sm text-slate-600 m-0">
-                      <span class="text-primary-600 font-medium">Klik untuk unggah</span> atau seret foto ke sini
-                    </p>
-                    <p class="text-xs text-slate-400 mt-1">PNG, JPG, maks. 5MB</p>
-                  </div>
-                </template>
+                <span
+                  class="mt-2 flex h-6 w-6 flex-none items-center justify-center rounded-full bg-primary-100 text-xs font-semibold text-primary-600"
+                >
+                  {{ index + 1 }}
+                </span>
 
-                <template #content="{ removeFileCallback }">
-                  <div v-if="photoPreview" class="relative overflow-hidden rounded-xl border border-slate-200 group">
-                    <img :src="photoPreview" alt="Preview foto" class="h-48 w-full object-cover" />
-                    <div
-                      class="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100"
-                    >
-                      <Button
-                        icon="pi pi-refresh"
-                        severity="secondary"
-                        rounded
-                        aria-label="Ganti foto"
-                        @click="changePhoto(removeFileCallback)"
-                      />
-                      <Button
-                        icon="pi pi-trash"
-                        severity="danger"
-                        rounded
-                        aria-label="Hapus foto"
-                        @click="removePhoto(removeFileCallback)"
-                      />
-                    </div>
-                  </div>
-                </template>
-              </FileUpload>
+                <Textarea
+                  v-model="mission.text"
+                  :placeholder="`Tulis misi ke-${index + 1}`"
+                  autoResize
+                  rows="1"
+                  class="flex-1"
+                  fluid
+                />
+
+                <Button
+                  icon="pi pi-trash"
+                  severity="danger"
+                  text
+                  rounded
+                  aria-label="Hapus misi"
+                  :disabled="missions.length <= 1"
+                  @click="removeMission(mission.id)"
+                />
+              </div>
             </div>
           </div>
         </template>
