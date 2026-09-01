@@ -45,7 +45,7 @@ const menuGroups = [
     ],
   },
   {
-    label: 'Konten',
+    label: 'Konten Publik',
     showLabel: true,
     items: [
       { label: 'Berita & Pengumuman', icon: 'pi pi-megaphone', route: '/news', permission: 'berita' },
@@ -89,7 +89,7 @@ const menuGroups = [
           { label: 'Daftar Pengguna', route: '/user-management', permission: 'user-management' },
           { label: 'Role & Hak Akses', route: '/user-management/roles', permission: 'user-management' },
           { label: 'Daftar Permission', route: '/user-management/permissions', permission: 'user-management' },
-          { label: 'Override User', route: '/user-management/user-permissions', permission: 'user-management' },
+         
         ],
       },
     ],
