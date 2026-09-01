@@ -2,7 +2,6 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import Tag from 'primevue/tag'
-import Select from 'primevue/select'
 import AppDataTable from '@/components/common/AppDataTable.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import AppInput from '@/components/common/AppInput.vue'
@@ -11,15 +10,18 @@ import { useLetterStore } from '@/stores/useLetterStore'
 const router = useRouter()
 const { rows } = useLetterStore()
 
+// sortable: true -> kolom ini bisa diklik headernya untuk sort (seperti tabel Berita).
+// Kolom seperti Signature Type/Verified By/Authorized By/Sumber tidak sortable,
+// mengikuti pola "Gambar" & "Aksi" di tabel Berita yang juga tidak diberi ikon sort.
 const columns = [
-  { field: 'requestId', header: 'Request ID' },
-  { field: 'citizenId', header: 'Citizen ID' },
-  { field: 'purpose', header: 'Purpose / Service Type' },
-  { field: 'status', header: 'Status' },
+  { field: 'requestId', header: 'Request ID', sortable: true },
+  { field: 'citizenId', header: 'Citizen ID', sortable: true },
+  { field: 'purpose', header: 'Purpose / Service Type', sortable: true },
+  { field: 'status', header: 'Status', sortable: true },
   { field: 'signatureType', header: 'Signature Type' },
   { field: 'verifiedBy', header: 'Verified By' },
   { field: 'authorizedBy', header: 'Authorized By' },
-  { field: 'date', header: 'Date' },
+  { field: 'date', header: 'Date', sortable: true },
   { field: 'source', header: 'Sumber' },
 ]
 
@@ -27,19 +29,32 @@ const columns = [
 const statusFilters = ['Semua Status', 'Pending', 'Diverifikasi', 'Disetujui', 'Ditolak']
 const activeFilter = ref('Semua Status')
 
-// --- Sort dropdown ---
-const sortOptions = [
-  { label: 'Sort by Date: 7 hari', value: '7d' },
-  { label: 'Sort by Date: 30 hari', value: '30d' },
-  { label: 'Sort by Date: Terbaru', value: 'newest' },
-  { label: 'Sort by Date: Terlama', value: 'oldest' },
-]
-const selectedSort = ref('newest')
-
 // --- Search ---
 const searchQuery = ref('')
 
-// --- Gabungan filter status + search + sort/filter tanggal ---
+// --- Sort (klik header kolom, mengikuti gaya tabel Berita) ---
+// sortOrder: 1 = ascending (A-Z / terlama dulu), -1 = descending (Z-A / terbaru dulu)
+const sortField = ref('dateValue')
+const sortOrder = ref(-1)
+
+function handleSort(field) {
+  if (sortField.value === field) {
+    sortOrder.value *= -1
+  } else {
+    sortField.value = field
+    sortOrder.value = 1
+  }
+  resetPage()
+}
+
+// Untuk kolom "date" kita sebenarnya sort berdasarkan dateValue (objek Date asli),
+// bukan teks tanggal yang sudah diformat.
+function sortValue(row, field) {
+  if (field === 'date') return new Date(row.dateValue).getTime()
+  return row[field]
+}
+
+// --- Gabungan filter status + search + sort ---
 const filteredRows = computed(() => {
   let result = [...rows.value]
 
@@ -57,22 +72,14 @@ const filteredRows = computed(() => {
     )
   }
 
-  const now = new Date()
-  if (selectedSort.value === '7d') {
-    const sevenDaysAgo = new Date(now)
-    sevenDaysAgo.setDate(now.getDate() - 7)
-    result = result.filter((r) => new Date(r.dateValue) >= sevenDaysAgo)
-    result.sort((a, b) => new Date(b.dateValue) - new Date(a.dateValue))
-  } else if (selectedSort.value === '30d') {
-    const thirtyDaysAgo = new Date(now)
-    thirtyDaysAgo.setDate(now.getDate() - 30)
-    result = result.filter((r) => new Date(r.dateValue) >= thirtyDaysAgo)
-    result.sort((a, b) => new Date(b.dateValue) - new Date(a.dateValue))
-  } else if (selectedSort.value === 'newest') {
-    result.sort((a, b) => new Date(b.dateValue) - new Date(a.dateValue))
-  } else if (selectedSort.value === 'oldest') {
-    result.sort((a, b) => new Date(a.dateValue) - new Date(b.dateValue))
-  }
+  const field = sortField.value === 'date' ? 'date' : sortField.value
+  result.sort((a, b) => {
+    const aVal = sortValue(a, field)
+    const bVal = sortValue(b, field)
+    if (aVal < bVal) return -1 * sortOrder.value
+    if (aVal > bVal) return 1 * sortOrder.value
+    return 0
+  })
 
   return result
 })
@@ -151,7 +158,7 @@ function goToTambahSurat() {
     </div>
 
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-      <!-- Filter, sort, search -->
+      <!-- Toolbar: filter status di kiri, search di kanan (gaya toolbar tabel Berita) -->
       <div class="flex items-center justify-between gap-3 mb-6 flex-wrap">
         <div class="flex items-center gap-2 flex-wrap">
           <AppButton
@@ -164,27 +171,24 @@ function goToTambahSurat() {
           />
         </div>
 
-        <div class="flex items-center gap-3">
-          <Select
-            v-model="selectedSort"
-            :options="sortOptions"
-            option-label="label"
-            option-value="value"
-            class="w-56"
-            @change="resetPage"
-          />
-          <AppInput
-            v-model="searchQuery"
-            placeholder="Cari Ticket ID atau Nama..."
-            icon="pi pi-search"
-            @update:model-value="resetPage"
-          />
-        </div>
+        <AppInput
+          v-model="searchQuery"
+          placeholder="Cari Ticket ID atau Nama..."
+          icon="pi pi-search"
+          class="w-72"
+          @update:model-value="resetPage"
+        />
       </div>
 
-      <!-- Table -->
+      <!-- Table: sort dilakukan lewat klik header kolom, bukan dropdown -->
       <div class="rounded-xl border border-slate-100 overflow-hidden">
-        <AppDataTable :columns="columns" :rows="paginatedRows">
+        <AppDataTable
+          :columns="columns"
+          :rows="paginatedRows"
+          :sort-field="sortField"
+          :sort-order="sortOrder"
+          @sort="handleSort"
+        >
           <template #status="{ data }">
             <Tag :value="data.status" :severity="statusColor[data.status]" />
           </template>
