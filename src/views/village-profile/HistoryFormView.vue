@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
 
 import InputText from 'primevue/inputtext'
@@ -9,12 +9,13 @@ import Button from 'primevue/button'
 import Card from 'primevue/card'
 import FileUpload from 'primevue/fileupload'
 
-import { historyContent } from './villageProfileData'
+import { getHistories, saveHistory } from '@/services/profile.service'
 
 const toast = useToast()
 const saving = ref(false)
 
-const isEdit = computed(() => historyContent.value !== null)
+const isEdit = computed(() => !!form.history_id)
+
 const pageTitle = computed(() => (isEdit.value ? 'Edit Sejarah' : 'Tambah Sejarah'))
 const mainButtonLabel = computed(() => (isEdit.value ? 'Perbarui' : 'Terbitkan'))
 
@@ -23,27 +24,15 @@ const statusOptions = [
   { label: 'Terbit', value: 'Published' },
 ]
 
-const MIN_MILESTONES_TO_PUBLISH = 2
-
-let milestoneIdCounter = 0
-function toMilestoneItem(text) {
-  milestoneIdCounter += 1
-  return { id: `h-${milestoneIdCounter}`, text }
-}
-
 const form = reactive({
-  profile_content_id: historyContent.value?.profile_content_id ?? null,
-  title: historyContent.value?.title ?? 'Sejarah Desa',
-  year: historyContent.value?.year ?? '',
-  milestones: (historyContent.value?.milestones?.length
-    ? historyContent.value.milestones
-    : ['']
-  ).map(toMilestoneItem),
-  status: historyContent.value?.status ?? 'Draft',
-  published_at: historyContent.value?.published_at ?? null,
-  // dua foto terpisah, sesuai dua Card placeholder di halaman publik
-  balai_desa_photo_file: null,
-  kegiatan_warga_photo_file: null,
+  history_id: null,
+  year_founded: null,
+  title: '',
+  point_1: '',
+  point_2: '',
+  point_3: '',
+  status: 'Draft',
+  published_at: null,
 })
 
 const statusOpen = ref(true)
@@ -51,14 +40,55 @@ const statusDisplay = computed(() => (
   statusOptions.find((item) => item.value === form.status)?.label ?? form.status
 ))
 
-// --- Paragraf Milestone: list custom, reorder pakai tombol kecil per-item ---
-const newMilestone = ref('')
+// Galeri foto: dukung banyak file. Setiap item = { id, file, preview }
+// Kalau data lama sudah ada foto (array url), tampilkan dulu sebagai preview tanpa file asli.
+const photos = ref(
+  []
+)
+const fileUploadRef = ref(null)
 
-function addMilestone() {
-  const text = newMilestone.value.trim()
-  if (!text) return
-  form.milestones.push(toMilestoneItem(text))
-  newMilestone.value = ''
+function loadExisting(history) {
+  if (!history) return
+  Object.assign(form, {
+    history_id: history.history_id,
+    year_founded: history.year_founded ?? null,
+    title: history.title ?? '',
+    point_1: history.points?.[0] ?? '',
+    point_2: history.points?.[1] ?? '',
+    point_3: history.points?.[2] ?? '',
+    status: history.status ?? 'Draft',
+    published_at: history.published_at ?? null,
+  })
+  photos.value = (history.photos ?? []).map((url, index) => ({
+    id: `existing-${index}`,
+    file: null,
+    preview: url,
+  }))
+}
+
+onMounted(async () => {
+  try {
+    const histories = await getHistories()
+    loadExisting(histories[0])
+  } catch (error) {
+    toast.add({ severity: 'error', summary: error.response?.data?.message ?? 'Gagal memuat data sejarah', life: 3000 })
+  }
+})
+
+function handleFilesSelect(event) {
+  const files = event.files ?? []
+  files.forEach((file) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      photos.value.push({
+        id: `photo-${crypto.randomUUID()}`,
+        file,
+        preview: reader.result,
+      })
+    }
+    reader.readAsDataURL(file)
+  })
+  fileUploadRef.value?.clear()
 }
 
 function removeMilestone(index) {
@@ -137,17 +167,25 @@ async function persist(nextStatus) {
       form.published_at = new Date().toISOString().slice(0, 10)
     }
 
-    historyContent.value = {
-      profile_content_id: form.profile_content_id ?? Date.now(),
-      title: form.title,
-      year: form.year,
-      milestones,
-      balai_desa_photo: balaiDesaPhoto.preview.value ?? '',
-      kegiatan_warga_photo: kegiatanWargaPhoto.preview.value ?? '',
-      status: form.status,
-      published_at: form.published_at,
-    }
-    form.profile_content_id = historyContent.value.profile_content_id
+    const files = photos.value
+      .filter((photo) => photo.file)
+      .map((photo) => ({ token: photo.id, file: photo.file }))
+    const photoValues = photos.value.map((photo) => (
+      photo.file ? `upload:${photo.id}` : photo.preview
+    ))
+    const saved = await saveHistory({
+      id: form.history_id,
+      payload: {
+        title: form.title.trim(),
+        year_founded: form.year_founded,
+        status: form.status,
+        published_at: form.published_at,
+        points: [form.point_1, form.point_2, form.point_3],
+        photos: photoValues,
+      },
+      files,
+    })
+    loadExisting(saved)
 
     toast.add({ severity: 'success', summary: 'Berhasil disimpan', life: 2000 })
   } finally {

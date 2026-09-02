@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 
@@ -12,10 +12,22 @@ import Dialog from 'primevue/dialog'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 
-import { orgStructureContent } from './villageProfileData'
+import {
+  getOrganizationalStructures,
+  saveOrganizationalStructure,
+} from '@/services/profile.service'
 
 const toast = useToast()
-const confirm = useConfirm()
+const saving = ref(false)
+
+const isEdit = computed(() => !!form.organizational_structure_id)
+const pageTitle = computed(() => (isEdit.value ? 'Edit Struktur Organisasi' : 'Tambah Struktur Organisasi'))
+const mainButtonLabel = computed(() => (isEdit.value ? 'Perbarui' : 'Terbitkan'))
+
+const statusOptions = [
+  { label: 'Draft', value: 'Draft' },
+  { label: 'Terbit', value: 'Published' },
+]
 
 /* Daftar jabatan bawaan, sesuai struktur yang ditampilkan di halaman publik.
    `level` menentukan pengelompokan, `pimpinan`/`slider`/`centerOnDesktop`
@@ -45,7 +57,7 @@ const JABATAN_OPTIONS = [
 ]
 
 function uid() {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
+  return crypto.randomUUID()
 }
 
 function initials(name) {
@@ -60,8 +72,7 @@ function initials(name) {
 /* Jabatan kustom yang pernah ditambahkan admin (di luar JABATAN_OPTIONS).
    Kalau sedang mengedit konten lama, rekonstruksi ulang dari data levels
    yang tersimpan supaya tetap muncul di pilihan Select. */
-function seedCustomJabatan() {
-  const existingLevels = orgStructureContent.value?.levels
+function seedCustomJabatan(existingLevels = []) {
   if (!Array.isArray(existingLevels)) return []
   const custom = []
   existingLevels.forEach((lvl) => {
@@ -81,7 +92,7 @@ function seedCustomJabatan() {
   return custom
 }
 
-const customJabatan = reactive(seedCustomJabatan())
+const customJabatan = reactive([])
 const allJabatanOptions = computed(() => [...JABATAN_OPTIONS, ...customJabatan])
 const existingLevelChoices = computed(() => {
   const seen = new Set()
@@ -124,10 +135,9 @@ function confirmAddJabatan() {
   cancelAddJabatan()
 }
 
-/* Ratakan data levels (kalau konten sudah ada sebelumnya) jadi daftar
-   orang datar, supaya cocok dengan bentuk tabel CRUD. */
-function seedPeople() {
-  const existingLevels = orgStructureContent.value?.levels
+/* Ratakan data levels (kalau sedang edit konten yang sudah ada) jadi daftar
+   orang datar, supaya cocok dengan bentuk form yang baru. */
+function seedPeople(existingLevels = []) {
   if (Array.isArray(existingLevels) && existingLevels.length) {
     return existingLevels.flatMap((lvl) =>
       (lvl.people ?? []).map((p) => ({
@@ -136,20 +146,80 @@ function seedPeople() {
         nama: p.name ?? '',
         desc: p.desc ?? '',
         photo: p.photo ?? null,
+        photoFile: null,
       }))
     )
   }
-  return []
+  return [{ id: uid(), jabatan: null, nama: '', desc: '', photo: null, photoFile: null }]
 }
 
-/* people = satu-satunya sumber data tabel. title/status tidak lagi
-   diedit lewat UI — dipertahankan apa adanya dari data sebelumnya
-   supaya bentuk data yang dikirim ke orgStructureContent tetap sama. */
-const people = ref(seedPeople())
-const metaTitle = orgStructureContent.value?.title ?? 'Struktur Organisasi Pemerintah Desa'
-const metaStatus = orgStructureContent.value?.status ?? 'Published'
-let metaPublishedAt = orgStructureContent.value?.published_at ?? null
-let metaProfileContentId = orgStructureContent.value?.profile_content_id ?? null
+const form = reactive({
+  organizational_structure_id: null,
+  title: 'Struktur Organisasi Pemerintah Desa',
+  status: 'Draft',
+  published_at: null,
+  people: seedPeople(),
+})
+
+function loadExisting(content) {
+  if (!content) return
+  Object.assign(form, {
+    organizational_structure_id: content.organizational_structure_id,
+    title: content.title ?? 'Struktur Organisasi Pemerintah Desa',
+    status: content.status ?? 'Draft',
+    published_at: content.published_at ?? null,
+  })
+  customJabatan.splice(0, customJabatan.length, ...seedCustomJabatan(content.levels ?? []))
+  form.people = seedPeople(content.levels ?? [])
+}
+
+onMounted(async () => {
+  try {
+    const structures = await getOrganizationalStructures()
+    loadExisting(structures[0])
+  } catch (error) {
+    toast.add({ severity: 'error', summary: error.response?.data?.message ?? 'Gagal memuat struktur organisasi', life: 3000 })
+  }
+})
+
+const statusOpen = ref(true)
+const statusDisplay = computed(() => (
+  statusOptions.find((item) => item.value === form.status)?.label ?? form.status
+))
+
+/* ---- Baris orang ---- */
+function addPerson() {
+  form.people.push({ id: uid(), jabatan: null, nama: '', desc: '', photo: null, photoFile: null })
+}
+function removePerson(personId) {
+  form.people = form.people.filter((p) => p.id !== personId)
+}
+
+/* ---- Unggah foto per orang (satu input file tersembunyi, dipakai bersama) ---- */
+const globalFileInput = ref(null)
+const pendingPhotoTarget = ref(null)
+
+function triggerPersonPhoto(personId) {
+  pendingPhotoTarget.value = personId
+  globalFileInput.value?.click()
+}
+
+function onGlobalFileChange(event) {
+  const file = event.target.files?.[0]
+  const targetId = pendingPhotoTarget.value
+  event.target.value = ''
+  if (!file || !targetId) return
+
+  const person = form.people.find((p) => p.id === targetId)
+  if (!person) return
+
+  const reader = new FileReader()
+  reader.onload = () => {
+    person.photo = reader.result
+    person.photoFile = file
+  }
+  reader.readAsDataURL(file)
+}
 
 /* ---- Kelompokkan daftar orang datar menjadi levels sesuai urutan &
    gaya kartu yang dipakai halaman publik ---- */
@@ -174,7 +244,12 @@ function buildLevels() {
     if (!p.jabatan || !p.nama.trim()) return
     const opt = options.find((o) => o.label === p.jabatan)
     if (!opt) return
-    buckets.get(opt.level).push({ name: p.nama, title: p.jabatan, desc: p.desc || '', photo: p.photo })
+    buckets.get(opt.level).push({
+      name: p.nama,
+      title: p.jabatan,
+      desc: p.desc || '',
+      photo: p.photoFile ? `upload:${p.id}` : p.photo,
+    })
   })
 
   return order
@@ -264,9 +339,20 @@ function savePersonDialog() {
     toast.add({ severity: 'success', summary: 'Pamong ditambahkan', life: 2000 })
   }
 
-  syncToStore()
-  closePersonDialog()
-}
+    const files = form.people
+      .filter((person) => person.photoFile)
+      .map((person) => ({ token: person.id, file: person.photoFile }))
+    const saved = await saveOrganizationalStructure({
+      id: form.organizational_structure_id,
+      payload: {
+        title: form.title.trim(),
+        status: form.status,
+        published_at: form.published_at,
+        levels: buildLevels(),
+      },
+      files,
+    })
+    loadExisting(saved)
 
 function deletePerson(person) {
   confirm.require({
@@ -516,10 +602,3 @@ function onPersonPhotoChange(event) {
     </Dialog>
   </div>
 </template>
-
-<style scoped>
-
-:deep(.p-avatar img) {
-  object-fit: cover;
-}
-</style>
