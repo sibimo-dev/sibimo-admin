@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
 
 import InputText from 'primevue/inputtext'
@@ -8,12 +8,15 @@ import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Avatar from 'primevue/avatar'
 
-import { orgStructureContent } from './villageProfileData'
+import {
+  getOrganizationalStructures,
+  saveOrganizationalStructure,
+} from '@/services/profile.service'
 
 const toast = useToast()
 const saving = ref(false)
 
-const isEdit = computed(() => orgStructureContent.value !== null)
+const isEdit = computed(() => !!form.organizational_structure_id)
 const pageTitle = computed(() => (isEdit.value ? 'Edit Struktur Organisasi' : 'Tambah Struktur Organisasi'))
 const mainButtonLabel = computed(() => (isEdit.value ? 'Perbarui' : 'Terbitkan'))
 
@@ -50,7 +53,7 @@ const JABATAN_OPTIONS = [
 ]
 
 function uid() {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
+  return crypto.randomUUID()
 }
 
 function initials(name) {
@@ -65,8 +68,7 @@ function initials(name) {
 /* Jabatan kustom yang pernah ditambahkan admin (di luar JABATAN_OPTIONS).
    Kalau sedang mengedit konten lama, rekonstruksi ulang dari data levels
    yang tersimpan supaya tetap muncul di pilihan Select. */
-function seedCustomJabatan() {
-  const existingLevels = orgStructureContent.value?.levels
+function seedCustomJabatan(existingLevels = []) {
   if (!Array.isArray(existingLevels)) return []
   const custom = []
   existingLevels.forEach((lvl) => {
@@ -86,7 +88,7 @@ function seedCustomJabatan() {
   return custom
 }
 
-const customJabatan = reactive(seedCustomJabatan())
+const customJabatan = reactive([])
 const allJabatanOptions = computed(() => [...JABATAN_OPTIONS, ...customJabatan])
 const existingLevelChoices = computed(() => {
   const seen = new Set()
@@ -131,8 +133,7 @@ function confirmAddJabatan() {
 
 /* Ratakan data levels (kalau sedang edit konten yang sudah ada) jadi daftar
    orang datar, supaya cocok dengan bentuk form yang baru. */
-function seedPeople() {
-  const existingLevels = orgStructureContent.value?.levels
+function seedPeople(existingLevels = []) {
   if (Array.isArray(existingLevels) && existingLevels.length) {
     return existingLevels.flatMap((lvl) =>
       (lvl.people ?? []).map((p) => ({
@@ -141,18 +142,40 @@ function seedPeople() {
         nama: p.name ?? '',
         desc: p.desc ?? '',
         photo: p.photo ?? null,
+        photoFile: null,
       }))
     )
   }
-  return [{ id: uid(), jabatan: null, nama: '', desc: '', photo: null }]
+  return [{ id: uid(), jabatan: null, nama: '', desc: '', photo: null, photoFile: null }]
 }
 
 const form = reactive({
-  profile_content_id: orgStructureContent.value?.profile_content_id ?? null,
-  title: orgStructureContent.value?.title ?? 'Struktur Organisasi Pemerintah Desa',
-  status: orgStructureContent.value?.status ?? 'Draft',
-  published_at: orgStructureContent.value?.published_at ?? null,
+  organizational_structure_id: null,
+  title: 'Struktur Organisasi Pemerintah Desa',
+  status: 'Draft',
+  published_at: null,
   people: seedPeople(),
+})
+
+function loadExisting(content) {
+  if (!content) return
+  Object.assign(form, {
+    organizational_structure_id: content.organizational_structure_id,
+    title: content.title ?? 'Struktur Organisasi Pemerintah Desa',
+    status: content.status ?? 'Draft',
+    published_at: content.published_at ?? null,
+  })
+  customJabatan.splice(0, customJabatan.length, ...seedCustomJabatan(content.levels ?? []))
+  form.people = seedPeople(content.levels ?? [])
+}
+
+onMounted(async () => {
+  try {
+    const structures = await getOrganizationalStructures()
+    loadExisting(structures[0])
+  } catch (error) {
+    toast.add({ severity: 'error', summary: error.response?.data?.message ?? 'Gagal memuat struktur organisasi', life: 3000 })
+  }
 })
 
 const statusOpen = ref(true)
@@ -162,7 +185,7 @@ const statusDisplay = computed(() => (
 
 /* ---- Baris orang ---- */
 function addPerson() {
-  form.people.push({ id: uid(), jabatan: null, nama: '', desc: '', photo: null })
+  form.people.push({ id: uid(), jabatan: null, nama: '', desc: '', photo: null, photoFile: null })
 }
 function removePerson(personId) {
   form.people = form.people.filter((p) => p.id !== personId)
@@ -189,6 +212,7 @@ function onGlobalFileChange(event) {
   const reader = new FileReader()
   reader.onload = () => {
     person.photo = reader.result
+    person.photoFile = file
   }
   reader.readAsDataURL(file)
 }
@@ -216,7 +240,12 @@ function buildLevels() {
     if (!p.jabatan || !p.nama.trim()) return
     const opt = options.find((o) => o.label === p.jabatan)
     if (!opt) return
-    buckets.get(opt.level).push({ name: p.nama, title: p.jabatan, desc: p.desc || '', photo: p.photo })
+    buckets.get(opt.level).push({
+      name: p.nama,
+      title: p.jabatan,
+      desc: p.desc || '',
+      photo: p.photoFile ? `upload:${p.id}` : p.photo,
+    })
   })
 
   return order
@@ -243,14 +272,20 @@ async function persist(nextStatus) {
       form.published_at = new Date().toISOString().slice(0, 10)
     }
 
-    orgStructureContent.value = {
-      profile_content_id: form.profile_content_id ?? Date.now(),
-      title: form.title,
-      levels: buildLevels(),
-      status: form.status,
-      published_at: form.published_at,
-    }
-    form.profile_content_id = orgStructureContent.value.profile_content_id
+    const files = form.people
+      .filter((person) => person.photoFile)
+      .map((person) => ({ token: person.id, file: person.photoFile }))
+    const saved = await saveOrganizationalStructure({
+      id: form.organizational_structure_id,
+      payload: {
+        title: form.title.trim(),
+        status: form.status,
+        published_at: form.published_at,
+        levels: buildLevels(),
+      },
+      files,
+    })
+    loadExisting(saved)
 
     toast.add({ severity: 'success', summary: 'Berhasil disimpan', life: 2000 })
   } finally {

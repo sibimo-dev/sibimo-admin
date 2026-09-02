@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
 
 import InputText from 'primevue/inputtext'
@@ -10,12 +10,12 @@ import Button from 'primevue/button'
 import Card from 'primevue/card'
 import FileUpload from 'primevue/fileupload'
 
-import { historyContent } from './villageProfileData'
+import { getHistories, saveHistory } from '@/services/profile.service'
 
 const toast = useToast()
 const saving = ref(false)
 
-const isEdit = computed(() => historyContent.value !== null)
+const isEdit = computed(() => !!form.history_id)
 
 const pageTitle = computed(() => (isEdit.value ? 'Edit Sejarah' : 'Tambah Sejarah'))
 const mainButtonLabel = computed(() => (isEdit.value ? 'Perbarui' : 'Terbitkan'))
@@ -25,18 +25,15 @@ const statusOptions = [
   { label: 'Terbit', value: 'Published' },
 ]
 
-// Ambil 3 poin dari data lama (jika ada), fallback string kosong
-const existingPoints = historyContent.value?.points ?? ['', '', '']
-
 const form = reactive({
-  profile_content_id: historyContent.value?.profile_content_id ?? null,
-  year_founded: historyContent.value?.year_founded ?? null,
-  title: historyContent.value?.title ?? '',
-  point_1: existingPoints[0] ?? '',
-  point_2: existingPoints[1] ?? '',
-  point_3: existingPoints[2] ?? '',
-  status: historyContent.value?.status ?? 'Draft',
-  published_at: historyContent.value?.published_at ?? null,
+  history_id: null,
+  year_founded: null,
+  title: '',
+  point_1: '',
+  point_2: '',
+  point_3: '',
+  status: 'Draft',
+  published_at: null,
 })
 
 const statusOpen = ref(true)
@@ -47,13 +44,37 @@ const statusDisplay = computed(() => (
 // Galeri foto: dukung banyak file. Setiap item = { id, file, preview }
 // Kalau data lama sudah ada foto (array url), tampilkan dulu sebagai preview tanpa file asli.
 const photos = ref(
-  (historyContent.value?.photos ?? []).map((url, index) => ({
+  []
+)
+const fileUploadRef = ref(null)
+
+function loadExisting(history) {
+  if (!history) return
+  Object.assign(form, {
+    history_id: history.history_id,
+    year_founded: history.year_founded ?? null,
+    title: history.title ?? '',
+    point_1: history.points?.[0] ?? '',
+    point_2: history.points?.[1] ?? '',
+    point_3: history.points?.[2] ?? '',
+    status: history.status ?? 'Draft',
+    published_at: history.published_at ?? null,
+  })
+  photos.value = (history.photos ?? []).map((url, index) => ({
     id: `existing-${index}`,
     file: null,
     preview: url,
   }))
-)
-const fileUploadRef = ref(null)
+}
+
+onMounted(async () => {
+  try {
+    const histories = await getHistories()
+    loadExisting(histories[0])
+  } catch (error) {
+    toast.add({ severity: 'error', summary: error.response?.data?.message ?? 'Gagal memuat data sejarah', life: 3000 })
+  }
+})
 
 function handleFilesSelect(event) {
   const files = event.files ?? []
@@ -61,7 +82,7 @@ function handleFilesSelect(event) {
     const reader = new FileReader()
     reader.onload = () => {
       photos.value.push({
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id: `photo-${crypto.randomUUID()}`,
         file,
         preview: reader.result,
       })
@@ -105,16 +126,25 @@ async function persist(nextStatus) {
       form.published_at = new Date().toISOString().slice(0, 10)
     }
 
-    historyContent.value = {
-      profile_content_id: form.profile_content_id ?? Date.now(),
-      year_founded: form.year_founded,
-      title: form.title,
-      points: [form.point_1, form.point_2, form.point_3],
-      photos: photos.value.map((photo) => photo.preview),
-      status: form.status,
-      published_at: form.published_at,
-    }
-    form.profile_content_id = historyContent.value.profile_content_id
+    const files = photos.value
+      .filter((photo) => photo.file)
+      .map((photo) => ({ token: photo.id, file: photo.file }))
+    const photoValues = photos.value.map((photo) => (
+      photo.file ? `upload:${photo.id}` : photo.preview
+    ))
+    const saved = await saveHistory({
+      id: form.history_id,
+      payload: {
+        title: form.title.trim(),
+        year_founded: form.year_founded,
+        status: form.status,
+        published_at: form.published_at,
+        points: [form.point_1, form.point_2, form.point_3],
+        photos: photoValues,
+      },
+      files,
+    })
+    loadExisting(saved)
 
     toast.add({ severity: 'success', summary: 'Berhasil disimpan', life: 2000 })
   } finally {

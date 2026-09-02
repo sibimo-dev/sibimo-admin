@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
 
 import InputText from 'primevue/inputtext'
@@ -9,12 +9,12 @@ import Select from 'primevue/select'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 
-import { visionMissionContent } from './villageProfileData'
+import { getVisionMissions, saveVisionMission } from '@/services/profile.service'
 
 const toast = useToast()
 const saving = ref(false)
 
-const isEdit = computed(() => visionMissionContent.value !== null)
+const isEdit = computed(() => !!form.vision_mission_id)
 
 const pageTitle = computed(() => (isEdit.value ? 'Edit Visi & Misi' : 'Tambah Visi & Misi'))
 const mainButtonLabel = computed(() => (isEdit.value ? 'Perbarui' : 'Terbitkan'))
@@ -28,30 +28,49 @@ const MIN_MISSIONS = 4
 
 function createMissionItem(text = '') {
   return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: `mission-${crypto.randomUUID()}`,
     text,
   }
 }
 
-const existingMissions = visionMissionContent.value?.missions ?? []
-const initialMissions = existingMissions.length
-  ? existingMissions.map((text) => createMissionItem(text))
-  : Array.from({ length: MIN_MISSIONS }, () => createMissionItem())
-
 const form = reactive({
-  profile_content_id: visionMissionContent.value?.profile_content_id ?? null,
-  title: visionMissionContent.value?.title ?? '',
-  vision: visionMissionContent.value?.vision ?? visionMissionContent.value?.content ?? '',
-  status: visionMissionContent.value?.status ?? 'Draft',
-  published_at: visionMissionContent.value?.published_at ?? null,
+  vision_mission_id: null,
+  title: '',
+  vision: '',
+  status: 'Draft',
+  published_at: null,
 })
 
-const missions = ref(initialMissions)
+const missions = ref(Array.from({ length: MIN_MISSIONS }, () => createMissionItem()))
 
 const statusOpen = ref(true)
 const statusDisplay = computed(() => (
   statusOptions.find((item) => item.value === form.status)?.label ?? form.status
 ))
+
+function loadExisting(visionMission) {
+  if (!visionMission) return
+  Object.assign(form, {
+    vision_mission_id: visionMission.vision_mission_id,
+    title: visionMission.title ?? '',
+    vision: visionMission.vision ?? '',
+    status: visionMission.status ?? 'Draft',
+    published_at: visionMission.published_at ?? null,
+  })
+  const existingMissions = Array.isArray(visionMission.missions) ? visionMission.missions : []
+  missions.value = existingMissions.length
+    ? existingMissions.map((text) => createMissionItem(text))
+    : Array.from({ length: MIN_MISSIONS }, () => createMissionItem())
+}
+
+onMounted(async () => {
+  try {
+    const visionMissions = await getVisionMissions()
+    loadExisting(visionMissions[0])
+  } catch (error) {
+    toast.add({ severity: 'error', summary: error.response?.data?.message ?? 'Gagal memuat data visi dan misi', life: 3000 })
+  }
+})
 
 // Kelola daftar Misi
 function addMission() {
@@ -88,15 +107,17 @@ async function persist(nextStatus) {
       form.published_at = new Date().toISOString().slice(0, 10)
     }
 
-    visionMissionContent.value = {
-      profile_content_id: form.profile_content_id ?? Date.now(),
-      title: form.title,
-      vision: form.vision,
-      missions: filledMissions,
-      status: form.status,
-      published_at: form.published_at,
-    }
-    form.profile_content_id = visionMissionContent.value.profile_content_id
+    const saved = await saveVisionMission({
+      id: form.vision_mission_id,
+      payload: {
+        title: form.title.trim(),
+        status: form.status,
+        published_at: form.published_at,
+        vision: form.vision,
+        missions: filledMissions,
+      },
+    })
+    loadExisting(saved)
 
     toast.add({ severity: 'success', summary: 'Berhasil disimpan', life: 2000 })
   } finally {
