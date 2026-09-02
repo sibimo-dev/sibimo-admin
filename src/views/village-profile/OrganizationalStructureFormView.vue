@@ -1,12 +1,16 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
+import { useConfirm } from 'primevue/useconfirm'
 
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Avatar from 'primevue/avatar'
+import Dialog from 'primevue/dialog'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
 
 import {
   getOrganizationalStructures,
@@ -102,7 +106,7 @@ const existingLevelChoices = computed(() => {
   return list
 })
 
-/* ---- Form tambah jabatan baru ---- */
+/* ---- Form tambah opsi jabatan baru (bukan anggotanya) ---- */
 const showAddJabatan = ref(false)
 const newJabatan = reactive({ nama: '', level: null })
 
@@ -236,7 +240,7 @@ function buildLevels() {
   })
 
   const buckets = new Map(order.map((lvl) => [lvl, []]))
-  form.people.forEach((p) => {
+  people.value.forEach((p) => {
     if (!p.jabatan || !p.nama.trim()) return
     const opt = options.find((o) => o.label === p.jabatan)
     if (!opt) return
@@ -253,24 +257,87 @@ function buildLevels() {
     .map((lvl) => ({ level: lvl, ...levelMeta.get(lvl), people: buckets.get(lvl) }))
 }
 
-/* ---- Simpan ---- */
-async function persist(nextStatus) {
-  if (!form.title.trim()) {
-    toast.add({ severity: 'error', summary: 'Judul wajib diisi', life: 2500 })
-    return
+/* Setiap aksi CRUD langsung ditulis ke orgStructureContent — tidak ada
+   tombol "Simpan Draft" / "Terbitkan" terpisah lagi. */
+function syncToStore() {
+  if (!metaPublishedAt) {
+    metaPublishedAt = new Date().toISOString().slice(0, 10)
   }
-  const incomplete = form.people.some((p) => (p.jabatan && !p.nama.trim()) || (!p.jabatan && p.nama.trim()))
-  if (incomplete) {
-    toast.add({ severity: 'error', summary: 'Lengkapi jabatan dan nama pada setiap baris', life: 2500 })
+  metaProfileContentId = metaProfileContentId ?? Date.now()
+
+  orgStructureContent.value = {
+    profile_content_id: metaProfileContentId,
+    title: metaTitle,
+    levels: buildLevels(),
+    status: metaStatus,
+    published_at: metaPublishedAt,
+  }
+}
+
+/* ========================================================================
+   CRUD anggota struktur organisasi — daftar (DataTable) + modal (Dialog)
+   ======================================================================== */
+
+const selectedPeople = ref([])
+
+const personDialogVisible = ref(false)
+const editingPersonId = ref(null)
+const personDialogTitle = computed(() => (editingPersonId.value ? 'Edit Pamong' : 'Tambah Pamong'))
+
+const emptyPersonForm = () => ({ jabatan: null, nama: '', desc: '', photo: null })
+const personForm = reactive(emptyPersonForm())
+
+function openNewPerson() {
+  editingPersonId.value = null
+  Object.assign(personForm, emptyPersonForm())
+  personDialogVisible.value = true
+}
+
+function openEditPerson(person) {
+  editingPersonId.value = person.id
+  Object.assign(personForm, {
+    jabatan: person.jabatan,
+    nama: person.nama,
+    desc: person.desc,
+    photo: person.photo,
+  })
+  personDialogVisible.value = true
+}
+
+function closePersonDialog() {
+  personDialogVisible.value = false
+  editingPersonId.value = null
+  Object.assign(personForm, emptyPersonForm())
+}
+
+function savePersonDialog() {
+  const nama = personForm.nama.trim()
+  if (!personForm.jabatan || !nama) {
+    toast.add({ severity: 'error', summary: 'Jabatan dan nama wajib diisi', life: 2500 })
     return
   }
 
-  form.status = nextStatus
-  saving.value = true
-  try {
-    if (form.status === 'Published' && !form.published_at) {
-      form.published_at = new Date().toISOString().slice(0, 10)
+  if (editingPersonId.value) {
+    // Reassign array (bukan mutasi in-place) supaya tabel pasti langsung refresh.
+    people.value = people.value.map((p) =>
+      p.id === editingPersonId.value
+        ? { ...p, jabatan: personForm.jabatan, nama, desc: personForm.desc.trim(), photo: personForm.photo }
+        : p
+    )
+    toast.add({ severity: 'success', summary: 'Pamong diperbarui', life: 2000 })
+  } else {
+    const newPerson = {
+      id: uid(),
+      jabatan: personForm.jabatan,
+      nama,
+      desc: personForm.desc.trim(),
+      photo: personForm.photo,
     }
+    // Reassign array (bukan .push) supaya perubahan pasti terdeteksi dan
+    // anggota baru langsung muncul di DataTable.
+    people.value = [...people.value, newPerson]
+    toast.add({ severity: 'success', summary: 'Pamong ditambahkan', life: 2000 })
+  }
 
     const files = form.people
       .filter((person) => person.photoFile)
@@ -287,150 +354,251 @@ async function persist(nextStatus) {
     })
     loadExisting(saved)
 
-    toast.add({ severity: 'success', summary: 'Berhasil disimpan', life: 2000 })
-  } finally {
-    saving.value = false
-  }
+function deletePerson(person) {
+  confirm.require({
+    message: `Hapus "${person.nama}" dari struktur organisasi?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: () => {
+      people.value = people.value.filter((p) => p.id !== person.id)
+      selectedPeople.value = selectedPeople.value.filter((p) => p.id !== person.id)
+      syncToStore()
+      toast.add({ severity: 'success', summary: 'Pamong dihapus', life: 2000 })
+    },
+  })
 }
 
-function saveDraft() {
-  persist('Draft')
+function deleteSelectedPeople() {
+  if (!selectedPeople.value.length) return
+  confirm.require({
+    message: `Hapus ${selectedPeople.value.length} pamong terpilih?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: () => {
+      const idsToRemove = new Set(selectedPeople.value.map((p) => p.id))
+      people.value = people.value.filter((p) => !idsToRemove.has(p.id))
+      selectedPeople.value = []
+      syncToStore()
+      toast.add({ severity: 'success', summary: 'Pamong terpilih dihapus', life: 2000 })
+    },
+  })
 }
-function saveMain() {
-  persist(isEdit.value ? form.status : 'Published')
+
+/* ---- Unggah foto (dipakai di dalam modal) ---- */
+const personPhotoInput = ref(null)
+
+function triggerPersonPhotoUpload() {
+  personPhotoInput.value?.click()
+}
+
+function onPersonPhotoChange(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = () => {
+    personForm.photo = reader.result
+  }
+  reader.readAsDataURL(file)
 }
 </script>
 
 <template>
   <div class="min-h-full text-slate-800">
-    <input ref="globalFileInput" type="file" accept="image/*" class="hidden" @change="onGlobalFileChange" />
-
     <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-      <h1 class="m-0 text-[22px] font-bold text-slate-900">{{ pageTitle }}</h1>
+      <h1 class="m-0 text-[22px] font-bold text-slate-900">Struktur Organisasi</h1>
     </div>
 
-    <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
-      <div class="flex flex-col gap-5">
-        <Card>
-          <template #content>
-            <div class="flex flex-col gap-2">
-              <label for="title" class="text-[13px] font-semibold text-slate-700">Judul</label>
-              <InputText id="title" v-model="form.title" placeholder="Judul" fluid />
+    <Card>
+      <template #title>
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-semibold text-slate-700">Daftar Pamong Kalurahan</span>
+          <Button
+            v-if="!showAddJabatan"
+            label="Tambah Jabatan Baru"
+            icon="pi pi-plus-circle"
+            text
+            size="small"
+            @click="openAddJabatan"
+          />
+        </div>
+      </template>
+      <template #content>
+        <!-- Form tambah opsi jabatan baru (bukan anggota) -->
+        <div v-if="showAddJabatan" class="mb-4 flex flex-col gap-3 rounded-lg border border-dashed border-blue-200 bg-blue-50/40 p-3">
+          <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs font-semibold text-slate-600">Nama Jabatan Baru</label>
+              <InputText v-model="newJabatan.nama" placeholder="mis. Bendahara Desa" size="small" />
             </div>
-          </template>
-        </Card>
-
-        <Card>
-          <template #title>
-            <div class="flex items-center justify-between">
-              <span class="text-sm font-semibold text-slate-700">Struktur Organisasi</span>
-              <Button
-                v-if="!showAddJabatan"
-                label="Tambah Jabatan Baru"
-                icon="pi pi-plus-circle"
-                text
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs font-semibold text-slate-600">Kelompok / Level</label>
+              <Select
+                v-model="newJabatan.level"
+                :options="existingLevelChoices"
+                optionLabel="label"
+                optionValue="value"
+                editable
+                filter
+                placeholder="Pilih kelompok yang ada atau ketik kelompok baru"
                 size="small"
-                @click="openAddJabatan"
               />
             </div>
-          </template>
-          <template #content>
-            <!-- Form tambah jabatan baru -->
-            <div v-if="showAddJabatan" class="mb-4 flex flex-col gap-3 rounded-lg border border-dashed border-blue-200 bg-blue-50/40 p-3">
-              <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                <div class="flex flex-col gap-1.5">
-                  <label class="text-xs font-semibold text-slate-600">Nama Jabatan Baru</label>
-                  <InputText v-model="newJabatan.nama" placeholder="mis. Bendahara Desa" size="small" />
-                </div>
-                <div class="flex flex-col gap-1.5">
-                  <label class="text-xs font-semibold text-slate-600">Kelompok / Level</label>
-                  <Select
-                    v-model="newJabatan.level"
-                    :options="existingLevelChoices"
-                    optionLabel="label"
-                    optionValue="value"
-                    editable
-                    filter
-                    placeholder="Pilih kelompok yang ada atau ketik kelompok baru"
-                    size="small"
-                  />
-                </div>
-              </div>
-              <div class="flex justify-end gap-2">
-                <Button label="Batal" text size="small" severity="secondary" @click="cancelAddJabatan" />
-                <Button label="Simpan Jabatan" icon="pi pi-check" size="small" @click="confirmAddJabatan" />
-              </div>
-            </div>
+          </div>
+          <div class="flex justify-end gap-2">
+            <Button label="Batal" text size="small" severity="secondary" @click="cancelAddJabatan" />
+            <Button label="Simpan Jabatan" icon="pi pi-check" size="small" @click="confirmAddJabatan" />
+          </div>
+        </div>
 
-            <div class="flex flex-col gap-2.5">
-              <div
-                v-for="person in form.people"
-                :key="person.id"
-                class="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50/60 p-3"
-              >
-                <div class="relative flex-none">
-                  <Avatar
-                    :image="person.photo || undefined"
-                    :label="!person.photo ? initials(person.nama) : undefined"
-                    shape="circle"
-                    size="large"
-                    class="!bg-blue-100 !text-blue-700"
-                  />
-                  <button
-                    type="button"
-                    class="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full bg-blue-600 text-white shadow"
-                    @click="triggerPersonPhoto(person.id)"
-                    aria-label="Unggah foto"
-                  >
-                    <i class="pi pi-camera text-[10px]" />
-                  </button>
-                </div>
+        <!-- Toolbar CRUD -->
+        <div class="mb-3 flex items-center gap-2">
+          <Button label="Tambah Pamong" icon="pi pi-plus" size="small" @click="openNewPerson" />
+          <Button
+            label="Hapus"
+            icon="pi pi-trash"
+            size="small"
+            severity="danger"
+            outlined
+            :disabled="!selectedPeople.length"
+            @click="deleteSelectedPeople"
+          />
+        </div>
 
-                <div class="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-2">
-                  <Select
-                    v-model="person.jabatan"
-                    :options="allJabatanOptions"
-                    optionLabel="label"
-                    optionValue="label"
-                    placeholder="Pilih jabatan"
-                    filter
-                    size="small"
-                  />
-                  <InputText v-model="person.nama" placeholder="Nama lengkap" size="small" />
-                  <InputText v-model="person.desc" placeholder="Deskripsi jabatan (opsional)" size="small" class="sm:col-span-2" />
-                </div>
-
-                <Button icon="pi pi-trash" text rounded size="small" severity="danger" @click="removePerson(person.id)" aria-label="Hapus baris" />
-              </div>
-
-              <Button label="Tambah Orang" icon="pi pi-user-plus" outlined size="small" class="self-start" @click="addPerson" />
+        <!-- Daftar anggota -->
+        <DataTable
+          v-model:selection="selectedPeople"
+          :value="people"
+          dataKey="id"
+          size="small"
+          stripedRows
+          :rows="10"
+          paginator
+          paginatorTemplate="PrevPageLink PageLinks NextPageLink"
+          responsiveLayout="scroll"
+        >
+          <template #empty>
+            <div class="py-6 text-center text-sm text-slate-400">
+              Belum ada pamong. Klik "Tambah Pamong" untuk mulai.
             </div>
           </template>
-        </Card>
+
+          <Column selectionMode="multiple" headerStyle="width: 3rem" />
+
+          <Column header="Foto" headerStyle="width: 4rem">
+            <template #body="{ data }">
+              <Avatar
+                :image="data.photo || undefined"
+                :label="!data.photo ? initials(data.nama) : undefined"
+                shape="circle"
+                class="!bg-blue-100 !text-blue-700"
+              />
+            </template>
+          </Column>
+
+          <Column field="jabatan" header="Jabatan">
+            <template #body="{ data }">
+              <span :class="{ 'text-slate-400 italic': !data.jabatan }">
+                {{ data.jabatan || 'Belum dipilih' }}
+              </span>
+            </template>
+          </Column>
+
+          <Column field="nama" header="Nama" />
+
+          <Column field="desc" header="Deskripsi">
+            <template #body="{ data }">
+              <span class="line-clamp-1 text-slate-500">{{ data.desc || '—' }}</span>
+            </template>
+          </Column>
+
+          <Column header="Aksi" headerStyle="width: 6rem">
+            <template #body="{ data }">
+              <div class="flex items-center gap-1">
+                <Button icon="pi pi-pencil" text rounded size="small" @click="openEditPerson(data)" aria-label="Edit pamong" />
+                <Button icon="pi pi-trash" text rounded size="small" severity="danger" @click="deletePerson(data)" aria-label="Hapus pamong" />
+              </div>
+            </template>
+          </Column>
+        </DataTable>
+      </template>
+    </Card>
+
+    <!-- Modal Tambah / Edit Anggota -->
+    <Dialog
+      v-model:visible="personDialogVisible"
+      modal
+      :header="personDialogTitle"
+      :style="{ width: '480px' }"
+      :closable="true"
+      @hide="closePersonDialog"
+    >
+      <input ref="personPhotoInput" type="file" accept="image/*" class="hidden" @change="onPersonPhotoChange" />
+
+      <div class="flex flex-col gap-4">
+        <!-- Upload foto: selebar field lain, preview jelas terlihat -->
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[13px] font-semibold text-slate-700">Foto</label>
+          <div class="relative w-full">
+            <div
+              class="flex h-44 w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 hover:border-blue-400"
+              @click="triggerPersonPhotoUpload"
+            >
+              <img v-if="personForm.photo" :src="personForm.photo" alt="Foto pamong" class="h-full w-full object-contain" />
+              <div v-else class="flex flex-col items-center gap-1.5 text-slate-400">
+                <i class="pi pi-camera text-2xl" />
+                <span class="text-xs font-medium">Upload Foto</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              class="absolute bottom-2 right-2 grid h-8 w-8 place-items-center rounded-full bg-blue-600 text-white shadow"
+              @click="triggerPersonPhotoUpload"
+              aria-label="Unggah foto"
+            >
+              <i class="pi pi-camera text-sm" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Jabatan (dropdown) -->
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[13px] font-semibold text-slate-700">Jabatan</label>
+          <Select
+            v-model="personForm.jabatan"
+            :options="allJabatanOptions"
+            optionLabel="label"
+            optionValue="label"
+            placeholder="Pilih jabatan"
+            filter
+            fluid
+          />
+        </div>
+
+        <!-- Nama (input text) -->
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[13px] font-semibold text-slate-700">Nama</label>
+          <InputText v-model="personForm.nama" placeholder="Nama lengkap" fluid />
+        </div>
+
+        <!-- Deskripsi (input text) -->
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[13px] font-semibold text-slate-700">Deskripsi</label>
+          <InputText v-model="personForm.desc" placeholder="Deskripsi jabatan (opsional)" fluid />
+        </div>
       </div>
 
-      <aside class="flex flex-col gap-3.5">
-        <Card>
-          <template #content>
-            <div class="flex gap-2.5">
-              <Button label="Simpan Draft" severity="secondary" outlined class="flex-1" :loading="saving" @click="saveDraft" />
-              <Button :label="mainButtonLabel" class="flex-1" :loading="saving" @click="saveMain" />
-            </div>
-          </template>
-        </Card>
-
-        <Card>
-          <template #content>
-            <div class="flex flex-col gap-3">
-              <button type="button" class="flex items-center justify-between text-left text-[13px] text-slate-700" @click="statusOpen = !statusOpen">
-                <span>Status: <strong>{{ statusDisplay }}</strong></span>
-                <i class="pi pi-chevron-down text-xs text-slate-400 transition-transform" :class="{ 'rotate-180': statusOpen }" />
-              </button>
-              <Select v-show="statusOpen" v-model="form.status" :options="statusOptions" optionLabel="label" optionValue="value" fluid />
-            </div>
-          </template>
-        </Card>
-      </aside>
-    </div>
+      <template #footer>
+        <Button label="Cancel" icon="pi pi-times" text severity="secondary" @click="closePersonDialog" />
+        <Button label="Save" icon="pi pi-check" @click="savePersonDialog" />
+      </template>
+    </Dialog>
   </div>
 </template>
