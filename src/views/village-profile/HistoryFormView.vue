@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useToast } from 'primevue/usetoast'
 
 import InputText from 'primevue/inputtext'
@@ -9,13 +9,17 @@ import Button from 'primevue/button'
 import Card from 'primevue/card'
 import FileUpload from 'primevue/fileupload'
 
-import { getHistories, saveHistory } from '@/services/profile.service'
+// TODO: API sejarah sudah direvisi dan bentuknya beda dari sebelumnya.
+// Sengaja TIDAK di-import dulu supaya halaman ini tidak error.
+// Saat API baru siap, sambungkan lagi di sini, mis:
+// import { getHistory, saveHistory } from '@/services/profile.service'
 
 const toast = useToast()
 const saving = ref(false)
 
-const isEdit = computed(() => !!form.history_id)
+const MIN_MILESTONES_TO_PUBLISH = 2
 
+const isEdit = computed(() => !!form.history_id)
 const pageTitle = computed(() => (isEdit.value ? 'Edit Sejarah' : 'Tambah Sejarah'))
 const mainButtonLabel = computed(() => (isEdit.value ? 'Perbarui' : 'Terbitkan'))
 
@@ -24,15 +28,14 @@ const statusOptions = [
   { label: 'Terbit', value: 'Published' },
 ]
 
+/* ---- Data lokal, kosong sampai API baru tersambung ---- */
 const form = reactive({
   history_id: null,
-  year_founded: null,
+  year: '',
   title: '',
-  point_1: '',
-  point_2: '',
-  point_3: '',
   status: 'Draft',
   published_at: null,
+  milestones: [],
 })
 
 const statusOpen = ref(true)
@@ -40,55 +43,14 @@ const statusDisplay = computed(() => (
   statusOptions.find((item) => item.value === form.status)?.label ?? form.status
 ))
 
-// Galeri foto: dukung banyak file. Setiap item = { id, file, preview }
-// Kalau data lama sudah ada foto (array url), tampilkan dulu sebagai preview tanpa file asli.
-const photos = ref(
-  []
-)
-const fileUploadRef = ref(null)
+/* ---- Paragraf Sejarah (milestone): tambah / hapus / ubah urutan ---- */
+const newMilestone = ref('')
 
-function loadExisting(history) {
-  if (!history) return
-  Object.assign(form, {
-    history_id: history.history_id,
-    year_founded: history.year_founded ?? null,
-    title: history.title ?? '',
-    point_1: history.points?.[0] ?? '',
-    point_2: history.points?.[1] ?? '',
-    point_3: history.points?.[2] ?? '',
-    status: history.status ?? 'Draft',
-    published_at: history.published_at ?? null,
-  })
-  photos.value = (history.photos ?? []).map((url, index) => ({
-    id: `existing-${index}`,
-    file: null,
-    preview: url,
-  }))
-}
-
-onMounted(async () => {
-  try {
-    const histories = await getHistories()
-    loadExisting(histories[0])
-  } catch (error) {
-    toast.add({ severity: 'error', summary: error.response?.data?.message ?? 'Gagal memuat data sejarah', life: 3000 })
-  }
-})
-
-function handleFilesSelect(event) {
-  const files = event.files ?? []
-  files.forEach((file) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      photos.value.push({
-        id: `photo-${crypto.randomUUID()}`,
-        file,
-        preview: reader.result,
-      })
-    }
-    reader.readAsDataURL(file)
-  })
-  fileUploadRef.value?.clear()
+function addMilestone() {
+  const text = newMilestone.value.trim()
+  if (!text) return
+  form.milestones.push({ id: `milestone-${crypto.randomUUID()}`, text })
+  newMilestone.value = ''
 }
 
 function removeMilestone(index) {
@@ -101,10 +63,9 @@ function moveMilestone(index, direction) {
   const list = form.milestones
   ;[list[index], list[target]] = [list[target], list[index]]
 }
-// --- end Paragraf Milestone ---
 
-// --- Upload Foto: dua slot terpisah, dibuat generik lewat factory function
-//     supaya logikanya tidak diduplikasi dua kali ---
+/* ---- Upload Foto: dua slot terpisah, dibuat generik lewat factory function
+     supaya logikanya tidak diduplikasi dua kali ---- */
 function usePhotoSlot(initialUrl, formKey) {
   const preview = ref(initialUrl || null)
   const uploadRef = ref(null)
@@ -139,19 +100,19 @@ function usePhotoSlot(initialUrl, formKey) {
   return { preview, uploadRef, handleSelect, handleValidationError, change, remove }
 }
 
-const balaiDesaPhoto = usePhotoSlot(historyContent.value?.balai_desa_photo, 'balai_desa_photo_file')
-const kegiatanWargaPhoto = usePhotoSlot(historyContent.value?.kegiatan_warga_photo, 'kegiatan_warga_photo_file')
-// --- end Upload Foto ---
+const balaiDesaPhoto = usePhotoSlot(null, 'balai_desa_photo_file')
+const kegiatanWargaPhoto = usePhotoSlot(null, 'kegiatan_warga_photo_file')
+/* ---- end Upload Foto ---- */
 
 async function persist(nextStatus) {
-  const milestones = form.milestones.map((m) => m.text.trim()).filter(Boolean)
+  const milestoneTexts = form.milestones.map((m) => m.text.trim()).filter(Boolean)
 
-  if (milestones.length === 0) {
+  if (milestoneTexts.length === 0) {
     toast.add({ severity: 'error', summary: 'Minimal isi 1 paragraf sejarah', life: 2500 })
     return
   }
 
-  if (nextStatus === 'Published' && milestones.length < MIN_MILESTONES_TO_PUBLISH) {
+  if (nextStatus === 'Published' && milestoneTexts.length < MIN_MILESTONES_TO_PUBLISH) {
     toast.add({
       severity: 'error',
       summary: `Minimal ${MIN_MILESTONES_TO_PUBLISH} paragraf sejarah untuk menerbitkan`,
@@ -167,27 +128,20 @@ async function persist(nextStatus) {
       form.published_at = new Date().toISOString().slice(0, 10)
     }
 
-    const files = photos.value
-      .filter((photo) => photo.file)
-      .map((photo) => ({ token: photo.id, file: photo.file }))
-    const photoValues = photos.value.map((photo) => (
-      photo.file ? `upload:${photo.id}` : photo.preview
-    ))
-    const saved = await saveHistory({
-      id: form.history_id,
-      payload: {
-        title: form.title.trim(),
-        year_founded: form.year_founded,
-        status: form.status,
-        published_at: form.published_at,
-        points: [form.point_1, form.point_2, form.point_3],
-        photos: photoValues,
-      },
-      files,
-    })
-    loadExisting(saved)
+    // TODO: ganti blok di bawah ini dengan pemanggilan saveHistory() dari API
+    // baru saat sudah siap. Payload yang perlu dikirim kira-kira:
+    // {
+    //   title: form.title.trim(),
+    //   year: form.year,
+    //   status: form.status,
+    //   published_at: form.published_at,
+    //   milestones: milestoneTexts,
+    //   balai_desa_photo_file: form.balai_desa_photo_file,
+    //   kegiatan_warga_photo_file: form.kegiatan_warga_photo_file,
+    // }
+    await new Promise((resolve) => setTimeout(resolve, 300)) // simulasi delay simpan
 
-    toast.add({ severity: 'success', summary: 'Berhasil disimpan', life: 2000 })
+    toast.add({ severity: 'success', summary: 'Perubahan disimpan (mode lokal, belum tersambung API)', life: 2500 })
   } finally {
     saving.value = false
   }
