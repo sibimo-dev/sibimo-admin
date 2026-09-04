@@ -12,13 +12,10 @@ import Dialog from 'primevue/dialog'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 
-// TODO: API struktur organisasi sudah direvisi dan bentuknya beda dari
-// sebelumnya. Sengaja TIDAK di-import dulu supaya halaman ini tidak error.
-// Saat API baru siap, sambungkan lagi di sini, mis:
-// import {
-//   getOrganizationalStructures,
-//   saveOrganizationalStructure,
-// } from '@/services/profile.service'
+import {
+  getOrganizationalStructures,
+  saveOrganizationalStructure,
+} from '@/services/profile.service'
 
 const toast = useToast()
 const confirm = useConfirm()
@@ -118,13 +115,75 @@ const form = reactive({
   people: [],
 })
 
-/* ---- Data lokal, kosong sampai API baru tersambung ---- */
-form.people = []
+function seedCustomJabatan(existingLevels = []) {
+  if (!Array.isArray(existingLevels)) return []
+
+  const custom = []
+  existingLevels.forEach((level) => {
+    ;(level.people ?? []).forEach((person) => {
+      const known = JABATAN_OPTIONS.some((option) => option.label === person.title)
+      if (!known && person.title && !custom.some((item) => item.label === person.title)) {
+        custom.push({
+          label: person.title,
+          level: level.level,
+          pimpinan: !!level.pimpinan,
+          slider: !!level.slider,
+          centerOnDesktop: !!level.centerOnDesktop,
+        })
+      }
+    })
+  })
+
+  return custom
+}
+
+function seedPeople(existingLevels = []) {
+  if (!Array.isArray(existingLevels)) return []
+
+  return existingLevels.flatMap((level) => (
+    (level.people ?? []).map((person) => ({
+      id: uid(),
+      jabatan: person.title ?? null,
+      nama: person.name ?? '',
+      desc: person.desc ?? '',
+      photo: person.photo ?? null,
+      photoFile: null,
+    }))
+  ))
+}
+
+function loadExisting(structure) {
+  if (!structure) return
+
+  Object.assign(form, {
+    organizational_structure_id: structure.organizational_structure_id,
+    title: structure.title ?? 'Struktur Organisasi Pemerintah Desa',
+    status: structure.status ?? 'Published',
+    published_at: structure.published_at ?? null,
+    people: seedPeople(structure.levels ?? []),
+  })
+  customJabatan.splice(0, customJabatan.length, ...seedCustomJabatan(structure.levels ?? []))
+}
+
+onMounted(async () => {
+  loading.value = true
+  try {
+    const structures = await getOrganizationalStructures()
+    loadExisting(structures[0])
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: error.response?.data?.message ?? 'Gagal memuat struktur organisasi',
+      life: 3000,
+    })
+  } finally {
+    loading.value = false
+  }
+})
 
 /* ========================================================================
    CRUD anggota struktur organisasi — daftar (DataTable) + modal (Dialog)
-   Semua perubahan disimpan di memory (form.people) selama API belum
-   tersambung; tidak ada request jaringan yang dikirim.
+   Setiap perubahan dikirim sebagai satu payload struktur ke API.
    ======================================================================== */
 
 const selectedPeople = ref([])
@@ -160,19 +219,81 @@ function closePersonDialog() {
   Object.assign(personForm, emptyPersonForm())
 }
 
-/* Simulasi "simpan ke server" - cukup delay singkat supaya loading state
-   tetap terasa natural. Ganti isi fungsi ini dengan pemanggilan
-   saveOrganizationalStructure() saat API baru sudah siap. */
+function buildLevels() {
+  const options = allJabatanOptions.value
+  const order = []
+  const levelMeta = new Map()
+
+  options.forEach((option) => {
+    if (!levelMeta.has(option.level)) {
+      order.push(option.level)
+      levelMeta.set(option.level, {
+        pimpinan: false,
+        slider: false,
+        centerOnDesktop: false,
+      })
+    }
+
+    const meta = levelMeta.get(option.level)
+    meta.pimpinan ||= !!option.pimpinan
+    meta.slider ||= !!option.slider
+    meta.centerOnDesktop ||= !!option.centerOnDesktop
+  })
+  closePersonDialog()
+}
+
+  const buckets = new Map(order.map((level) => [level, []]))
+  form.people.forEach((person) => {
+    if (!person.jabatan || !person.nama.trim()) return
+
+    const option = options.find((item) => item.label === person.jabatan)
+    if (!option) return
+
+    buckets.get(option.level).push({
+      name: person.nama.trim(),
+      title: person.jabatan,
+      desc: person.desc?.trim() ?? '',
+      photo: person.photoFile ? `upload:${person.id}` : person.photo,
+    })
+  })
+}
+
+  return order
+    .filter((level) => buckets.get(level)?.length)
+    .map((level) => ({
+      level,
+      ...levelMeta.get(level),
+      people: buckets.get(level),
+    }))
+}
+
 async function persistStructure() {
   saving.value = true
   try {
-    // TODO: sambungkan ke API baru di sini, contoh:
-    // await saveOrganizationalStructure({
-    //   id: form.organizational_structure_id,
-    //   payload: { title: form.title, status: form.status, people: form.people },
-    // })
-    await new Promise((resolve) => setTimeout(resolve, 200))
+    const files = form.people
+      .filter((person) => person.photoFile)
+      .map((person) => ({ token: person.id, file: person.photoFile }))
+
+    const saved = await saveOrganizationalStructure({
+      id: form.organizational_structure_id,
+      payload: {
+        title: form.title,
+        status: form.status,
+        published_at: form.published_at,
+        levels: buildLevels(),
+      },
+      files,
+    })
+
+    loadExisting(saved)
     return true
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: error.response?.data?.message ?? 'Gagal menyimpan struktur organisasi',
+      life: 3000,
+    })
+    return false
   } finally {
     saving.value = false
   }
@@ -212,11 +333,12 @@ async function savePersonDialog() {
     ]
   }
 
-  await persistStructure()
+  const saved = await persistStructure()
+  if (!saved) return
 
   toast.add({
     severity: 'success',
-    summary: (editingPersonId.value ? 'Pamong diperbarui' : 'Pamong ditambahkan') + ' (mode lokal, belum tersambung API)',
+    summary: editingPersonId.value ? 'Pamong diperbarui' : 'Pamong ditambahkan',
     life: 2500,
   })
   closePersonDialog()
@@ -234,8 +356,9 @@ function deletePerson(person) {
       form.people = form.people.filter((p) => p.id !== person.id)
       selectedPeople.value = selectedPeople.value.filter((p) => p.id !== person.id)
 
-      await persistStructure()
-      toast.add({ severity: 'success', summary: 'Pamong dihapus', life: 2000 })
+      if (await persistStructure()) {
+        toast.add({ severity: 'success', summary: 'Pamong dihapus', life: 2000 })
+      }
     },
   })
 }
@@ -254,8 +377,9 @@ function deleteSelectedPeople() {
       form.people = form.people.filter((p) => !idsToRemove.has(p.id))
       selectedPeople.value = []
 
-      await persistStructure()
-      toast.add({ severity: 'success', summary: 'Pamong terpilih dihapus', life: 2000 })
+      if (await persistStructure()) {
+        toast.add({ severity: 'success', summary: 'Pamong terpilih dihapus', life: 2000 })
+      }
     },
   })
 }

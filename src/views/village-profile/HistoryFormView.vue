@@ -36,6 +36,8 @@ const form = reactive({
   status: 'Draft',
   published_at: null,
   milestones: [],
+  balai_desa_photo_file: null,
+  kegiatan_warga_photo_file: null,
 })
 
 const statusOpen = ref(true)
@@ -104,8 +106,52 @@ const balaiDesaPhoto = usePhotoSlot(null, 'balai_desa_photo_file')
 const kegiatanWargaPhoto = usePhotoSlot(null, 'kegiatan_warga_photo_file')
 /* ---- end Upload Foto ---- */
 
+function loadExisting(history) {
+  if (!history) return
+
+  const photos = Array.isArray(history.photos) ? history.photos : []
+  Object.assign(form, {
+    history_id: history.history_id,
+    year: history.year_founded ?? '',
+    title: history.title ?? '',
+    status: history.status ?? 'Draft',
+    published_at: history.published_at ?? null,
+    milestones: (Array.isArray(history.points) ? history.points : []).map((text) => ({
+      id: `milestone-${crypto.randomUUID()}`,
+      text: text ?? '',
+    })),
+    balai_desa_photo_file: null,
+    kegiatan_warga_photo_file: null,
+  })
+  balaiDesaPhoto.preview.value = photos[0] ?? null
+  kegiatanWargaPhoto.preview.value = photos[1] ?? null
+}
+
+onMounted(async () => {
+  try {
+    const histories = await getHistories()
+    loadExisting(histories[0])
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: error.response?.data?.message ?? 'Gagal memuat data sejarah',
+      life: 3000,
+    })
+  }
+})
+
 async function persist(nextStatus) {
   const milestoneTexts = form.milestones.map((m) => m.text.trim()).filter(Boolean)
+
+  if (!form.title.trim()) {
+    toast.add({ severity: 'error', summary: 'Judul wajib diisi', life: 2500 })
+    return
+  }
+
+  if (!String(form.year).trim()) {
+    toast.add({ severity: 'error', summary: 'Tahun berdiri wajib diisi', life: 2500 })
+    return
+  }
 
   if (milestoneTexts.length === 0) {
     toast.add({ severity: 'error', summary: 'Minimal isi 1 paragraf sejarah', life: 2500 })
@@ -128,20 +174,37 @@ async function persist(nextStatus) {
       form.published_at = new Date().toISOString().slice(0, 10)
     }
 
-    // TODO: ganti blok di bawah ini dengan pemanggilan saveHistory() dari API
-    // baru saat sudah siap. Payload yang perlu dikirim kira-kira:
-    // {
-    //   title: form.title.trim(),
-    //   year: form.year,
-    //   status: form.status,
-    //   published_at: form.published_at,
-    //   milestones: milestoneTexts,
-    //   balai_desa_photo_file: form.balai_desa_photo_file,
-    //   kegiatan_warga_photo_file: form.kegiatan_warga_photo_file,
-    // }
-    await new Promise((resolve) => setTimeout(resolve, 300)) // simulasi delay simpan
+    const files = []
+    if (form.balai_desa_photo_file) {
+      files.push({ token: 'balai-desa', file: form.balai_desa_photo_file })
+    }
+    if (form.kegiatan_warga_photo_file) {
+      files.push({ token: 'kegiatan-warga', file: form.kegiatan_warga_photo_file })
+    }
 
-    toast.add({ severity: 'success', summary: 'Perubahan disimpan (mode lokal, belum tersambung API)', life: 2500 })
+    const saved = await saveHistory({
+      id: form.history_id,
+      payload: {
+        title: form.title.trim(),
+        year_founded: form.year,
+        status: form.status,
+        published_at: form.published_at,
+        points: milestoneTexts,
+        photos: [
+          form.balai_desa_photo_file ? 'upload:balai-desa' : balaiDesaPhoto.preview.value,
+          form.kegiatan_warga_photo_file ? 'upload:kegiatan-warga' : kegiatanWargaPhoto.preview.value,
+        ],
+      },
+      files,
+    })
+    loadExisting(saved)
+    toast.add({ severity: 'success', summary: 'Berhasil disimpan', life: 2000 })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: error.response?.data?.message ?? 'Gagal menyimpan data sejarah',
+      life: 3000,
+    })
   } finally {
     saving.value = false
   }
