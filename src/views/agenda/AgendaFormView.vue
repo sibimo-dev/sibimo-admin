@@ -76,7 +76,7 @@ onMounted(async () => {
   try {
     const existing = await agendaService.get(agendaId.value)
     eventName.value = existing.title ?? ''
-    attendees.value = existing.description ?? ''
+    attendees.value = existing.attendee ?? ''
     place.value = existing.location ?? ''
     eventDate.value = parseDateValue(existing.event_date)
     startTime.value = createTime(existing.start_time)
@@ -148,7 +148,7 @@ async function saveMain() {
   status.value = 'Published'
   const payload = {
     title: eventName.value,
-    description: attendees.value,
+    attendee : attendees.value,
     event_date: eventDate.value.toISOString().slice(0, 10),
     start_time: startTime.value.toTimeString().slice(0, 5),
     end_time: endTime.value.toTimeString().slice(0, 5),

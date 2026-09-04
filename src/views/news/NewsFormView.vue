@@ -44,12 +44,11 @@ const authorOptions = ref([])
 const author = ref(null)
 
 const categoryOptions = ref([
-  { id: 'infrastruktur', label: 'Infrastruktur', checked: false },
-  { id: 'pertanian', label: 'Pertanian', checked: false },
+  { id: 'pengumuman', label: 'Pengumuman', checked: false },
+  { id: 'pemerintahan', label: 'Pemerintahan', checked: false },
+  { id: 'pembangunan', label: 'Pembangunan', checked: false },
+  { id: 'kegiatan-warga', label: 'Kegiatan Warga', checked: false },
   { id: 'kesehatan', label: 'Kesehatan', checked: false },
-  { id: 'sosial', label: 'Sosial', checked: false },
-  { id: 'keuangan', label: 'Keuangan', checked: false },
-  { id: 'teknologi', label: 'Teknologi', checked: false },
 ])
 const newsCategories = ref([])
 
