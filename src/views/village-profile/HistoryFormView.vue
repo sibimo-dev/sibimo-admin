@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useToast } from 'primevue/usetoast'
 
 import InputText from 'primevue/inputtext'
@@ -9,7 +9,10 @@ import Button from 'primevue/button'
 import Card from 'primevue/card'
 import FileUpload from 'primevue/fileupload'
 
-import { getHistories, saveHistory } from '@/services/profile.service'
+// TODO: API sejarah sudah direvisi dan bentuknya beda dari sebelumnya.
+// Sengaja TIDAK di-import dulu supaya halaman ini tidak error.
+// Saat API baru siap, sambungkan lagi di sini, mis:
+// import { getHistory, saveHistory } from '@/services/profile.service'
 
 const toast = useToast()
 const saving = ref(false)
