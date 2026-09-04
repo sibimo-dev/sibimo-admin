@@ -18,12 +18,12 @@ const router = useRouter()
 const toast = useToast()
 
 const modules = [
-  { key: 'villageProfile', label: 'Profile Desa', slug: 'profil-desa' },
+  { key: 'villageProfile', label: 'Profil Kalurahan', slug: 'profil-kalurahan' },
   { key: 'agenda', label: 'Kelola Agenda', slug: 'agenda' },
   { key: 'news', label: 'Berita & Pengumuman', slug: 'berita' },
   { key: 'library', label: 'Kelola Perpustakaan', slug: 'perpustakaan' },
   { key: 'letterService', label: 'Kelola Layanan', slug: 'surat' },
-  { key: 'villagePotential', label: 'Kelola Potensi', slug: 'potensi-desa' },
+  { key: 'villagePotential', label: 'Kelola Potensi Kalurahan', slug: 'potensi-kalurahan' },
   { key: 'gallery', label: 'Kelola Gallery', slug: 'gallery' },
   { key: 'userManagement', label: 'Manajemen Admin', slug: 'user-management' },
 ]
