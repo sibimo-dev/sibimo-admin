@@ -58,17 +58,17 @@ const menuGroups = [
     showLabel: true,
     items: [
       { label: 'Data Warga', icon: 'pi pi-users', route: '/citizen' },
-      { label: 'Potensi Kalurahan', icon: 'pi pi-star', route: '/village-potential', permission: 'potensi-desa' },
+      { label: 'Potensi Kalurahan', icon: 'pi pi-star', route: '/village-potential', permission: 'potensi-kalurahan' },
     ],
   },
   {
     label: 'Profil Kalurahan',
     showLabel: true,
     items: [
-      { label: 'Sejarah', icon: 'pi pi-book', route: '/village-profile/history', permission: 'profil-desa' },
-      { label: 'Visi & Misi', icon: 'pi pi-flag', route: '/village-profile/vision-mission', permission: 'profil-desa' },
-      { label: 'Struktur Organisasi', icon: 'pi pi-sitemap', route: '/village-profile/organizational-structure', permission: 'profil-desa' },
-      { label: 'Data Wilayah', icon: 'pi pi-map', route: '/village-profile/region', permission: 'profil-desa' },
+      { label: 'Sejarah', icon: 'pi pi-book', route: '/village-profile/history', permission: 'sejarah' },
+      { label: 'Visi & Misi', icon: 'pi pi-flag', route: '/village-profile/vision-mission', permission: 'visi-misi' },
+      { label: 'Struktur Organisasi', icon: 'pi pi-sitemap', route: '/village-profile/organizational-structure', permission: 'struktur-organisasi' },
+      { label: 'Data Wilayah', icon: 'pi pi-map', route: '/village-profile/region', permission: 'data-wilayah' },
     ],
   },
   {

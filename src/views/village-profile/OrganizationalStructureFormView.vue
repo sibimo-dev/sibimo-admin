@@ -240,7 +240,6 @@ function buildLevels() {
     meta.centerOnDesktop ||= !!option.centerOnDesktop
   })
   closePersonDialog()
-}
 
   const buckets = new Map(order.map((level) => [level, []]))
   form.people.forEach((person) => {
@@ -256,7 +255,6 @@ function buildLevels() {
       photo: person.photoFile ? `upload:${person.id}` : person.photo,
     })
   })
-}
 
   return order
     .filter((level) => buckets.get(level)?.length)
