@@ -109,7 +109,7 @@ function confirmAddJabatan() {
 /* form.people = satu-satunya sumber data tabel. */
 const form = reactive({
   organizational_structure_id: null,
-  title: 'Struktur Organisasi Pemerintah Desa',
+  title: 'Struktur Organisasi Pemerintah Kalurahan',
   status: 'Published',
   published_at: null,
   people: [],
@@ -157,7 +157,7 @@ function loadExisting(structure) {
 
   Object.assign(form, {
     organizational_structure_id: structure.organizational_structure_id,
-    title: structure.title ?? 'Struktur Organisasi Pemerintah Desa',
+    title: structure.title ?? 'Struktur Organisasi Pemerintah Kalurahan',
     status: structure.status ?? 'Published',
     published_at: structure.published_at ?? null,
     people: seedPeople(structure.levels ?? []),
@@ -239,8 +239,6 @@ function buildLevels() {
     meta.slider ||= !!option.slider
     meta.centerOnDesktop ||= !!option.centerOnDesktop
   })
-  closePersonDialog()
-
   const buckets = new Map(order.map((level) => [level, []]))
   form.people.forEach((person) => {
     if (!person.jabatan || !person.nama.trim()) return
