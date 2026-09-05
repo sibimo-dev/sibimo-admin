@@ -18,7 +18,10 @@ const router = useRouter()
 const toast = useToast()
 
 const modules = [
-  { key: 'villageProfile', label: 'Profil Kalurahan', slug: 'profil-kalurahan' },
+  { key: 'history', label: 'Sejarah Kalurahan', slug: 'sejarah' },
+  { key: 'visionMission', label: 'Visi & Misi Kalurahan', slug: 'visi-misi' },
+  { key: 'organization', label: 'Struktur Organisasi', slug: 'struktur-organisasi' },
+  { key: 'region', label: 'Data Wilayah Kalurahan', slug: 'data-wilayah' },
   { key: 'agenda', label: 'Kelola Agenda', slug: 'agenda' },
   { key: 'news', label: 'Berita & Pengumuman', slug: 'berita' },
   { key: 'library', label: 'Kelola Perpustakaan', slug: 'perpustakaan' },
