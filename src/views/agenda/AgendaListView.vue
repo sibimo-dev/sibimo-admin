@@ -171,10 +171,6 @@ function addNew() {
   router.push({ name: 'agenda-create' })
 }
 
-function goToCalendar() {
-  router.push({ name: 'agenda-calendar' })
-}
-
 function editAgenda(id) {
   router.push({
     name: 'agenda-edit',
@@ -323,15 +319,6 @@ function exportData() {
                 class="w-full rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
               />
             </IconField>
-
-            <Button
-              label="Kalender"
-              icon="pi pi-calendar"
-              severity="secondary"
-              outlined
-              class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
-              @click="goToCalendar"
-            />
 
             <Button
               label="Export"

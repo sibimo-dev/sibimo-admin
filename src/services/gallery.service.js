@@ -1,7 +1,16 @@
 import api from './api'
 
 const unwrap = (request) => request.then((response) => response.data.data)
-const formData = (payload) => { const data = new FormData(); data.append('title', payload.title); data.append('description', payload.description ?? ''); if (payload.image_file) data.append('image', payload.image_file); return data }
+const formData = (payload) => {
+    const data = new FormData()
+    data.append('title', payload.title)
+    data.append('description', payload.description ?? '')
+    data.append('category', payload.category ?? 'kegiatan-sosial')
+    data.append('location', payload.location ?? '')
+    data.append('event_date', payload.event_date ?? '')
+    if (payload.image_file) data.append('image', payload.image_file)
+    return data
+}
 export const getGalleries = () => unwrap(api.get('/galleries'))
 export const getGallery = (id) => unwrap(api.get(`/galleries/${id}`))
 export const createGallery = (payload) => unwrap(api.post('/galleries', formData(payload), { headers: { 'Content-Type': 'multipart/form-data' } }))

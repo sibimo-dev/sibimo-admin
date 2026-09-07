@@ -41,6 +41,10 @@ const fileUploadRef = ref(null)
 const saving = ref(false)
 const title = ref('')
 const content = ref('')
+const shortDesc = ref('')
+const location = ref('')
+const contact = ref('')
+const extraFields = ref([{ label: '', value: '' }]) // list key-value dinamis
 
 const status = ref('Draft')
 const visibility = ref('publik')
@@ -66,6 +70,12 @@ const visibilityLabel = computed(() => (
 onMounted(async () => {
   if (authStore.user) { authorOptions.value = [{ label: authStore.user.full_name, value: authStore.user.user_id }]; author.value = authStore.user.user_id }
   if (!isEditMode.value) return
+  shortDesc.value = existing.short_desc ?? ''
+  location.value = existing.location ?? ''
+  contact.value = existing.contact ?? ''
+  extraFields.value = existing.extra_info && Object.keys(existing.extra_info).length
+    ? Object.entries(existing.extra_info).map(([label, value]) => ({ label, value }))
+    : [{ label: '', value: '' }]
 
   try {
     const existing = await potentialService.get(potentialId.value)
@@ -81,6 +91,13 @@ onMounted(async () => {
     toast.add({ severity: 'error', summary: 'Gagal memuat data potensi', detail: error.response?.data?.message ?? 'Coba lagi.', life: 3000 })
   }
 })
+
+function addExtraField() {
+  extraFields.value.push({ label: '', value: '' })
+}
+function removeExtraField(index) {
+  extraFields.value.splice(index, 1)
+}
 
 function handlePhotoSelect(event) {
   const file = event.files?.[0]
@@ -126,11 +143,16 @@ async function saveMain() {
   const selectedCategory = categoryOptions.value.find(category => category.checked)
   const categoryMap = { pertanian: 'Agriculture', bumdes: 'BUMDes', pariwisata: 'Tourism', umkm: 'UMKM' }
   if (!selectedCategory) { toast.add({ severity: 'warn', summary: 'Pilih kategori potensi terlebih dahulu', life: 3000 }); return }
+  const extraInfoObject = Object.fromEntries(
+  extraFields.value.filter((f) => f.label.trim()).map((f) => [f.label, f.value]))
   const payload = {
     category: categoryMap[selectedCategory.id],
     title: title.value,
+    short_desc: shortDesc.value,
     description: content.value,
-    location: '',
+    location: location.value,     
+    contact: contact.value,
+    extra_info: extraInfoObject,
     image: photoFile.value,
   }
 
@@ -274,6 +296,75 @@ function moveToTrash() {
                 v-model="title"
                 placeholder="Judul potensi desa"
                 class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none focus:border-primary-600 focus:ring-4 focus:ring-primary-100"
+              />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-[13px] font-semibold text-neutral-700" for="shortDesc">
+                Ringkasan Singkat
+              </label>
+              <InputText
+                id="shortDesc"
+                v-model="shortDesc"
+                placeholder="Ringkasan 1-2 kalimat untuk kartu preview"
+                class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none focus:border-primary-600 focus:ring-4 focus:ring-primary-100"
+              />
+            </div>
+
+            <div class="flex flex-col gap-2">
+              <label class="text-[13px] font-semibold text-neutral-700" for="location">
+                Lokasi
+              </label>
+              <InputText
+                id="location"
+                v-model="location"
+                placeholder="Contoh: Padukuhan Sorasan, Bimomartani"
+                class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none focus:border-primary-600 focus:ring-4 focus:ring-primary-100"
+              />
+            </div>
+
+            <div class="flex flex-col gap-2">
+              <label class="text-[13px] font-semibold text-neutral-700" for="contact">
+                Kontak
+              </label>
+              <InputText
+                id="contact"
+                v-model="contact"
+                placeholder="Contoh: 0812-xxxx-xxxx (Ibu Siti, Ketua Kelompok)"
+                class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none focus:border-primary-600 focus:ring-4 focus:ring-primary-100"
+              />
+            </div>
+
+            <div class="flex flex-col gap-2">
+              <span class="text-[13px] font-semibold text-neutral-700">
+                Informasi Tambahan
+              </span>
+              <div v-for="(field, index) in extraFields" :key="index" class="flex gap-2">
+                <InputText
+                  v-model="field.label"
+                  placeholder="Label (mis. Jam Operasional)"
+                  class="w-1/3 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-[13px]"
+                />
+                <InputText
+                  v-model="field.value"
+                  placeholder="Nilai (mis. 08.00 - 17.00 WIB)"
+                  class="flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-[13px]"
+                />
+                <Button
+                  icon="pi pi-trash"
+                  severity="danger"
+                  text
+                  rounded
+                  aria-label="Hapus baris"
+                  @click="removeExtraField(index)"
+                />
+              </div>
+              <Button
+                label="Tambah Info"
+                icon="pi pi-plus"
+                text
+                size="small"
+                class="self-start"
+                @click="addExtraField"
               />
             </div>
 

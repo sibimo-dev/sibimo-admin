@@ -12,6 +12,8 @@ import Button from 'primevue/button'
 import FileUpload from 'primevue/fileupload'
 import Editor from 'primevue/editor'
 import AppInput from '@/components/common/AppInput.vue'
+import Select from 'primevue/select'
+import DatePicker from 'primevue/datepicker'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,9 +29,19 @@ const fileUploadRef = ref(null)
 const form = reactive({
   title: '',
   description: '',
+  category: 'kegiatan-sosial',
+  location: '',
+  event_date: new Date(),
   image_file: null,
   uploaded_at: null,
 })
+
+const categoryOptions = [
+  { label: 'Musyawarah', value: 'musyawarah' },
+  { label: 'Kegiatan Sosial', value: 'kegiatan-sosial' },
+  { label: 'Pembangunan', value: 'pembangunan' },
+  { label: 'Budaya', value: 'budaya' },
+]
 
 const errors = reactive({ title: '' })
 
@@ -42,8 +54,13 @@ onMounted(async () => {
     if (existing) {
       form.title = existing.title
       form.description = existing.description
+      form.category = existing.category ?? 'kegiatan-sosial'
+      form.location = existing.location ?? ''
       form.uploaded_at = existing.uploaded_at
       preview.value = existing.image
+      form.event_date = existing.event_date
+        ? new Date(`${existing.event_date.slice(0, 10)}T00:00:00`)
+        : new Date()
     }
   }
 })
@@ -57,6 +74,13 @@ function handleFileSelect(event) {
     preview.value = reader.result
   }
   reader.readAsDataURL(file)
+}
+
+function toDateInputValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function handleValidationError(event) {
@@ -90,9 +114,12 @@ async function handleSubmit() {
     const payload = {
       title: form.title,
       description: form.description,
+      category: form.category,
+      location: form.location,
+      event_date: toDateInputValue(form.event_date),
       uploaded_by: authStore.user?.id ?? '',
       image_file: form.image_file,
-    }
+    } 
 
     if (isEdit.value) {
       await galleryStore.update(route.params.id, payload)
@@ -205,6 +232,46 @@ function handleCancel() {
                 required
               />
             </div>
+
+            <div class="flex flex-col gap-2">
+              <label for="category" class="text-[13px] font-semibold text-slate-700">
+                Kategori
+              </label>
+              <Select
+                id="category"
+                v-model="form.category"
+                :options="categoryOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Pilih kategori"
+                class="w-full"
+              />
+            </div>
+
+            <div class="flex flex-col gap-2">
+              <label for="location" class="text-[13px] font-semibold text-slate-700">
+                Lokasi
+              </label>
+              <AppInput
+                id="location"
+                v-model="form.location"
+                placeholder="Contoh: Balai Kalurahan Bimomartani"
+              />
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <label for="event_date" class="text-[13px] font-semibold text-slate-700">
+              Tanggal Kegiatan
+            </label>
+            <DatePicker
+              id="event_date"
+              v-model="form.event_date"
+              dateFormat="dd/mm/yy"
+              showIcon
+              iconDisplay="input"
+              class="w-full"
+            />
+          </div>
 
             <div v-if="isEdit" class="flex flex-col gap-2">
               <label class="text-[13px] font-semibold text-slate-700">
