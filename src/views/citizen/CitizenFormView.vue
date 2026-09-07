@@ -31,6 +31,7 @@ const mainButtonLabel = computed(() => (
 const genderOptions = ['Laki-laki', 'Perempuan']
 const educationOptions = ['Tidak Sekolah', 'SD', 'SMP', 'SMA/SMK', 'D3', 'S1', 'S2', 'S3']
 const maritalStatusOptions = ['Belum Menikah', 'Menikah', 'Cerai Hidup', 'Cerai Mati']
+const religionOptions = ['Islam', 'Kristen', 'Katolik', 'Hindu', 'Buddha', 'Konghucu', 'Lainnya']
 const statusOptions = [
   { label: 'Active', value: 'Active' },
   { label: 'Pindah', value: 'Pindah' },
@@ -47,6 +48,8 @@ const address = ref('')
 const occupation = ref('')
 const education = ref('SMA/SMK')
 const maritalStatus = ref('Belum Menikah')
+const religion = ref('Islam')
+const ktpAddress = ref('')
 
 const status = ref('Active')
 const statusOpen = ref(true)
@@ -91,6 +94,8 @@ async function fetchCitizenDetail() {
     occupation.value = data.occupation ?? ''
     education.value = data.education ?? 'SMA/SMK'
     maritalStatus.value = data.marital_status ?? 'Belum Menikah'
+    religion.value = data.religion ?? 'Islam'
+    ktpAddress.value = data.ktp_address ?? data.address ?? ''
     status.value = data.status ?? 'Active'
   } catch (err) {
     errorMessage.value = err.response?.data?.message || 'Gagal memuat detail data warga.'
@@ -125,6 +130,7 @@ async function saveCitizen() {
     occupation: occupation.value,
     education: education.value,
     marital_status: maritalStatus.value,
+    religion: religion.value,
     status: status.value,
   }
 
@@ -354,6 +360,20 @@ function deleteCitizen() {
                 />
               </div>
 
+              <div class="flex flex-col gap-2">
+                <label class="text-[13px] font-semibold text-neutral-700" for="religion">
+                  Agama
+                </label>
+
+                <Select
+                  id="religion"
+                  v-model="religion"
+                  :options="religionOptions"
+                  class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
+                  :pt="{ label: { class: 'px-3 py-2.5' } }"
+                />
+              </div>
+
             </div>
 
             <div class="flex flex-col gap-2">
@@ -366,6 +386,20 @@ function deleteCitizen() {
                 v-model="address"
                 rows="3"
                 placeholder="Alamat lengkap warga"
+                class="w-full resize-y rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
+              />
+            </div>
+
+            <div class="flex flex-col gap-2">
+              <label class="text-[13px] font-semibold text-neutral-700" for="ktpAddress">
+                Alamat sesuai KTP
+              </label>
+
+              <Textarea
+                id="ktpAddress"
+                v-model="ktpAddress"
+                rows="3"
+                placeholder="Alamat lengkap sesuai KTP"
                 class="w-full resize-y rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
               />
             </div>
