@@ -18,7 +18,12 @@ const newsFormData = (payload) => {
 const potentialFormData = (payload) => {
   const data = new FormData()
   Object.entries(payload).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') data.append(key, value)
+    if (value === undefined || value === null || value === '') return
+    if (key === 'extra_info' && typeof value === 'object') {
+      data.append(key, JSON.stringify(value))
+    } else {
+      data.append(key, value)
+    }
   })
   return data
 }
