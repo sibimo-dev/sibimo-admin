@@ -70,12 +70,6 @@ const visibilityLabel = computed(() => (
 onMounted(async () => {
   if (authStore.user) { authorOptions.value = [{ label: authStore.user.full_name, value: authStore.user.user_id }]; author.value = authStore.user.user_id }
   if (!isEditMode.value) return
-  shortDesc.value = existing.short_desc ?? ''
-  location.value = existing.location ?? ''
-  contact.value = existing.contact ?? ''
-  extraFields.value = existing.extra_info && Object.keys(existing.extra_info).length
-    ? Object.entries(existing.extra_info).map(([label, value]) => ({ label, value }))
-    : [{ label: '', value: '' }]
 
   try {
     const existing = await potentialService.get(potentialId.value)
@@ -87,6 +81,12 @@ onMounted(async () => {
     categoryOptions.value.forEach(category => { category.checked = category.id === selectedId })
     status.value = existing.status ?? 'Published'
     visibility.value = 'publik'
+    shortDesc.value = existing.short_desc ?? ''
+    location.value = existing.location ?? ''
+    contact.value = existing.contact ?? ''
+    extraFields.value = existing.extra_info && Object.keys(existing.extra_info).length
+      ? Object.entries(existing.extra_info).map(([label, value]) => ({ label, value }))
+      : [{ label: '', value: '' }]
   } catch (error) {
     toast.add({ severity: 'error', summary: 'Gagal memuat data potensi', detail: error.response?.data?.message ?? 'Coba lagi.', life: 3000 })
   }
