@@ -11,7 +11,7 @@ import { getComplaints } from '@/services/complaint.service'
 import { getListCache, setListCache } from '@/services/list-cache'
 const router = useRouter()
 const cachedRows = getListCache('complaints')
-const rows = ref(cachedRows ?? [])
+const rows = ref((cachedRows ?? []).map(mapComplaint))
 const loading = ref(!cachedRows)
 const loadError = ref('')
 const searchQuery = ref('')
@@ -24,7 +24,17 @@ const statusOptions = [{ label: 'Status: Semua', value: null }, ...Object.entrie
 const categoryOptions = computed(() => [{ label: 'Kategori: Semua', value: null }, ...[...new Set(rows.value.map(r => r.category))].map(value => ({ label: categoryMeta[value] ?? value, value }))])
 const filteredRows = computed(() => { const q = searchQuery.value.toLowerCase(); return rows.value.filter(r => (!q || `${r.complaint_id} ${r.reporter_name} ${r.title}`.toLowerCase().includes(q)) && (!selectedCategory.value || r.category === selectedCategory.value) && (!selectedStatus.value || r.status === selectedStatus.value)) })
 const stats = computed(() => ({ total: rows.value.length, submitted: rows.value.filter(r => r.status === 'Submitted').length, progress: rows.value.filter(r => r.status === 'In Progress').length, resolved: rows.value.filter(r => r.status === 'Resolved').length }))
-function mapComplaint(item) { return { ...item, complaint_code: `#AD-${String(item.submitted_at ?? '').slice(0, 10)}-${item.complaint_id}`, reporter_name: item.citizen?.full_name ?? '-', nik: item.citizen?.national_id ?? '-', phone: item.citizen?.phone_number ?? '-', address: item.citizen?.address ?? '-', submitted_at: item.submitted_at ? new Date(item.submitted_at).toLocaleString('id-ID') : '-' } }
+function mapComplaint(item) {
+  const hasReporterData = Boolean(item.reporter_name?.trim() || item.reporter_phone?.trim())
+
+  return {
+    ...item,
+    complaint_code: `#AD-${String(item.submitted_at ?? '').slice(0, 10)}-${item.complaint_id}`,
+    reporter_name: hasReporterData ? 'Anonim' : '',
+    phone: hasReporterData ? 'Anonim' : '',
+    submitted_at: item.submitted_at ? new Date(item.submitted_at).toLocaleString('id-ID') : '-',
+  }
+}
 async function loadComplaints({ background = false } = {}) {
   if (!background) loading.value = true
   try {

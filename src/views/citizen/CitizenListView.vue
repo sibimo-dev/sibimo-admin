@@ -48,18 +48,43 @@ function formatDate(dateStr) {
 function mapCitizenFromApi(item) {
   return {
     id: item.citizen_id,
+    recordType: item.record_type,
+    recordEvent: item.record_event,
     name: item.full_name,
     nationalId: item.national_id, 
     familyCardNumber: item.family_card_number,
+    dusun: item.dusun,
+    rt: item.rt,
+    rw: item.rw,
     gender: item.gender,
     address: item.address,
+    ktpAddress: item.ktp_address,
     status: item.status,
     occupation: item.occupation,
     education: item.education,
     maritalStatus: item.marital_status,
+    religion: item.religion,
     phoneNumber: item.phone_number,
     birthPlace: item.birth_place,
     birthDate: item.birth_date,
+    age: item.age,
+    birthCertificateStatus: item.birth_certificate_status,
+    birthCertificateNumber: item.birth_certificate_number,
+    bloodType: item.blood_type,
+    marriageCertificateStatus: item.marriage_certificate_status,
+    marriageCertificateNumber: item.marriage_certificate_number,
+    marriageDate: item.marriage_date,
+    divorceCertificateStatus: item.divorce_certificate_status,
+    divorceCertificateNumber: item.divorce_certificate_number,
+    divorceDate: item.divorce_date,
+    familyRelationship: item.family_relationship,
+    physicalDisability: item.physical_disability,
+    disabilityStatus: item.disability_status,
+    motherNationalId: item.mother_national_id,
+    motherName: item.mother_name,
+    fatherNationalId: item.father_national_id,
+    fatherName: item.father_name,
+    nationality: item.nationality,
   }
 }
 
@@ -157,47 +182,165 @@ async function deleteSelected() {
 // TETAP SAMA PERSIS, tidak perlu diubah -- itu logic baca file, bukan komunikasi API.
 
 function normalizeKey(key) {
-  return key.trim().toLowerCase().replace(/[\s_]+/g, '')
+  return String(key ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '')
 }
 
-function mapRowToResident(row, nextId) {
+function excelDateToIso(value) {
+  if (value === null || value === undefined || value === '') return null
+  if (value instanceof Date) return value.toISOString().slice(0, 10)
+  const raw = String(value).trim()
+  if (!raw) return null
+
+  if (/^\d+(\.\d+)?$/.test(raw)) {
+    const parsed = XLSX.SSF.parse_date_code(Number(raw))
+    if (parsed) return `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`
+  }
+
+  const parts = raw.split(/[\/-]/).map(Number)
+  if (parts.length === 3 && parts.every(Number.isFinite)) {
+    const [first, second, third] = parts
+    const year = first > 31 ? first : third
+    const month = first > 31 ? second : second
+    const day = first > 31 ? third : first
+    if (year && month && day) return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  }
+
+  const parsed = new Date(raw)
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10)
+}
+
+function normalizeGender(value) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (normalized === 'p' || normalized === 'perempuan') return 'Perempuan'
+  if (normalized === 'l' || normalized === 'laki-laki' || normalized === 'laki laki') return 'Laki-laki'
+  return String(value ?? '').trim()
+}
+
+function normalizeReligion(value) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  const values = {
+    katholik: 'Katolik',
+    katolik: 'Katolik',
+    budha: 'Buddha',
+    buddha: 'Buddha',
+    islam: 'Islam',
+    kristen: 'Kristen',
+    hindu: 'Hindu',
+    konghucu: 'Konghucu',
+  }
+  return values[normalized] ?? String(value ?? '').trim()
+}
+
+function mapRowToResident(row) {
   const normalized = {}
 
   Object.keys(row).forEach(key => {
     normalized[normalizeKey(key)] = row[key]
   })
 
+  const record_type = normalized['tulispendudukmatipindahorangluar'] ?? 'PENDUDUK'
+  const record_event = normalized['tulislahir01dstdatang01dstpindah01dstmati01dst'] ?? 'Lahir01'
   const full_name = normalized['namalengkap'] ?? normalized['nama'] ?? normalized['name'] ?? ''
   const national_id = normalized['nik'] ?? normalized['nationalid'] ?? ''
   const family_card_number = normalized['nomorkk'] ?? normalized['kk'] ?? normalized['familycardnumber'] ?? ''
-  const gender = normalized['jeniskelamin'] ?? normalized['gender'] ?? normalized['jk'] ?? ''
+  const dusun = normalized['dusun'] ?? ''
+  const rt = normalized['rt'] ?? ''
+  const rw = normalized['rw'] ?? ''
+  const gender = normalizeGender(normalized['lp'] ?? normalized['jeniskelamin'] ?? normalized['gender'] ?? normalized['jk'] ?? '')
   const birth_place = normalized['tempatlahir'] ?? normalized['birthplace'] ?? ''
-  const birth_date = normalized['tanggallahir'] ?? normalized['birthdate'] ?? null
+  const birth_date = excelDateToIso(normalized['tanggallahir'] ?? normalized['birthdate'] ?? null)
+  const age = normalized['umur'] ? Number.parseInt(normalized['umur'], 10) : null
+  const birth_certificate_status = normalized['aktalahir'] ?? ''
+  const birth_certificate_number = normalized['nomoraktalahir'] ?? ''
+  const blood_type = normalized['goldarah'] ?? ''
   const phone_number = normalized['notelepon'] ?? normalized['nomortelepon'] ?? normalized['phonenumber'] ?? ''
   const address = normalized['alamat'] ?? normalized['address'] ?? ''
   const occupation = normalized['pekerjaan'] ?? normalized['occupation'] ?? ''
   const education = normalized['pendidikan'] ?? normalized['education'] ?? ''
-  const marital_status = normalized['statuspernikahan'] ?? normalized['maritalstatus'] ?? ''
-  let status = normalized['status'] ?? 'Active'
+  const marital_status = normalized['statuskawin'] ?? normalized['statuspernikahan'] ?? normalized['maritalstatus'] ?? ''
+  const marriage_certificate_status = normalized['aktakawin'] ?? ''
+  const marriage_certificate_number = normalized['nomoraktakawin'] ?? ''
+  const marriage_date = excelDateToIso(normalized['tanggalkawin'] ?? null)
+  const divorce_certificate_status = normalized['aktacerai'] ?? ''
+  const divorce_certificate_number = normalized['nomoraktacerai'] ?? ''
+  const divorce_date = excelDateToIso(normalized['tanggalcerai'] ?? null)
+  const family_relationship = normalized['statushubdlmkeluarga'] ?? ''
+  const physical_disability = normalized['kelainanfisik'] ?? ''
+  const disability_status = normalized['penyandangcacat'] ?? ''
+  const religion = normalizeReligion(normalized['agama'] ?? '')
+  const mother_national_id = normalized['nikibu'] ?? ''
+  const mother_name = normalized['namalengkapibu'] ?? ''
+  const father_national_id = normalized['nikayah'] ?? ''
+  const father_name = normalized['namalengkapayah'] ?? ''
+  const nationality = normalized['kewarganegaraan'] ?? ''
+  const ktp_address = address
+  const status = String(normalized['status'] ?? '').trim().toLowerCase() === 'pindah' ? 'Pindah' : 'Active'
 
-  status = String(status).trim().toLowerCase() === 'pindah' ? 'Pindah' : 'Active'
 
   if (!full_name && !national_id) return null
 
   return {
+    record_type: String(record_type).trim() || 'PENDUDUK',
+    record_event: String(record_event).trim() || 'Lahir01',
     full_name: String(full_name).trim(),
     national_id: String(national_id).trim(),
     family_card_number: String(family_card_number).trim(),
-    gender: String(gender).trim(),
+    dusun: String(dusun).trim(),
+    rt: String(rt).trim(),
+    rw: String(rw).trim(),
+    gender,
     birth_place: String(birth_place).trim(),
-    birth_date: birth_date ? String(birth_date).trim() : null,
+    birth_date,
+    age: Number.isNaN(age) ? null : age,
+    birth_certificate_status: String(birth_certificate_status).trim(),
+    birth_certificate_number: String(birth_certificate_number).trim(),
+    blood_type: String(blood_type).trim(),
     phone_number: String(phone_number).trim(),
     address: String(address).trim(),
+    ktp_address: String(ktp_address).trim(),
     occupation: String(occupation).trim(),
     education: String(education).trim(),
     marital_status: String(marital_status).trim(),
+    marriage_certificate_status: String(marriage_certificate_status).trim(),
+    marriage_certificate_number: String(marriage_certificate_number).trim(),
+    marriage_date,
+    divorce_certificate_status: String(divorce_certificate_status).trim(),
+    divorce_certificate_number: String(divorce_certificate_number).trim(),
+    divorce_date,
+    family_relationship: String(family_relationship).trim(),
+    physical_disability: String(physical_disability).trim(),
+    disability_status: String(disability_status).trim(),
+    religion,
+    mother_national_id: String(mother_national_id).trim(),
+    mother_name: String(mother_name).trim(),
+    father_national_id: String(father_national_id).trim(),
+    father_name: String(father_name).trim(),
+    nationality: String(nationality).trim(),
     status,
   }
+}
+
+function readCitizenRows(workbook) {
+  for (const sheetName of workbook.SheetNames) {
+    const matrix = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+      header: 1,
+      defval: '',
+      raw: false,
+    })
+    const headerIndex = matrix.findIndex(row => {
+      const keys = row.map(normalizeKey)
+      return keys.includes('nik') && keys.includes('namalengkap')
+    })
+    if (headerIndex < 0) continue
+
+    const headers = matrix[headerIndex]
+    return matrix.slice(headerIndex + 1).map(values => headers.reduce((row, header, index) => {
+      if (header !== '') row[header] = values[index] ?? ''
+      return row
+    }, {}))
+  }
+
+  return []
 }
 
 async function handleFileSelect(event) {
@@ -213,9 +356,7 @@ async function handleFileSelect(event) {
     try {
       const data = new Uint8Array(e.target.result)
       const workbook = XLSX.read(data, { type: 'array' })
-      const firstSheetName = workbook.SheetNames[0]
-      const sheet = workbook.Sheets[firstSheetName]
-      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+      const rows = readCitizenRows(workbook)
 
       if (rows.length === 0) {
         importError.value = 'File tidak berisi data yang bisa diimpor.'
@@ -439,59 +580,141 @@ async function handleFileSelect(event) {
         footer: { class: 'border-t border-neutral-100 px-5 py-3' },
       }"
     >
-      <div v-if="selectedDetailResident" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-
+      <div v-if="selectedDetailResident" class="grid max-h-[65vh] grid-cols-1 gap-4 overflow-y-auto pr-1 sm:grid-cols-2">
         <div class="flex flex-col gap-1 sm:col-span-2">
           <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nama Lengkap</span>
-          <span class="text-[13px] font-medium text-neutral-800">{{ selectedDetailResident.name }}</span>
+          <span class="text-[13px] font-medium text-neutral-800">{{ selectedDetailResident.name || '-' }}</span>
         </div>
 
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Jenis Data</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.recordType || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Peristiwa</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.recordEvent || '-' }}</span>
+        </div>
         <div class="flex flex-col gap-1">
           <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">NIK</span>
           <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.nationalId || '-' }}</span>
         </div>
-
         <div class="flex flex-col gap-1">
           <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor KK</span>
           <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.familyCardNumber || '-' }}</span>
         </div>
-
         <div class="flex flex-col gap-1">
           <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Jenis Kelamin</span>
           <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.gender || '-' }}</span>
         </div>
-
         <div class="flex flex-col gap-1">
           <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor Telepon</span>
           <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.phoneNumber || '-' }}</span>
         </div>
-
         <div class="flex flex-col gap-1">
           <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tempat Lahir</span>
           <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.birthPlace || '-' }}</span>
         </div>
-
         <div class="flex flex-col gap-1">
           <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tanggal Lahir</span>
           <span class="text-[13px] text-neutral-800">{{ formatDate(selectedDetailResident.birthDate) }}</span>
         </div>
-
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Umur</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.age ?? '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Golongan Darah</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.bloodType || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Akta Lahir</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.birthCertificateStatus || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor Akta Lahir</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.birthCertificateNumber || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Dusun</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.dusun || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">RT / RW</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.rt || '-' }} / {{ selectedDetailResident.rw || '-' }}</span>
+        </div>
         <div class="flex flex-col gap-1">
           <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Pekerjaan</span>
           <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.occupation || '-' }}</span>
         </div>
-
         <div class="flex flex-col gap-1">
           <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Pendidikan</span>
           <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.education || '-' }}</span>
         </div>
-
         <div class="flex flex-col gap-1">
           <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Status Pernikahan</span>
           <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.maritalStatus || '-' }}</span>
         </div>
-
         <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Agama</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.religion || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Akta Kawin</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.marriageCertificateStatus || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor Akta Kawin</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.marriageCertificateNumber || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tanggal Kawin</span>
+          <span class="text-[13px] text-neutral-800">{{ formatDate(selectedDetailResident.marriageDate) }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Akta Cerai</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.divorceCertificateStatus || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor Akta Cerai</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.divorceCertificateNumber || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tanggal Cerai</span>
+          <span class="text-[13px] text-neutral-800">{{ formatDate(selectedDetailResident.divorceDate) }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Hubungan Keluarga</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.familyRelationship || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Kelainan Fisik</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.physicalDisability || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Penyandang Cacat</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.disabilityStatus || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Kewarganegaraan</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.nationality || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nama Ibu</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.motherName || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">NIK Ibu</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.motherNationalId || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nama Ayah</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.fatherName || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">NIK Ayah</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.fatherNationalId || '-' }}</span>
+        </div>
+        <div class="flex flex-col gap-1 sm:col-span-2">
           <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Status</span>
           <Tag
             :value="selectedDetailResident.status"
@@ -499,12 +722,14 @@ async function handleFileSelect(event) {
             class="w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide"
           />
         </div>
-
         <div class="flex flex-col gap-1 sm:col-span-2">
           <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Alamat</span>
           <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.address || '-' }}</span>
         </div>
-
+        <div class="flex flex-col gap-1 sm:col-span-2">
+          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Alamat sesuai KTP</span>
+          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.ktpAddress || '-' }}</span>
+        </div>
       </div>
 
       <template #footer>

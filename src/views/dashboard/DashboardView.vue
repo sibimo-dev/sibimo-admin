@@ -161,6 +161,7 @@ function applyDashboardData(data) {
   allSubmissions.value = data.submissions ?? []
   recentComplaints.value = (data.complaints ?? []).map((complaint) => ({
     ...complaint,
+    reporter: complaint.reporter ? 'Anonim' : '',
     time: formatRelativeTime(complaint.time),
   }))
   upcomingAgenda.value = (data.upcomingAgenda ?? []).map((item) => ({

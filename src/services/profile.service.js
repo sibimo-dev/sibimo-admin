@@ -1,8 +1,34 @@
 import api from './api'
-const unwrap = (request) => request.then((response) => response.data.data)
-export const getHistories = () => unwrap(api.get('/histories'))
-export const getVisionMissions = () => unwrap(api.get('/vision-missions'))
-export const getOrganizationalStructures = () => unwrap(api.get('/organizational-structures'))
+
+const unwrap = (request) => request.then((response) => response.data?.data ?? null)
+
+function unwrapCollection(request) {
+  return request.then((response) => {
+    const data = response.data?.data
+    const rows = (Array.isArray(data) ? data : (data ? [data] : [])).map((row) => {
+      const normalized = { ...row }
+      for (const field of ['points', 'photos', 'missions', 'levels']) {
+        if (typeof normalized[field] !== 'string') continue
+        try {
+          const parsed = JSON.parse(normalized[field])
+          normalized[field] = parsed
+        } catch {
+          normalized[field] = []
+        }
+      }
+      return normalized
+    })
+    return rows.sort((a, b) => {
+      const aPublished = a?.status === 'Published' ? 1 : 0
+      const bPublished = b?.status === 'Published' ? 1 : 0
+      return bPublished - aPublished
+    })
+  })
+}
+
+export const getHistories = () => unwrapCollection(api.get('/histories'))
+export const getVisionMissions = () => unwrapCollection(api.get('/vision-missions'))
+export const getOrganizationalStructures = () => unwrapCollection(api.get('/organizational-structures'))
 
 export function saveHistory({ id, payload, files = [] }) {
   const formData = new FormData()
