@@ -277,116 +277,240 @@ function deleteCitizen() {
 
     <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
 
-      <Card>
-        <template #content>
-          <div class="flex flex-col gap-5">
+      <div class="flex flex-col gap-5">
 
-            <div class="flex flex-col gap-2">
-              <label class="text-[13px] font-semibold text-neutral-700" for="fullName">
-                Nama Lengkap
-              </label>
-
-              <InputText
-                id="fullName"
-                v-model="fullName"
-                placeholder="Nama lengkap warga"
-                class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
-              />
+        <!-- ============ IDENTITAS POKOK ============ -->
+        <Card>
+          <template #title>
+            <div class="flex items-center gap-2 text-[15px] font-semibold text-neutral-800">
+              <i class="pi pi-id-card text-primary-500" />
+              Identitas Pokok
             </div>
-
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="recordType">Jenis Data</label>
-                <Select
-                  id="recordType"
-                  v-model="recordType"
-                  :options="recordTypeOptions"
-                  class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800"
-                  :pt="{ label: { class: 'px-3 py-2.5' } }"
-                />
-              </div>
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="recordEvent">Peristiwa</label>
-                <Select
-                  id="recordEvent"
-                  v-model="recordEvent"
-                  :options="recordEventOptions"
-                  class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800"
-                  :pt="{ label: { class: 'px-3 py-2.5' } }"
-                />
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          </template>
+          <template #content>
+            <div class="flex flex-col gap-5">
 
               <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="nationalId">
-                  NIK
+                <label class="text-[13px] font-semibold text-neutral-700" for="fullName">
+                  Nama Lengkap
                 </label>
-
                 <InputText
-                  id="nationalId"
-                  v-model="nationalId"
-                  maxlength="16"
-                  inputmode="numeric"
-                  placeholder="16 digit NIK"
+                  id="fullName"
+                  v-model="fullName"
+                  placeholder="Nama lengkap warga"
                   class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
                 />
               </div>
 
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="familyCardNumber">
-                  Nomor KK
-                </label>
+              <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="recordType">Jenis Data</label>
+                  <Select
+                    id="recordType"
+                    v-model="recordType"
+                    :options="recordTypeOptions"
+                    class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800"
+                    :pt="{ label: { class: 'px-3 py-2.5' } }"
+                  />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="recordEvent">Peristiwa</label>
+                  <Select
+                    id="recordEvent"
+                    v-model="recordEvent"
+                    :options="recordEventOptions"
+                    class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800"
+                    :pt="{ label: { class: 'px-3 py-2.5' } }"
+                  />
+                </div>
+              </div>
 
-                <InputText
-                  id="familyCardNumber"
-                  v-model="familyCardNumber"
-                  maxlength="16"
-                  inputmode="numeric"
-                  placeholder="16 digit nomor KK"
-                  class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
+              <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="nationalId">
+                    NIK
+                  </label>
+                  <InputText
+                    id="nationalId"
+                    v-model="nationalId"
+                    maxlength="16"
+                    inputmode="numeric"
+                    placeholder="16 digit NIK"
+                    class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
+                  />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="familyCardNumber">
+                    Nomor KK
+                  </label>
+                  <InputText
+                    id="familyCardNumber"
+                    v-model="familyCardNumber"
+                    maxlength="16"
+                    inputmode="numeric"
+                    placeholder="16 digit nomor KK"
+                    class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
+                  />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="gender">
+                    Jenis Kelamin
+                  </label>
+                  <Select
+                    id="gender"
+                    v-model="gender"
+                    :options="genderOptions"
+                    class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
+                    :pt="{ label: { class: 'px-3 py-2.5' } }"
+                  />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="nationality">Kewarganegaraan</label>
+                  <Select
+                    id="nationality"
+                    v-model="nationality"
+                    :options="nationalityOptions"
+                    class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]"
+                    :pt="{ label: { class: 'px-3 py-2.5' } }"
+                  />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="birthPlace">
+                    Tempat Lahir
+                  </label>
+                  <InputText
+                    id="birthPlace"
+                    v-model="birthPlace"
+                    placeholder="Tempat lahir"
+                    class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
+                  />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="birthDate">
+                    Tanggal Lahir
+                  </label>
+                  <DatePicker
+                    id="birthDate"
+                    v-model="birthDate"
+                    dateFormat="yy-mm-dd"
+                    showIcon
+                    iconDisplay="input"
+                    class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
+                    :pt="{ pcInputText: { root: { class: 'w-full px-3 py-2.5' } } }"
+                  />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="age">Umur</label>
+                  <InputText id="age" v-model="age" type="number" min="0" max="150" placeholder="Umur" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="bloodType">Golongan Darah</label>
+                  <Select id="bloodType" v-model="bloodType" :options="bloodTypeOptions" placeholder="Pilih golongan darah" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ label: { class: 'px-3 py-2.5' } }" />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="religion">Agama</label>
+                  <Select
+                    id="religion"
+                    v-model="religion"
+                    :options="religionOptions"
+                    class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
+                    :pt="{ label: { class: 'px-3 py-2.5' } }"
+                  />
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-2">
+                <label class="text-[13px] font-semibold text-neutral-700" for="birthCertificateStatus">Akta Lahir</label>
+                <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                  <Select id="birthCertificateStatus" v-model="birthCertificateStatus" :options="certificateOptions" placeholder="Pilih status" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ label: { class: 'px-3 py-2.5' } }" />
+                  <InputText id="birthCertificateNumber" v-model="birthCertificateNumber" placeholder="Nomor akta lahir" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
+                </div>
+              </div>
+
+            </div>
+          </template>
+        </Card>
+
+        <!-- ============ ALAMAT & DOMISILI ============ -->
+        <Card>
+          <template #title>
+            <div class="flex items-center gap-2 text-[15px] font-semibold text-neutral-800">
+              <i class="pi pi-map-marker text-primary-500" />
+              Alamat & Domisili
+            </div>
+          </template>
+          <template #content>
+            <div class="flex flex-col gap-5">
+
+              <div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="dusun">Dusun</label>
+                  <InputText id="dusun" v-model="dusun" placeholder="Nama dusun" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="rt">RT</label>
+                  <InputText id="rt" v-model="rt" placeholder="RT" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="rw">RW</label>
+                  <InputText id="rw" v-model="rw" placeholder="RW" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-2">
+                <label class="text-[13px] font-semibold text-neutral-700" for="address">
+                  Alamat
+                </label>
+                <Textarea
+                  id="address"
+                  v-model="address"
+                  rows="3"
+                  placeholder="Alamat lengkap warga"
+                  class="w-full resize-y rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
+                />
+              </div>
+
+              <div class="flex flex-col gap-2">
+                <label class="text-[13px] font-semibold text-neutral-700" for="ktpAddress">
+                  Alamat sesuai KTP
+                </label>
+                <Textarea
+                  id="ktpAddress"
+                  v-model="ktpAddress"
+                  rows="3"
+                  placeholder="Alamat lengkap sesuai KTP"
+                  class="w-full resize-y rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
                 />
               </div>
 
             </div>
+          </template>
+        </Card>
 
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="dusun">Dusun</label>
-                <InputText id="dusun" v-model="dusun" placeholder="Nama dusun" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
-              </div>
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="rt">RT</label>
-                <InputText id="rt" v-model="rt" placeholder="RT" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
-              </div>
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="rw">RW</label>
-                <InputText id="rw" v-model="rw" placeholder="RW" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
-              </div>
+        <!-- ============ KONTAK, PENDIDIKAN & PEKERJAAN ============ -->
+        <Card>
+          <template #title>
+            <div class="flex items-center gap-2 text-[15px] font-semibold text-neutral-800">
+              <i class="pi pi-briefcase text-primary-500" />
+              Kontak, Pendidikan & Pekerjaan
             </div>
-
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
-
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="gender">
-                  Jenis Kelamin
-                </label>
-
-                <Select
-                  id="gender"
-                  v-model="gender"
-                  :options="genderOptions"
-                  class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
-                  :pt="{ label: { class: 'px-3 py-2.5' } }"
-                />
-              </div>
+          </template>
+          <template #content>
+            <div class="flex flex-col gap-5">
 
               <div class="flex flex-col gap-2">
                 <label class="text-[13px] font-semibold text-neutral-700" for="phoneNumber">
                   Nomor Telepon
                 </label>
-
                 <InputText
                   id="phoneNumber"
                   v-model="phoneNumber"
@@ -396,145 +520,51 @@ function deleteCitizen() {
                 />
               </div>
 
-            </div>
-
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="age">Umur</label>
-                <InputText id="age" v-model="age" type="number" min="0" max="150" placeholder="Umur" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
-              </div>
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="bloodType">Golongan Darah</label>
-                <Select id="bloodType" v-model="bloodType" :options="bloodTypeOptions" placeholder="Pilih golongan darah" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ label: { class: 'px-3 py-2.5' } }" />
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="birthCertificateStatus">Akta Lahir</label>
-                <Select id="birthCertificateStatus" v-model="birthCertificateStatus" :options="certificateOptions" placeholder="Pilih status" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ label: { class: 'px-3 py-2.5' } }" />
-              </div>
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="birthCertificateNumber">Nomor Akta Lahir</label>
-                <InputText id="birthCertificateNumber" v-model="birthCertificateNumber" placeholder="Nomor akta lahir" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
-
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="birthPlace">
-                  Tempat Lahir
-                </label>
-
-                <InputText
-                  id="birthPlace"
-                  v-model="birthPlace"
-                  placeholder="Tempat lahir"
-                  class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
-                />
-              </div>
-
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="birthDate">
-                  Tanggal Lahir
-                </label>
-
-                <DatePicker
-                  id="birthDate"
-                  v-model="birthDate"
-                  dateFormat="yy-mm-dd"
-                  showIcon
-                  iconDisplay="input"
-                  class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
-                  :pt="{ pcInputText: { root: { class: 'w-full px-3 py-2.5' } } }"
-                />
+              <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="occupation">
+                    Pekerjaan
+                  </label>
+                  <InputText
+                    id="occupation"
+                    v-model="occupation"
+                    placeholder="Pekerjaan warga"
+                    class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
+                  />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="education">
+                    Pendidikan
+                  </label>
+                  <Select
+                    id="education"
+                    v-model="education"
+                    :options="educationOptions"
+                    class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
+                    :pt="{ label: { class: 'px-3 py-2.5' } }"
+                  />
+                </div>
               </div>
 
             </div>
+          </template>
+        </Card>
 
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="marriageCertificateStatus">Akta Kawin</label>
-                <Select id="marriageCertificateStatus" v-model="marriageCertificateStatus" :options="certificateOptions" placeholder="Pilih status" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ label: { class: 'px-3 py-2.5' } }" />
-              </div>
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="marriageCertificateNumber">Nomor Akta Kawin</label>
-                <InputText id="marriageCertificateNumber" v-model="marriageCertificateNumber" placeholder="Nomor akta kawin" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
-              </div>
+        <!-- ============ STATUS PERNIKAHAN ============ -->
+        <Card>
+          <template #title>
+            <div class="flex items-center gap-2 text-[15px] font-semibold text-neutral-800">
+              <i class="pi pi-heart text-primary-500" />
+              Status Pernikahan
             </div>
-
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="marriageDate">Tanggal Kawin</label>
-                <DatePicker id="marriageDate" v-model="marriageDate" dateFormat="yy-mm-dd" showIcon iconDisplay="input" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ pcInputText: { root: { class: 'w-full px-3 py-2.5' } } }" />
-              </div>
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="familyRelationship">Hubungan Dalam Keluarga</label>
-                <InputText id="familyRelationship" v-model="familyRelationship" placeholder="Contoh: Kepala Keluarga" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="divorceCertificateStatus">Akta Cerai</label>
-                <Select id="divorceCertificateStatus" v-model="divorceCertificateStatus" :options="certificateOptions" placeholder="Pilih status" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ label: { class: 'px-3 py-2.5' } }" />
-              </div>
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="divorceCertificateNumber">Nomor Akta Cerai</label>
-                <InputText id="divorceCertificateNumber" v-model="divorceCertificateNumber" placeholder="Nomor akta cerai" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="divorceDate">Tanggal Cerai</label>
-                <DatePicker id="divorceDate" v-model="divorceDate" dateFormat="yy-mm-dd" showIcon iconDisplay="input" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ pcInputText: { root: { class: 'w-full px-3 py-2.5' } } }" />
-              </div>
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="nationality">Kewarganegaraan</label>
-                <Select id="nationality" v-model="nationality" :options="nationalityOptions" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ label: { class: 'px-3 py-2.5' } }" />
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
-
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="occupation">
-                  Pekerjaan
-                </label>
-
-                <InputText
-                  id="occupation"
-                  v-model="occupation"
-                  placeholder="Pekerjaan warga"
-                  class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
-                />
-              </div>
-
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="education">
-                  Pendidikan
-                </label>
-
-                <Select
-                  id="education"
-                  v-model="education"
-                  :options="educationOptions"
-                  class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
-                  :pt="{ label: { class: 'px-3 py-2.5' } }"
-                />
-              </div>
-
-            </div>
-
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          </template>
+          <template #content>
+            <div class="flex flex-col gap-5">
 
               <div class="flex flex-col gap-2">
                 <label class="text-[13px] font-semibold text-neutral-700" for="maritalStatus">
                   Status Pernikahan
                 </label>
-
                 <Select
                   id="maritalStatus"
                   v-model="maritalStatus"
@@ -544,36 +574,90 @@ function deleteCitizen() {
                 />
               </div>
 
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="religion">
-                  Agama
-                </label>
+              <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="marriageCertificateStatus">Akta Kawin</label>
+                  <Select id="marriageCertificateStatus" v-model="marriageCertificateStatus" :options="certificateOptions" placeholder="Pilih status" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ label: { class: 'px-3 py-2.5' } }" />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="marriageCertificateNumber">Nomor Akta Kawin</label>
+                  <InputText id="marriageCertificateNumber" v-model="marriageCertificateNumber" placeholder="Nomor akta kawin" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
+                </div>
+              </div>
 
-                <Select
-                  id="religion"
-                  v-model="religion"
-                  :options="religionOptions"
-                  class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
-                  :pt="{ label: { class: 'px-3 py-2.5' } }"
-                />
+              <div class="flex flex-col gap-2">
+                <label class="text-[13px] font-semibold text-neutral-700" for="marriageDate">Tanggal Kawin</label>
+                <DatePicker id="marriageDate" v-model="marriageDate" dateFormat="yy-mm-dd" showIcon iconDisplay="input" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ pcInputText: { root: { class: 'w-full px-3 py-2.5' } } }" />
+              </div>
+
+              <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="divorceCertificateStatus">Akta Cerai</label>
+                  <Select id="divorceCertificateStatus" v-model="divorceCertificateStatus" :options="certificateOptions" placeholder="Pilih status" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ label: { class: 'px-3 py-2.5' } }" />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="divorceCertificateNumber">Nomor Akta Cerai</label>
+                  <InputText id="divorceCertificateNumber" v-model="divorceCertificateNumber" placeholder="Nomor akta cerai" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-2">
+                <label class="text-[13px] font-semibold text-neutral-700" for="divorceDate">Tanggal Cerai</label>
+                <DatePicker id="divorceDate" v-model="divorceDate" dateFormat="yy-mm-dd" showIcon iconDisplay="input" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ pcInputText: { root: { class: 'w-full px-3 py-2.5' } } }" />
               </div>
 
             </div>
+          </template>
+        </Card>
 
-            <div class="flex flex-col gap-2">
-              <label class="text-[13px] font-semibold text-neutral-700" for="address">
-                Alamat
-              </label>
-
-              <Textarea
-                id="address"
-                v-model="address"
-                rows="3"
-                placeholder="Alamat lengkap warga"
-                class="w-full resize-y rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
-              />
+        <!-- ============ DATA KELUARGA ============ -->
+        <Card>
+          <template #title>
+            <div class="flex items-center gap-2 text-[15px] font-semibold text-neutral-800">
+              <i class="pi pi-users text-primary-500" />
+              Data Keluarga
             </div>
+          </template>
+          <template #content>
+            <div class="flex flex-col gap-5">
 
+              <div class="flex flex-col gap-2">
+                <label class="text-[13px] font-semibold text-neutral-700" for="familyRelationship">Hubungan Dalam Keluarga</label>
+                <InputText id="familyRelationship" v-model="familyRelationship" placeholder="Contoh: Kepala Keluarga" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
+              </div>
+
+              <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="motherName">Nama Lengkap Ibu</label>
+                  <InputText id="motherName" v-model="motherName" placeholder="Nama ibu" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="motherNationalId">NIK Ibu</label>
+                  <InputText id="motherNationalId" v-model="motherNationalId" maxlength="16" inputmode="numeric" placeholder="NIK ibu" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="fatherName">Nama Lengkap Ayah</label>
+                  <InputText id="fatherName" v-model="fatherName" placeholder="Nama ayah" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-neutral-700" for="fatherNationalId">NIK Ayah</label>
+                  <InputText id="fatherNationalId" v-model="fatherNationalId" maxlength="16" inputmode="numeric" placeholder="NIK ayah" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
+                </div>
+              </div>
+
+            </div>
+          </template>
+        </Card>
+
+        <!-- ============ KESEHATAN & DISABILITAS ============ -->
+        <Card>
+          <template #title>
+            <div class="flex items-center gap-2 text-[15px] font-semibold text-neutral-800">
+              <i class="pi pi-heart-fill text-primary-500" />
+              Kesehatan & Disabilitas
+            </div>
+          </template>
+          <template #content>
             <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
               <div class="flex flex-col gap-2">
                 <label class="text-[13px] font-semibold text-neutral-700" for="physicalDisability">Kelainan Fisik</label>
@@ -584,43 +668,10 @@ function deleteCitizen() {
                 <Select id="disabilityStatus" v-model="disabilityStatus" :options="disabilityOptions" placeholder="Pilih status" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ label: { class: 'px-3 py-2.5' } }" />
               </div>
             </div>
+          </template>
+        </Card>
 
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="motherName">Nama Lengkap Ibu</label>
-                <InputText id="motherName" v-model="motherName" placeholder="Nama ibu" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
-              </div>
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="motherNationalId">NIK Ibu</label>
-                <InputText id="motherNationalId" v-model="motherNationalId" maxlength="16" inputmode="numeric" placeholder="NIK ibu" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
-              </div>
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="fatherName">Nama Lengkap Ayah</label>
-                <InputText id="fatherName" v-model="fatherName" placeholder="Nama ayah" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
-              </div>
-              <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="fatherNationalId">NIK Ayah</label>
-                <InputText id="fatherNationalId" v-model="fatherNationalId" maxlength="16" inputmode="numeric" placeholder="NIK ayah" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
-              </div>
-            </div>
-
-            <div class="flex flex-col gap-2">
-              <label class="text-[13px] font-semibold text-neutral-700" for="ktpAddress">
-                Alamat sesuai KTP
-              </label>
-
-              <Textarea
-                id="ktpAddress"
-                v-model="ktpAddress"
-                rows="3"
-                placeholder="Alamat lengkap sesuai KTP"
-                class="w-full resize-y rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
-              />
-            </div>
-
-          </div>
-        </template>
-      </Card>
+      </div>
 
       <aside class="flex flex-col gap-5">
 

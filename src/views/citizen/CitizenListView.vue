@@ -571,7 +571,7 @@ async function handleFileSelect(event) {
       v-model:visible="detailDialogVisible"
       header="Detail Data Warga"
       modal
-      :style="{ width: '32rem' }"
+      :style="{ width: '36rem' }"
       class="rounded-lg"
       :pt="{
         header: { class: 'border-b border-neutral-100 px-5 py-4' },
@@ -580,156 +580,213 @@ async function handleFileSelect(event) {
         footer: { class: 'border-t border-neutral-100 px-5 py-3' },
       }"
     >
-      <div v-if="selectedDetailResident" class="grid max-h-[65vh] grid-cols-1 gap-4 overflow-y-auto pr-1 sm:grid-cols-2">
-        <div class="flex flex-col gap-1 sm:col-span-2">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nama Lengkap</span>
-          <span class="text-[13px] font-medium text-neutral-800">{{ selectedDetailResident.name || '-' }}</span>
-        </div>
+      <div v-if="selectedDetailResident" class="flex max-h-[65vh] flex-col gap-6 overflow-y-auto pr-1">
 
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Jenis Data</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.recordType || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Peristiwa</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.recordEvent || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">NIK</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.nationalId || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor KK</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.familyCardNumber || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Jenis Kelamin</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.gender || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor Telepon</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.phoneNumber || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tempat Lahir</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.birthPlace || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tanggal Lahir</span>
-          <span class="text-[13px] text-neutral-800">{{ formatDate(selectedDetailResident.birthDate) }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Umur</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.age ?? '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Golongan Darah</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.bloodType || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Akta Lahir</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.birthCertificateStatus || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor Akta Lahir</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.birthCertificateNumber || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Dusun</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.dusun || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">RT / RW</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.rt || '-' }} / {{ selectedDetailResident.rw || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Pekerjaan</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.occupation || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Pendidikan</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.education || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Status Pernikahan</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.maritalStatus || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Agama</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.religion || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Akta Kawin</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.marriageCertificateStatus || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor Akta Kawin</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.marriageCertificateNumber || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tanggal Kawin</span>
-          <span class="text-[13px] text-neutral-800">{{ formatDate(selectedDetailResident.marriageDate) }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Akta Cerai</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.divorceCertificateStatus || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor Akta Cerai</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.divorceCertificateNumber || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tanggal Cerai</span>
-          <span class="text-[13px] text-neutral-800">{{ formatDate(selectedDetailResident.divorceDate) }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Hubungan Keluarga</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.familyRelationship || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Kelainan Fisik</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.physicalDisability || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Penyandang Cacat</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.disabilityStatus || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Kewarganegaraan</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.nationality || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nama Ibu</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.motherName || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">NIK Ibu</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.motherNationalId || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nama Ayah</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.fatherName || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">NIK Ayah</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.fatherNationalId || '-' }}</span>
-        </div>
-        <div class="flex flex-col gap-1 sm:col-span-2">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Status</span>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span class="text-base font-bold text-neutral-800">{{ selectedDetailResident.name || '-' }}</span>
           <Tag
             :value="selectedDetailResident.status"
             :severity="statusSeverity(selectedDetailResident.status)"
             class="w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide"
           />
         </div>
-        <div class="flex flex-col gap-1 sm:col-span-2">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Alamat</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.address || '-' }}</span>
+
+        <!-- ============ IDENTITAS POKOK ============ -->
+        <div class="flex flex-col gap-3">
+          <div class="flex items-center gap-2 border-b border-neutral-100 pb-2 text-[13px] font-semibold text-neutral-800">
+            <i class="pi pi-id-card text-primary-500" />
+            Identitas Pokok
+          </div>
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Jenis Data</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.recordType || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Peristiwa</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.recordEvent || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">NIK</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.nationalId || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor KK</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.familyCardNumber || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Jenis Kelamin</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.gender || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Kewarganegaraan</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.nationality || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tempat Lahir</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.birthPlace || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tanggal Lahir</span>
+              <span class="text-[13px] text-neutral-800">{{ formatDate(selectedDetailResident.birthDate) }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Umur</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.age ?? '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Golongan Darah</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.bloodType || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Agama</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.religion || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Akta Lahir</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.birthCertificateStatus || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor Akta Lahir</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.birthCertificateNumber || '-' }}</span>
+            </div>
+          </div>
         </div>
-        <div class="flex flex-col gap-1 sm:col-span-2">
-          <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Alamat sesuai KTP</span>
-          <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.ktpAddress || '-' }}</span>
+
+        <!-- ============ ALAMAT & DOMISILI ============ -->
+        <div class="flex flex-col gap-3">
+          <div class="flex items-center gap-2 border-b border-neutral-100 pb-2 text-[13px] font-semibold text-neutral-800">
+            <i class="pi pi-map-marker text-primary-500" />
+            Alamat & Domisili
+          </div>
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Dusun</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.dusun || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">RT / RW</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.rt || '-' }} / {{ selectedDetailResident.rw || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1 sm:col-span-2">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Alamat</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.address || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1 sm:col-span-2">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Alamat sesuai KTP</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.ktpAddress || '-' }}</span>
+            </div>
+          </div>
         </div>
+
+        <!-- ============ KONTAK, PENDIDIKAN & PEKERJAAN ============ -->
+        <div class="flex flex-col gap-3">
+          <div class="flex items-center gap-2 border-b border-neutral-100 pb-2 text-[13px] font-semibold text-neutral-800">
+            <i class="pi pi-briefcase text-primary-500" />
+            Kontak, Pendidikan & Pekerjaan
+          </div>
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor Telepon</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.phoneNumber || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Pekerjaan</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.occupation || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Pendidikan</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.education || '-' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============ STATUS PERNIKAHAN ============ -->
+        <div class="flex flex-col gap-3">
+          <div class="flex items-center gap-2 border-b border-neutral-100 pb-2 text-[13px] font-semibold text-neutral-800">
+            <i class="pi pi-heart text-primary-500" />
+            Status Pernikahan
+          </div>
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="flex flex-col gap-1 sm:col-span-2">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Status Pernikahan</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.maritalStatus || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Akta Kawin</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.marriageCertificateStatus || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor Akta Kawin</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.marriageCertificateNumber || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tanggal Kawin</span>
+              <span class="text-[13px] text-neutral-800">{{ formatDate(selectedDetailResident.marriageDate) }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Akta Cerai</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.divorceCertificateStatus || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor Akta Cerai</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.divorceCertificateNumber || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tanggal Cerai</span>
+              <span class="text-[13px] text-neutral-800">{{ formatDate(selectedDetailResident.divorceDate) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============ DATA KELUARGA ============ -->
+        <div class="flex flex-col gap-3">
+          <div class="flex items-center gap-2 border-b border-neutral-100 pb-2 text-[13px] font-semibold text-neutral-800">
+            <i class="pi pi-users text-primary-500" />
+            Data Keluarga
+          </div>
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="flex flex-col gap-1 sm:col-span-2">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Hubungan Keluarga</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.familyRelationship || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nama Ibu</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.motherName || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">NIK Ibu</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.motherNationalId || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nama Ayah</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.fatherName || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">NIK Ayah</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.fatherNationalId || '-' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============ KESEHATAN & DISABILITAS ============ -->
+        <div class="flex flex-col gap-3">
+          <div class="flex items-center gap-2 border-b border-neutral-100 pb-2 text-[13px] font-semibold text-neutral-800">
+            <i class="pi pi-heart-fill text-primary-500" />
+            Kesehatan & Disabilitas
+          </div>
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Kelainan Fisik</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.physicalDisability || '-' }}</span>
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Penyandang Cacat</span>
+              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.disabilityStatus || '-' }}</span>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <template #footer>
