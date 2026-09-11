@@ -1,37 +1,27 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import Checkbox from 'primevue/checkbox'
-import ToggleSwitch from 'primevue/toggleswitch'
+import Dialog from 'primevue/dialog'
 import AppButton from '@/components/common/AppButton.vue'
+import AppInput from '@/components/common/AppInput.vue'
 import {
   createRole,
+  deleteRole,
   getPermissions,
   getRoles,
   syncRolePermissions,
+  updateRole,
 } from '@/services/rbac.service'
-import { getListCache, setListCache } from '@/services/list-cache'
+import { getListCache, setListCache, updateListCache } from '@/services/list-cache'
 
 const route = useRoute()
 const router = useRouter()
+const confirm = useConfirm()
 const toast = useToast()
 
-const modules = [
-  { key: 'history', label: 'Sejarah Kalurahan', slug: 'sejarah' },
-  { key: 'visionMission', label: 'Visi & Misi Kalurahan', slug: 'visi-misi' },
-  { key: 'organization', label: 'Struktur Organisasi', slug: 'struktur-organisasi' },
-  { key: 'region', label: 'Data Wilayah Kalurahan', slug: 'data-wilayah' },
-  { key: 'agenda', label: 'Kelola Agenda', slug: 'agenda' },
-  { key: 'news', label: 'Berita & Pengumuman', slug: 'berita' },
-  { key: 'library', label: 'Kelola Perpustakaan', slug: 'perpustakaan' },
-  { key: 'letterService', label: 'Kelola Layanan', slug: 'surat' },
-  { key: 'villagePotential', label: 'Kelola Potensi Kalurahan', slug: 'potensi-kalurahan' },
-  { key: 'gallery', label: 'Kelola Gallery', slug: 'gallery' },
-  { key: 'userManagement', label: 'Manajemen Admin', slug: 'user-management' },
-]
-const permissionKeys = ['view', 'create', 'edit', 'delete']
-const permissionLabels = { view: 'LIHAT', create: 'BUAT', edit: 'EDIT', delete: 'HAPUS' }
 const cachedRoles = getListCache('roles')
 const cachedPermissions = getListCache('permissions')
 const roles = ref([])
@@ -40,40 +30,33 @@ const activeRoleId = ref(null)
 const saving = ref(false)
 const loading = ref(!cachedRoles && !cachedPermissions)
 
-const emptyModulePermissions = () => Object.fromEntries(
-  modules.map((module) => [module.key, {
-    view: false,
-    create: false,
-    edit: false,
-    delete: false,
-  }]),
+// Daftar modul yang ditampilkan di matrix hak akses diambil langsung dari
+// table permissions (bukan hardcode di FE lagi). Halaman Dashboard sengaja
+// dikeluarkan dari daftar ini -- semua Role bisa akses Dashboard tanpa
+// perlu diberi hak akses secara eksplisit.
+const assignableModules = computed(() =>
+  permissions.value.filter((permission) => String(permission.slug ?? '').toLowerCase() !== 'dashboard'),
 )
 
+// Setiap modul sekarang cukup 1 checkbox "Akses" (all access), tidak perlu
+// lagi kolom Lihat / Buat / Edit / Hapus terpisah.
+function buildAccessMap(role) {
+  const grantedIds = new Set((role.permissions ?? []).map((permission) => permission.permission_id))
+  return Object.fromEntries(
+    permissions.value.map((permission) => [permission.permission_id, grantedIds.has(permission.permission_id)]),
+  )
+}
+
 function mapRole(role) {
-  const permissionIds = (role.permissions ?? []).map((permission) => permission.permission_id)
-  const selectedSlugs = new Set((role.permissions ?? []).map((permission) => permission.slug))
-  const matrix = emptyModulePermissions()
-
-  modules.forEach((module) => {
-    if (selectedSlugs.has(module.slug)) {
-      permissionKeys.forEach((key) => { matrix[module.key][key] = true })
-    }
-  })
-
   return {
     id: role.role_id,
     name: role.name ?? '-',
     description: role.description ?? '',
-    status: 'active',
     isProtected: String(role.name ?? '').toLowerCase() === 'superadmin',
-    permissionIds,
-    permissions: matrix,
+    access: buildAccessMap(role),
   }
 }
 
-// Map cache setelah seluruh helper di atas selesai diinisialisasi.
-// Sebelumnya mapRole dipanggil sebelum emptyModulePermissions tersedia,
-// sehingga halaman role crash ketika cache role sudah terisi.
 roles.value = (cachedRoles ?? []).map(mapRole)
 
 const activeRole = computed(() => roles.value.find((role) => role.id === activeRoleId.value))
@@ -84,8 +67,6 @@ function selectInitialRole() {
   activeRoleId.value = requestedRole?.id ?? roles.value[0]?.id ?? null
 }
 
-// Pilih role dari cache saat komponen dibuat agar matrix permission langsung
-// terlihat tanpa menunggu request API selesai.
 selectInitialRole()
 
 async function loadData({ background = false } = {}) {
@@ -116,10 +97,6 @@ function selectRole(roleId) {
   activeRoleId.value = roleId
 }
 
-function toggleRoleStatus(role) {
-  role.status = role.status === 'active' ? 'inactive' : 'active'
-}
-
 async function handleAddRole() {
   try {
     const created = await createRole({
@@ -139,15 +116,90 @@ async function handleAddRole() {
   }
 }
 
+// --- Edit nama & deskripsi role ---
+const editDialogVisible = ref(false)
+const editForm = reactive({ name: '', description: '' })
+const editSaving = ref(false)
+
+function openEditRole(role) {
+  editForm.name = role.name
+  editForm.description = role.description
+  editDialogVisible.value = true
+}
+
+async function saveRoleName() {
+  if (!activeRole.value || !editForm.name.trim()) {
+    toast.add({ severity: 'warn', summary: 'Nama role tidak boleh kosong', life: 2500 })
+    return
+  }
+
+  editSaving.value = true
+  try {
+    const updated = await updateRole(activeRole.value.id, {
+      name: editForm.name.trim(),
+      description: editForm.description,
+    })
+    const index = roles.value.findIndex((role) => role.id === activeRole.value.id)
+    if (index !== -1) {
+      roles.value[index] = { ...roles.value[index], name: updated.name ?? editForm.name, description: updated.description ?? editForm.description }
+    }
+    updateListCache('roles', (items) => items.map((item) => (item.role_id === activeRole.value.id ? { ...item, ...updated } : item)))
+    editDialogVisible.value = false
+    toast.add({ severity: 'success', summary: 'Role berhasil diperbarui', life: 2000 })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal memperbarui role',
+      detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+      life: 4000,
+    })
+  } finally {
+    editSaving.value = false
+  }
+}
+
+// --- Hapus role ---
+function handleDeleteRole(role) {
+  if (role.isProtected) {
+    toast.add({ severity: 'warn', summary: 'Super Admin tidak bisa dihapus', life: 2000 })
+    return
+  }
+  confirm.require({
+    message: `Hapus role "${role.name}"? Pengguna dengan role ini perlu dipindahkan ke role lain.`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      try {
+        await deleteRole(role.id)
+        roles.value = roles.value.filter((item) => item.id !== role.id)
+        updateListCache('roles', (items) => items.filter((item) => item.role_id !== role.id))
+        if (activeRoleId.value === role.id) {
+          activeRoleId.value = roles.value[0]?.id ?? null
+        }
+        toast.add({ severity: 'success', summary: 'Role berhasil dihapus', life: 2000 })
+      } catch (error) {
+        toast.add({
+          severity: 'error',
+          summary: 'Gagal menghapus role',
+          detail: error.response?.data?.message ?? 'Role mungkin masih dipakai pengguna lain.',
+          life: 4000,
+        })
+      }
+    },
+  })
+}
+
 async function saveChanges() {
   if (!activeRole.value) return
 
   saving.value = true
   try {
-    const selectedIds = modules
-      .filter((module) => Object.values(activeRole.value.permissions[module.key]).some(Boolean))
-      .map((module) => permissions.value.find((permission) => permission.slug === module.slug)?.permission_id)
-      .filter(Boolean)
+    const selectedIds = permissions.value
+      .filter((permission) => activeRole.value.access[permission.permission_id])
+      .map((permission) => permission.permission_id)
 
     const updated = await syncRolePermissions(activeRole.value.id, selectedIds)
     const index = roles.value.findIndex((role) => role.id === activeRole.value.id)
@@ -156,7 +208,7 @@ async function saveChanges() {
       role_id: role.id,
       name: role.name,
       description: role.description,
-      permissions: permissions.value.filter((permission) => role.permissionIds.includes(permission.permission_id)),
+      permissions: permissions.value.filter((permission) => role.access[permission.permission_id]),
     })))
 
     toast.add({ severity: 'success', summary: 'Perubahan hak akses disimpan', life: 2000 })
@@ -182,7 +234,7 @@ function cancel() {
   <div>
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
       <div>
-        <h1 class="text-2xl font-bold text-gray-800 mb-1">List Admin</h1>
+        <h1 class="text-2xl font-bold text-gray-800 mb-1">Role & Hak Akses</h1>
         <p class="text-sm text-gray-500 mb-0">
           Pengelolaan role-based access control dan hak izin modul.
         </p>
@@ -214,25 +266,40 @@ function cancel() {
         </div>
 
         <div class="flex flex-col">
-          <button
+          <div
             v-for="role in roles"
             :key="role.id"
-            class="flex items-center justify-between text-left px-3 py-2.5 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+            class="group flex items-center justify-between rounded-lg text-sm text-gray-600 hover:bg-gray-50"
             :class="{
-              'bg-gray-100 text-gray-900 font-semibold border-l-[3px] border-gray-800': role.id === activeRoleId,
+              'bg-gray-100 text-gray-900 font-semibold': role.id === activeRoleId,
             }"
-            @click="selectRole(role.id)"
           >
-            <span class="flex items-center gap-2">
-              <span
-                v-if="!role.isProtected"
-                class="w-1.5 h-1.5 rounded-full shrink-0"
-                :class="role.status === 'active' ? 'bg-green-500' : 'bg-gray-300'"
-              ></span>
+            <button
+              class="flex-1 text-left px-3 py-2.5 bg-transparent border-0"
+              :class="{ 'border-l-[3px] border-gray-800': role.id === activeRoleId }"
+              @click="selectRole(role.id)"
+            >
               {{ role.name }}
-            </span>
-            <i v-if="role.id === activeRoleId" class="pi pi-chevron-right text-xs"></i>
-          </button>
+            </button>
+
+            <div class="flex items-center gap-1 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                class="w-6 h-6 rounded-md inline-flex items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-800"
+                title="Edit nama role"
+                @click.stop="openEditRole(role)"
+              >
+                <i class="pi pi-pencil text-xs"></i>
+              </button>
+              <button
+                v-if="!role.isProtected"
+                class="w-6 h-6 rounded-md inline-flex items-center justify-center text-gray-500 hover:bg-red-100 hover:text-red-600"
+                title="Hapus role"
+                @click.stop="handleDeleteRole(role)"
+              >
+                <i class="pi pi-trash text-xs"></i>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -246,56 +313,28 @@ function cancel() {
               </h2>
               <p class="text-sm text-gray-500 mb-0">{{ activeRole.description }}</p>
             </div>
-
-            <!-- Toggle status active/inactive -- disembunyikan untuk Super Admin -->
-            <div v-if="!activeRole.isProtected" class="flex items-center gap-2 shrink-0">
-              <span
-                class="text-xs font-semibold"
-                :class="activeRole.status === 'active' ? 'text-green-600' : 'text-gray-400'"
-              >
-                {{ activeRole.status === 'active' ? 'Active' : 'Deactive' }}
-              </span>
-              <ToggleSwitch
-                :model-value="activeRole.status === 'active'"
-                @update:model-value="toggleRoleStatus(activeRole)"
-              />
-            </div>
           </div>
 
-          <!-- Peringatan saat role nonaktif: semua hak akses otomatis terkunci -->
-          <div
-            v-if="activeRole.status === 'inactive'"
-            class="flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs text-gray-500"
-          >
-            <i class="pi pi-lock"></i>
-            Peran ini nonaktif. Semua hak akses dikunci dan tidak berlaku sampai diaktifkan kembali.
-          </div>
-
-          <table
-            class="w-full text-sm"
-            :class="{ 'opacity-50 pointer-events-none': activeRole.status === 'inactive' }"
-          >
+          <table class="w-full text-sm">
             <thead>
               <tr class="text-left border-b border-gray-100 bg-gray-50">
                 <th class="py-3 px-4 font-semibold text-xs text-gray-500">MODUL</th>
-                <th
-                  v-for="key in permissionKeys"
-                  :key="key"
-                  class="py-3 px-4 font-semibold text-xs text-gray-500 text-center"
-                >
-                  {{ permissionLabels[key] }}
-                </th>
+                <th class="py-3 px-4 font-semibold text-xs text-gray-500 text-center w-28">AKSES</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="mod in modules" :key="mod.key" class="border-b border-gray-50">
-                <td class="py-3 px-4 font-medium text-gray-800">{{ mod.label }}</td>
-                <td v-for="key in permissionKeys" :key="key" class="py-3 px-4 text-center">
+              <tr v-for="permission in assignableModules" :key="permission.permission_id" class="border-b border-gray-50">
+                <td class="py-3 px-4 font-medium text-gray-800">{{ permission.name ?? permission.slug }}</td>
+                <td class="py-3 px-4 text-center">
                   <Checkbox
-                    v-model="activeRole.permissions[mod.key][key]"
+                    v-model="activeRole.access[permission.permission_id]"
                     :binary="true"
-                    :disabled="activeRole.status === 'inactive'"
                   />
+                </td>
+              </tr>
+              <tr v-if="assignableModules.length === 0">
+                <td colspan="2" class="py-6 px-4 text-center text-gray-400">
+                  Belum ada modul (permission) yang bisa diatur.
                 </td>
               </tr>
             </tbody>
@@ -303,5 +342,28 @@ function cancel() {
         </div>
       </div>
     </div>
+
+    <!-- Dialog edit nama & deskripsi role -->
+    <Dialog
+      v-model:visible="editDialogVisible"
+      modal
+      header="Edit Role"
+      :style="{ width: '28rem', maxWidth: '95vw' }"
+    >
+      <div class="flex flex-col gap-3">
+        <AppInput v-model="editForm.name" label="Nama Role" required placeholder="Nama role" />
+        <AppInput v-model="editForm.description" label="Deskripsi" placeholder="Deskripsi role (opsional)" />
+      </div>
+
+      <template #footer>
+        <AppButton label="Batal" variant="outline" @click="editDialogVisible = false" />
+        <AppButton
+          label="Simpan"
+          variant="dark"
+          :loading="editSaving"
+          @click="saveRoleName"
+        />
+      </template>
+    </Dialog>
   </div>
 </template>

@@ -16,7 +16,7 @@ const menuGroups = [
   {
     label: 'Utama',
     showLabel: false,
-    items: [{ label: 'Dashboard', icon: 'pi pi-home', route: '/dashboard', permission: 'dashboard' }],
+    items: [{ label: 'Dashboard', icon: 'pi pi-home', route: '/dashboard' }],
   },
   {
     label: 'Layanan',
@@ -26,10 +26,10 @@ const menuGroups = [
         label: 'Persuratan',
         icon: 'pi pi-file',
         items: [
-          { label: 'Pengelolaan Surat', route: '/letter', permission: 'surat' },
-          { label: 'Verifikasi Surat', route: '/letter/verification', permission: 'surat' },
-          { label: 'Otorisasi Surat', route: '/letter/authorization', permission: 'surat' },
-          { label: 'Tipe Surat', route: '/letter-type', permission: 'surat' },
+          { label: 'Pengelolaan Surat', route: '/letter', permission: 'pengelolaan-surat' },
+          { label: 'Verifikasi Surat', route: '/letter/verification', permission: 'verifikasi-surat' },
+          { label: 'Otorisasi Surat', route: '/letter/authorization', permission: 'otorisasi-surat' },
+          { label: 'Tipe Surat', route: '/letter-type', permission: 'tipe-surat' },
         ],
       },
       { label: 'Aduan', icon: 'pi pi-comments', route: '/complaint', permission: 'pengaduan' },
@@ -72,20 +72,11 @@ const menuGroups = [
     ],
   },
   {
-    label: 'User Management',
+    label: 'Manajemen Pengguna',
     showLabel: true,
     items: [
-      {
-        label: 'List Admin',
-        icon: 'pi pi-user-edit',
-        permission: 'user-management',
-        items: [
-          { label: 'Daftar Pengguna', route: '/user-management', permission: 'user-management' },
-          { label: 'Role & Hak Akses', route: '/user-management/roles', permission: 'user-management' },
-          { label: 'Daftar Permission', route: '/user-management/permissions', permission: 'user-management' },
-         
-        ],
-      },
+      { label: 'Daftar Pengguna', icon: 'pi pi-users', route: '/user-management', permission: 'user-management' },
+      { label: 'Role & Hak Akses', icon: 'pi pi-shield', route: '/user-management/roles', permission: 'user-management' },
     ],
   },
 ]
