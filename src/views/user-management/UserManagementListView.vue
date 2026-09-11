@@ -8,8 +8,8 @@ import Checkbox from 'primevue/checkbox'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Dialog from 'primevue/dialog'
-import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
+import ToggleSwitch from 'primevue/toggleswitch'
 import AppButton from '@/components/common/AppButton.vue'
 import AppInput from '@/components/common/AppInput.vue'
 import { createUser, deleteUser, getRoles, getUsers, updateUser } from '@/services/rbac.service'
@@ -37,6 +37,8 @@ const form = reactive({
   is_active: true,
 })
 
+// Kolom "Role" dan "Hak Akses" sebelumnya sama-sama menampilkan nama role
+// (roleName), jadi salah satunya (Hak Akses) dihapus -- cukup 1 kolom "Role".
 function mapUser(user) {
   const roleName = user.role?.name ?? '-'
   return {
@@ -44,8 +46,6 @@ function mapUser(user) {
     id: user.user_id,
     userName: user.full_name ?? user.username ?? '-',
     positionTitle: roleName,
-    department: '-',
-    accessLabel: roleName === '-' ? 'No Access' : roleName,
     status: user.is_active ? 'active' : 'inactive',
     isProtected: roleName.toLowerCase() === 'superadmin',
   }
@@ -74,7 +74,7 @@ async function loadData({ background = false } = {}) {
 // --- Search ---
 const searchQuery = ref('')
 
-// Kalau datang dari List Admin lewat tombol "Kelola" (?role=Admin Berita),
+// Kalau datang dari Role & Hak Akses lewat tombol "Kelola" (?role=Admin Berita),
 // auto-filter tabel ke peran tersebut.
 onMounted(() => {
   if (route.query.role) {
@@ -89,8 +89,7 @@ const filteredUsers = computed(() => {
   return users.value.filter(
     (r) =>
       r.userName.toLowerCase().includes(query) ||
-      r.positionTitle.toLowerCase().includes(query) ||
-      r.department.toLowerCase().includes(query),
+      r.positionTitle.toLowerCase().includes(query),
   )
 })
 
@@ -230,6 +229,95 @@ function handleDelete(role) {
   })
 }
 
+// --- Bulk Action: Hapus / Nonaktifkan pengguna terpilih ---
+// Backend belum punya endpoint bulk, jadi dipanggil satu-satu (pola sama
+// seperti deleteSelected() di CitizenListView.vue).
+const bulkProcessing = ref(false)
+
+const selectedUsers = computed(() =>
+  users.value.filter((user) => selectedIds.value.includes(user.id)),
+)
+
+// Super Admin tidak boleh ikut terhapus/dinonaktifkan lewat bulk action.
+const selectableSelectedUsers = computed(() =>
+  selectedUsers.value.filter((user) => !user.isProtected),
+)
+
+function clearSelectionIfEmpty() {
+  if (filteredUsers.value.length === 0) selectedIds.value = []
+}
+
+function handleBulkDelete() {
+  const targets = selectableSelectedUsers.value
+  if (targets.length === 0) return
+
+  confirm.require({
+    message: `Hapus ${targets.length} pengguna terpilih?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      bulkProcessing.value = true
+      const ids = targets.map((user) => user.id)
+      try {
+        await Promise.all(ids.map((id) => deleteUser(id)))
+        const idSet = new Set(ids)
+        users.value = users.value.filter((item) => !idSet.has(item.id))
+        updateListCache('users', (items) => items.filter((item) => !idSet.has(item.user_id)))
+        selectedIds.value = selectedIds.value.filter((id) => !idSet.has(id))
+        toast.add({ severity: 'success', summary: `${ids.length} pengguna berhasil dihapus`, life: 2500 })
+      } catch (error) {
+        toast.add({
+          severity: 'error',
+          summary: 'Sebagian pengguna gagal dihapus',
+          detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+          life: 4000,
+        })
+        await loadData({ background: true })
+      } finally {
+        bulkProcessing.value = false
+        clearSelectionIfEmpty()
+      }
+    },
+  })
+}
+
+function handleBulkDeactivate() {
+  const targets = selectableSelectedUsers.value
+  if (targets.length === 0) return
+
+  confirm.require({
+    message: `Nonaktifkan ${targets.length} pengguna terpilih?`,
+    header: 'Konfirmasi Nonaktifkan',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Nonaktifkan',
+    rejectLabel: 'Batal',
+    accept: async () => {
+      bulkProcessing.value = true
+      try {
+        await Promise.all(targets.map((user) => updateUser(user.id, { is_active: false })))
+        const idSet = new Set(targets.map((user) => user.id))
+        users.value = users.value.map((item) => (idSet.has(item.id) ? { ...item, status: 'inactive' } : item))
+        updateListCache('users', (items) => items.map((item) => (idSet.has(item.user_id) ? { ...item, is_active: false } : item)))
+        toast.add({ severity: 'success', summary: `${targets.length} pengguna berhasil dinonaktifkan`, life: 2500 })
+      } catch (error) {
+        toast.add({
+          severity: 'error',
+          summary: 'Sebagian pengguna gagal dinonaktifkan',
+          detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+          life: 4000,
+        })
+        await loadData({ background: true })
+      } finally {
+        bulkProcessing.value = false
+        selectedIds.value = []
+      }
+    },
+  })
+}
+
 onMounted(() => loadData({ background: Boolean(cachedUsers || cachedRoles) }))
 </script>
 
@@ -253,6 +341,32 @@ onMounted(() => loadData({ background: Boolean(cachedUsers || cachedRoles) }))
             icon="pi pi-plus"
             variant="dark"
             @click="goToAddNew"
+          />
+        </div>
+      </div>
+
+      <!-- Bulk Action bar: muncul saat ada baris yang dicentang -->
+      <div
+        v-if="selectedIds.length > 0"
+        class="flex items-center justify-between gap-3 mb-4 px-3 py-2 rounded-xl bg-gray-50 border border-gray-200"
+      >
+        <span class="text-sm text-gray-600">{{ selectedIds.length }} pengguna dipilih</span>
+        <div class="flex items-center gap-2">
+          <AppButton
+            label="Nonaktifkan"
+            icon="pi pi-ban"
+            variant="outline"
+            :loading="bulkProcessing"
+            :disabled="selectableSelectedUsers.length === 0"
+            @click="handleBulkDeactivate"
+          />
+          <AppButton
+            label="Hapus"
+            icon="pi pi-trash"
+            variant="danger"
+            :loading="bulkProcessing"
+            :disabled="selectableSelectedUsers.length === 0"
+            @click="handleBulkDelete"
           />
         </div>
       </div>
@@ -283,21 +397,9 @@ onMounted(() => loadData({ background: Boolean(cachedUsers || cachedRoles) }))
           </template>
         </Column>
 
-        <Column field="positionTitle" header="Role / Posisi" sortable>
+        <Column field="positionTitle" header="Role" sortable>
           <template #body="{ data }">
             <span class="text-blue-600 font-medium">{{ data.positionTitle }}</span>
-          </template>
-        </Column>
-
-        <Column field="department" header="Departmen" sortable>
-          <template #body="{ data }">
-            <span class="text-gray-600">{{ data.department }}</span>
-          </template>
-        </Column>
-
-        <Column field="accessLabel" header="Hak Akses" sortable>
-          <template #body="{ data }">
-            <span class="text-gray-600">{{ data.accessLabel }}</span>
           </template>
         </Column>
 
@@ -350,23 +452,38 @@ onMounted(() => loadData({ background: Boolean(cachedUsers || cachedRoles) }))
       :style="{ width: '34rem', maxWidth: '95vw' }"
     >
       <div class="flex flex-col gap-3">
-        <InputText v-model="form.full_name" placeholder="Nama lengkap" />
-        <InputText v-model="form.username" placeholder="Username" />
-        <InputText v-model="form.email" type="email" placeholder="Email" />
-        <InputText
+        <AppInput v-model="form.full_name" label="Nama" required placeholder="Nama" />
+        <AppInput v-model="form.username" label="Username" required placeholder="Username" />
+        <AppInput v-model="form.email" type="email" label="Email" required placeholder="Email" />
+        <AppInput
           v-model="form.password"
           type="password"
+          label="Password"
           :placeholder="editingUserId ? 'Password (kosongkan jika tidak diubah)' : 'Password'"
         />
-        <InputText v-model="form.phone_number" placeholder="Nomor telepon (opsional)" />
-        <Select
-          v-model="form.role_id"
-          :options="roles"
-          option-label="name"
-          option-value="role_id"
-          placeholder="Pilih role"
-          fluid
-        />
+        <AppInput v-model="form.phone_number" label="Nomor Telepon" placeholder="Nomor telepon (opsional)" />
+
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-neutral-700">
+            Role <span class="text-danger-500">*</span>
+          </label>
+          <Select
+            v-model="form.role_id"
+            :options="roles"
+            option-label="name"
+            option-value="role_id"
+            placeholder="Pilih role"
+            fluid
+          />
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-neutral-700">Status</label>
+          <div class="flex items-center gap-2">
+            <ToggleSwitch v-model="form.is_active" />
+            <span class="text-sm text-gray-600">{{ form.is_active ? 'Aktif' : 'Tidak Aktif' }}</span>
+          </div>
+        </div>
       </div>
 
       <template #footer>
