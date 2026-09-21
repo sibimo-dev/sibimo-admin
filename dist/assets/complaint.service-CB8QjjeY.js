@@ -1,0 +1,1 @@
+import{P as e}from"./index-4wnXBkEE.js";var t=e=>e.then(e=>e.data.data),n=()=>t(e.get(`/complaints`)),r=n=>t(e.get(`/complaints/${n}`)),i=(n,r)=>t(e.post(`/complaints/${n}/status`,r));export{n,i as r,r as t};
