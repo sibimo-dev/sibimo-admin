@@ -1,1 +1,0 @@
-var e=`http://localhost:8000/api`.replace(/\/api\/?$/,``);function t(t){if(!t)return``;let n=String(t);return/^https?:\/\//i.test(n)?n:n.startsWith(`/storage/`)?`${e}${n}`:n.startsWith(`storage/`)?`${e}/${n}`:`${e}/storage/${n.replace(/^\/+/,``)}`}export{t};
