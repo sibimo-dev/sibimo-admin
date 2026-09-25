@@ -1,394 +1,252 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppButton from '@/components/common/AppButton.vue'
 import AppInput from '@/components/common/AppInput.vue'
-import Tag from 'primevue/tag'
 import { useLetterTypeStore } from '@/stores/useLetterTypeStore'
 import { useLetterStore } from '@/stores/useLetterStore'
 
 const router = useRouter()
-const { rows: letterTypes } = useLetterTypeStore()
-const { addSurat } = useLetterStore()
+const typeStore = useLetterTypeStore()
+const letterStore = useLetterStore()
 
-// Hanya tipe surat aktif yang boleh dipakai bikin surat baru
-const activeTypes = computed(() => letterTypes.value.filter((t) => t.is_active))
-
-// Kategori diturunkan otomatis dari tipe surat yang ada, bukan daftar statis --
-// begitu ada kategori baru ditambahkan lewat Pengelolaan Tipe Surat, langsung muncul di sini.
-const categories = computed(() => {
-  const unique = [...new Set(activeTypes.value.map((t) => t.category))]
-  return unique.map((cat) => ({
-    key: cat,
-    label: cat,
-    count: activeTypes.value.filter((t) => t.category === cat).length,
-  }))
-})
-
-// --- Step control ---
-// 1 = pilih kategori, 2 = pilih jenis surat, 3 = isi form
 const step = ref(1)
-
-const selectedCategoryKey = ref('')
-const selectedLetterTypeId = ref(null)
-
-const typesInSelectedCategory = computed(() =>
-  activeTypes.value.filter((t) => t.category === selectedCategoryKey.value),
-)
-const selectedLetterType = computed(() =>
-  activeTypes.value.find((t) => t.letter_type_id === selectedLetterTypeId.value) || null,
-)
-
-function pickCategory(categoryKey) {
-  selectedCategoryKey.value = categoryKey
-  selectedLetterTypeId.value = null
-  step.value = 2
-}
-
-function pickType(letterTypeId) {
-  selectedLetterTypeId.value = letterTypeId
-  step.value = 3
-}
-
-function goBack() {
-  if (step.value === 1) {
-    router.push('/letter')
-  } else {
-    step.value -= 1
-  }
-}
-
-// --- Form data pemohon ---
-const form = ref({
-  citizenName: '',
-  citizenId: '',
-  phone: '',
-  address: '',
+const selectedCategory = ref('')
+const selectedTypeId = ref(null)
+const selectedType = ref(null)
+const fields = ref([])
+const documents = ref([])
+const dynamicValues = reactive({})
+const documentFiles = reactive({})
+const form = reactive({
+  applicant_name: '',
+  applicant_nik: '',
+  applicant_phone: '',
+  applicant_address: '',
   notes: '',
 })
-
 const errors = ref({})
-
-function validateForm() {
-  errors.value = {}
-  if (!form.value.citizenName.trim()) errors.value.citizenName = 'Nama wajib diisi'
-  if (!/^\d{16}$/.test(form.value.citizenId.trim())) {
-    errors.value.citizenId = 'NIK harus 16 digit angka'
-  }
-  if (!form.value.address.trim()) errors.value.address = 'Alamat wajib diisi'
-  return Object.keys(errors.value).length === 0
-}
-
+const isLoading = ref(false)
 const isSubmitting = ref(false)
 const submitted = ref(null)
 
-// Tanggal cetak (dipakai di kop preview surat)
-const printDate = computed(() =>
-  submitted.value
-    ? new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
-    : '',
+const activeTypes = computed(() => typeStore.rows.value.filter((type) => type.is_active))
+const categories = computed(() => [...new Set(activeTypes.value.map((type) => type.category))])
+const typesInCategory = computed(() =>
+  activeTypes.value.filter((type) => type.category === selectedCategory.value),
 )
 
-function submitForm() {
-  if (!validateForm() || !selectedLetterType.value) return
+onMounted(async () => {
+  isLoading.value = true
+  try {
+    await typeStore.fetchRows()
+  } catch (error) {
+    errors.value.general = error.response?.data?.message ?? 'Gagal memuat tipe surat.'
+  } finally {
+    isLoading.value = false
+  }
+})
 
-  isSubmitting.value = true
-  const created = addSurat({
-    letterType: selectedLetterType.value,
-    citizenId: form.value.citizenId.trim(),
-    citizenName: form.value.citizenName.trim(),
-    citizenPhone: form.value.phone.trim(),
-    citizenAddress: form.value.address.trim(),
-    notes: form.value.notes.trim(),
+function chooseCategory(category) {
+  selectedCategory.value = category
+  selectedTypeId.value = null
+  selectedType.value = null
+  step.value = 2
+}
+
+async function chooseType(id) {
+  selectedTypeId.value = id
+  selectedType.value = await typeStore.fetchById(id)
+  fields.value = selectedType.value.fields?.length
+    ? selectedType.value.fields
+    : await typeStore.getFields(id)
+  documents.value = selectedType.value.documents?.length
+    ? selectedType.value.documents
+    : await typeStore.getDocuments(id)
+  Object.keys(dynamicValues).forEach((key) => delete dynamicValues[key])
+  fields.value.forEach((field) => { dynamicValues[field.field_key] = '' })
+  Object.keys(documentFiles).forEach((key) => delete documentFiles[key])
+  errors.value = {}
+  step.value = 3
+}
+
+function validate() {
+  const nextErrors = {}
+  if (!form.applicant_name.trim()) nextErrors.applicant_name = 'Nama pemohon wajib diisi.'
+  if (!/^\d{16}$/.test(form.applicant_nik.trim())) nextErrors.applicant_nik = 'NIK harus 16 digit.'
+  if (!form.applicant_address.trim()) nextErrors.applicant_address = 'Alamat wajib diisi.'
+
+  fields.value.forEach((field) => {
+    const value = dynamicValues[field.field_key]
+    if (field.is_required && (value === undefined || value === null || value === '')) {
+      nextErrors[field.field_key] = field.field_label + ' wajib diisi.'
+    }
   })
-  isSubmitting.value = false
-  submitted.value = created
+
+  documents.value.forEach((document) => {
+    if (document.is_required && !documentFiles[document.letter_type_document_id]) {
+      nextErrors['document_' + document.letter_type_document_id] =
+        document.document_name + ' wajib diunggah.'
+    }
+  })
+
+  errors.value = nextErrors
+  return Object.keys(nextErrors).length === 0
 }
 
-function printLetter() {
-  window.print()
+async function submitForm() {
+  if (!validate() || !selectedType.value) return
+  isSubmitting.value = true
+  try {
+    const created = await letterStore.addSurat({
+      letter_type_id: selectedType.value.letter_type_id,
+      applicant_name: form.applicant_name.trim(),
+      applicant_nik: form.applicant_nik.trim(),
+      applicant_phone: form.applicant_phone.trim() || null,
+      applicant_address: form.applicant_address.trim(),
+      notes: form.notes.trim() || null,
+      source: 'Manual (Kelurahan)',
+      form_data: { ...dynamicValues },
+    })
+
+    for (const document of documents.value) {
+      const file = documentFiles[document.letter_type_document_id]
+      if (!file) continue
+      const payload = new FormData()
+      payload.append('file', file)
+      payload.append('letter_type_document_id', document.letter_type_document_id)
+      await letterStore.uploadAttachment(created.id, payload)
+    }
+
+    submitted.value = await letterStore.fetchById(created.id)
+  } catch (error) {
+    errors.value = {
+      general: error.response?.data?.message ?? 'Pengajuan surat gagal disimpan.',
+    }
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
-function resetAndAddAnother() {
+function resetForm() {
   step.value = 1
-  selectedCategoryKey.value = ''
-  selectedLetterTypeId.value = null
-  form.value = { citizenName: '', citizenId: '', phone: '', address: '', notes: '' }
+  selectedCategory.value = ''
+  selectedTypeId.value = null
+  selectedType.value = null
+  fields.value = []
+  documents.value = []
   submitted.value = null
+  Object.assign(form, {
+    applicant_name: '',
+    applicant_nik: '',
+    applicant_phone: '',
+    applicant_address: '',
+    notes: '',
+  })
+  Object.keys(dynamicValues).forEach((key) => delete dynamicValues[key])
+  Object.keys(documentFiles).forEach((key) => delete documentFiles[key])
+  errors.value = {}
 }
 </script>
 
 <template>
   <div class="min-h-screen bg-slate-50">
-    <div class="mb-6 flex items-center gap-3 print:hidden">
-      <button
-        class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-        @click="goBack"
-      >
-        <i class="pi pi-arrow-left"></i>
-      </button>
+    <div class="mb-6 flex items-center justify-between gap-3">
       <div>
-        <h1 class="text-2xl font-semibold text-slate-800">Tambah Surat</h1>
-        <p class="text-sm text-slate-500 mt-1">
-          Input surat manual untuk warga yang mengajukan langsung ke kelurahan.
-        </p>
+        <h1 class="text-2xl font-semibold text-slate-800">Tambah Pengajuan Surat</h1>
+        <p class="text-sm text-slate-500 mt-1">Data akan disimpan langsung ke backend.</p>
+      </div>
+      <AppButton label="Kembali" variant="outline" @click="router.push('/letter')" />
+    </div>
+
+    <div v-if="isLoading" class="bg-white rounded-xl border p-6 text-sm text-slate-500">Memuat tipe surat...</div>
+    <div v-else-if="submitted" class="bg-white rounded-xl border p-6 space-y-4">
+      <p class="text-green-700 font-semibold">Pengajuan berhasil dibuat.</p>
+      <p class="text-sm">Request ID: <strong>{{ submitted.requestId }}</strong></p>
+      <p class="text-sm">Jenis surat: {{ submitted.purpose }}</p>
+      <div class="flex gap-3">
+        <AppButton label="Lihat Pengelolaan Surat" @click="router.push('/letter')" />
+        <AppButton label="Tambah Lagi" variant="outline" @click="resetForm" />
       </div>
     </div>
 
-    <!-- Stepper indicator -->
-    <div class="flex items-center gap-2 mb-6 print:hidden" v-if="!submitted">
-      <div
-        v-for="(label, i) in ['Kategori Surat', 'Jenis Surat', 'Data Pemohon']"
-        :key="label"
-        class="flex items-center gap-2"
-      >
-        <div class="flex items-center gap-2">
-          <div
-            class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold"
-            :class="step >= i + 1 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'"
-          >
-            {{ i + 1 }}
-          </div>
-          <span
-            class="text-sm font-medium"
-            :class="step >= i + 1 ? 'text-slate-800' : 'text-slate-400'"
-          >
-            {{ label }}
-          </span>
-        </div>
-        <div v-if="i < 2" class="w-8 h-px bg-slate-200 mx-1"></div>
-      </div>
-    </div>
+    <div v-else class="bg-white rounded-xl border p-6">
+      <p v-if="errors.general" class="mb-4 text-sm text-red-600">{{ errors.general }}</p>
 
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 print:hidden" v-if="!submitted">
-      <!-- Step 1: pilih kategori -->
-      <div v-if="step === 1">
-        <h2 class="text-base font-semibold text-slate-800 mb-1">Pilih Kategori Surat</h2>
-        <p class="text-sm text-slate-500 mb-5">
-          Pilih kategori sesuai jenis surat yang diajukan warga. Hanya tipe surat berstatus
-          <span class="font-medium text-slate-700">Aktif</span> yang tersedia di sini.
-        </p>
-
-        <p v-if="categories.length === 0" class="text-sm text-slate-400 py-8 text-center">
-          Belum ada tipe surat aktif. Tambahkan dulu lewat
-          <router-link to="/letter-type" class="text-blue-600 hover:underline">Pengelolaan Tipe Surat</router-link>.
-        </p>
-
-        <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <button
-            v-for="cat in categories"
-            :key="cat.key"
-            class="text-left rounded-xl border border-slate-200 p-4 hover:border-blue-400 hover:bg-blue-50/50 transition-colors"
-            @click="pickCategory(cat.key)"
-          >
-            <p class="font-semibold text-slate-800">{{ cat.label }}</p>
-            <p class="text-xs text-blue-600 mt-3">{{ cat.count }} jenis surat aktif</p>
+      <div v-if="step === 1" class="space-y-4">
+        <h2 class="font-semibold text-slate-800">Pilih Kategori</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <button v-for="category in categories" :key="category" class="border rounded-xl p-4 text-left hover:border-blue-500" @click="chooseCategory(category)">
+            <span class="font-medium">{{ category }}</span>
+            <span class="block text-xs text-slate-500 mt-1">{{ activeTypes.filter((type) => type.category === category).length }} tipe surat</span>
           </button>
         </div>
       </div>
 
-      <!-- Step 2: pilih jenis surat -->
-      <div v-else-if="step === 2">
-        <h2 class="text-base font-semibold text-slate-800 mb-1">
-          Pilih Jenis Surat
-          <span class="text-slate-400 font-normal">— {{ selectedCategoryKey }}</span>
-        </h2>
-        <p class="text-sm text-slate-500 mb-5">Pilih jenis surat spesifik yang diminta warga.</p>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <button
-            v-for="type in typesInSelectedCategory"
-            :key="type.letter_type_id"
-            class="text-left rounded-xl border border-slate-200 px-4 py-3 hover:border-blue-400 hover:bg-blue-50/50 transition-colors"
-            @click="pickType(type.letter_type_id)"
-          >
-            <p class="text-sm font-medium text-slate-700">{{ type.letter_name }}</p>
-            <p class="text-xs text-slate-400 mt-1">
-              {{ type.number_prefix }} · {{ type.processing_time }} · {{ type.signer_name }}
-            </p>
+      <div v-else-if="step === 2" class="space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-semibold text-slate-800">Pilih Tipe Surat</h2>
+          <AppButton label="Kembali" size="small" variant="outline" @click="step = 1" />
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <button v-for="type in typesInCategory" :key="type.letter_type_id" class="border rounded-xl p-4 text-left hover:border-blue-500" @click="chooseType(type.letter_type_id)">
+            <span class="font-medium">{{ type.letter_name }}</span>
+            <span class="block text-xs text-slate-500 mt-1">{{ type.code }} · {{ type.processing_time || '-' }}</span>
           </button>
         </div>
       </div>
 
-      <!-- Step 3: form data pemohon -->
-      <div v-else-if="step === 3" class="max-w-xl">
-        <h2 class="text-base font-semibold text-slate-800 mb-1">Data Pemohon</h2>
-        <p class="text-sm text-slate-500 mb-4">
-          {{ selectedCategoryKey }} — <span class="font-medium text-slate-700">{{ selectedLetterType?.letter_name }}</span>
-        </p>
-
-        <!-- Info tipe surat: hanya ditampilkan, tidak diedit di sini -- diatur di Pengelolaan Tipe Surat -->
-        <div class="rounded-xl bg-slate-50 border border-slate-100 p-4 mb-5 grid grid-cols-2 gap-3 text-sm">
+      <div v-else class="space-y-6">
+        <div class="flex items-center justify-between">
           <div>
-            <p class="text-slate-400 text-xs">Kode Nomor</p>
-            <p class="font-medium text-slate-700">{{ selectedLetterType?.number_prefix }}</p>
+            <h2 class="font-semibold text-slate-800">{{ selectedType?.letter_name }}</h2>
+            <p class="text-xs text-slate-500">{{ selectedType?.code }} · {{ selectedType?.signer_name }}</p>
           </div>
-          <div>
-            <p class="text-slate-400 text-xs">Estimasi Proses</p>
-            <p class="font-medium text-slate-700">{{ selectedLetterType?.processing_time }}</p>
-          </div>
-          <div>
-            <p class="text-slate-400 text-xs">Penandatangan</p>
-            <p class="font-medium text-slate-700">{{ selectedLetterType?.signer_name }}</p>
-          </div>
-          <div>
-            <p class="text-slate-400 text-xs">Metode TTD</p>
-            <Tag
-              :value="selectedLetterType?.signature_method === 'digital' ? 'Digital' : 'Manual'"
-              severity="contrast"
-              class="mt-0.5"
-            />
-          </div>
+          <AppButton label="Kembali" size="small" variant="outline" @click="step = 2" />
         </div>
 
-        <div class="space-y-4">
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Nama Lengkap</label>
-            <AppInput v-model="form.citizenName" placeholder="Nama sesuai KTP" class="w-full" />
-            <p v-if="errors.citizenName" class="text-xs text-red-500 mt-1">{{ errors.citizenName }}</p>
+            <AppInput v-model="form.applicant_name" label="Nama Pemohon" required />
+            <p v-if="errors.applicant_name" class="text-xs text-red-600 mt-1">{{ errors.applicant_name }}</p>
           </div>
-
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">NIK</label>
-            <AppInput v-model="form.citizenId" placeholder="16 digit NIK" class="w-full" maxlength="16" />
-            <p v-if="errors.citizenId" class="text-xs text-red-500 mt-1">{{ errors.citizenId }}</p>
+            <AppInput v-model="form.applicant_nik" label="NIK" maxlength="16" required />
+            <p v-if="errors.applicant_nik" class="text-xs text-red-600 mt-1">{{ errors.applicant_nik }}</p>
           </div>
-
+          <AppInput v-model="form.applicant_phone" label="Nomor Telepon" />
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">No. Telepon (opsional)</label>
-            <AppInput v-model="form.phone" placeholder="08xxxxxxxxxx" class="w-full" />
+            <AppInput v-model="form.applicant_address" label="Alamat" required />
+            <p v-if="errors.applicant_address" class="text-xs text-red-600 mt-1">{{ errors.applicant_address }}</p>
           </div>
+          <AppInput v-model="form.notes" label="Catatan" />
+        </section>
 
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Alamat</label>
-            <AppInput v-model="form.address" placeholder="Alamat sesuai domisili" class="w-full" />
-            <p v-if="errors.address" class="text-xs text-red-500 mt-1">{{ errors.address }}</p>
+        <section v-if="fields.length" class="space-y-4 border-t pt-5">
+          <h3 class="font-semibold text-slate-800">Data Tambahan Surat</h3>
+          <div v-for="field in fields" :key="field.field_id">
+            <label class="block text-sm text-slate-600">{{ field.field_label }} <span v-if="field.is_required" class="text-red-500">*</span></label>
+            <select v-if="field.field_type === 'select'" v-model="dynamicValues[field.field_key]" class="mt-1 w-full border rounded-lg px-3 py-2">
+              <option value="">Pilih {{ field.field_label }}</option>
+              <option v-for="option in field.options || []" :key="option" :value="option">{{ option }}</option>
+            </select>
+            <textarea v-else-if="field.field_type === 'textarea'" v-model="dynamicValues[field.field_key]" rows="3" class="mt-1 w-full border rounded-lg px-3 py-2" />
+            <input v-else v-model="dynamicValues[field.field_key]" :type="field.field_type === 'number' ? 'number' : field.field_type" class="mt-1 w-full border rounded-lg px-3 py-2" />
+            <p v-if="errors[field.field_key]" class="text-xs text-red-600 mt-1">{{ errors[field.field_key] }}</p>
           </div>
+        </section>
 
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Catatan (opsional)</label>
-            <AppInput
-              v-model="form.notes"
-              placeholder="Catatan tambahan untuk verifikator"
-              class="w-full"
-            />
+        <section v-if="documents.length" class="space-y-4 border-t pt-5">
+          <h3 class="font-semibold text-slate-800">Dokumen Persyaratan</h3>
+          <div v-for="document in documents" :key="document.letter_type_document_id" class="border rounded-lg p-3">
+            <label class="block text-sm text-slate-600">{{ document.document_name }} <span v-if="document.is_required" class="text-red-500">*</span></label>
+            <input type="file" accept=".jpg,.jpeg,.png,.pdf" class="mt-2 text-sm" @change="documentFiles[document.letter_type_document_id] = $event.target.files[0]" />
+            <p v-if="errors['document_' + document.letter_type_document_id]" class="text-xs text-red-600 mt-1">{{ errors['document_' + document.letter_type_document_id] }}</p>
           </div>
-        </div>
+        </section>
 
-        <div class="flex items-center gap-3 mt-6">
-          <AppButton label="Kembali" variant="outline" @click="step = 2" />
-          <AppButton
-            :label="isSubmitting ? 'Memproses...' : 'Cetak Surat'"
-            variant="primary"
-            :disabled="isSubmitting"
-            @click="submitForm"
-          />
-        </div>
-      </div>
-    </div>
-
-    <!-- ================= Preview surat siap cetak ================= -->
-    <div v-if="submitted">
-      <!-- Toolbar aksi -- disembunyikan saat print, hanya area surat di bawah yang tercetak -->
-      <div class="flex items-center justify-between mb-4 print:hidden">
-        <div class="flex items-center gap-2 text-sm text-slate-500">
-          <i class="pi pi-check-circle text-green-600"></i>
-          Surat tersimpan (Request ID {{ submitted.requestId }}) — status
-          <span class="font-medium text-slate-700">Pending</span>, menunggu verifikasi.
-        </div>
-        <div class="flex items-center gap-3">
-          <AppButton label="Tambah Surat Lagi" variant="outline" @click="resetAndAddAnother" />
-          <AppButton label="Lihat Daftar Surat" variant="outline" @click="router.push('/letter')" />
-          <AppButton label="Cetak Sekarang" icon="pi pi-print" variant="primary" @click="printLetter" />
-        </div>
-      </div>
-
-      <!-- Area surat: ini yang tercetak (id dipakai oleh CSS @media print di bawah) -->
-      <div id="print-area" class="bg-white rounded-2xl border border-slate-200 shadow-sm mx-auto max-w-3xl p-10 print:shadow-none print:border-0 print:rounded-none print:p-0">
-        <!-- Kop surat -- placeholder, ganti dengan data Profil Desa begitu tersedia -->
-        <div class="flex items-center gap-4 border-b-2 border-slate-800 pb-4 mb-6">
-          <div class="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 text-xs shrink-0">
-            Logo
-          </div>
-          <div class="text-center flex-1">
-            <p class="font-bold text-lg uppercase tracking-wide">Pemerintah Desa</p>
-            <p class="font-bold text-lg uppercase tracking-wide">Kecamatan — Kabupaten</p>
-            <p class="text-xs text-slate-500 mt-1">
-              Alamat Kantor Desa, Kode Pos — Telp. (0000) 000000
-            </p>
-          </div>
-        </div>
-
-        <div class="text-center mb-6">
-          <p class="font-bold underline uppercase">{{ submitted.purpose }}</p>
-          <p class="text-sm text-slate-600">Nomor: {{ submitted.letterNumber }}</p>
-        </div>
-
-        <div class="text-sm leading-relaxed text-slate-800 space-y-4">
-          <p>Yang bertanda tangan di bawah ini menerangkan bahwa:</p>
-
-          <table class="ml-4">
-            <tbody>
-              <tr>
-                <td class="pr-3 py-0.5 align-top">Nama</td>
-                <td class="pr-3 py-0.5 align-top">:</td>
-                <td class="py-0.5 font-medium">{{ submitted.citizenName }}</td>
-              </tr>
-              <tr>
-                <td class="pr-3 py-0.5 align-top">NIK</td>
-                <td class="pr-3 py-0.5 align-top">:</td>
-                <td class="py-0.5 font-medium">{{ submitted.citizenId }}</td>
-              </tr>
-              <tr>
-                <td class="pr-3 py-0.5 align-top">Alamat</td>
-                <td class="pr-3 py-0.5 align-top">:</td>
-                <td class="py-0.5 font-medium">{{ form.address }}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <p>
-            Adalah benar warga kami dan mengajukan permohonan
-            <span class="font-medium">{{ submitted.purpose }}</span> untuk keperluan yang
-            bersangkutan.
-          </p>
-
-          <p v-if="submitted.notes">Catatan: {{ submitted.notes }}</p>
-
-          <p>
-            Demikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan
-            sebagaimana mestinya.
-          </p>
-        </div>
-
-        <div class="flex justify-end mt-10">
-          <div class="text-center text-sm">
-            <p>Ditetapkan di: ______________</p>
-            <p>Pada tanggal: {{ printDate }}</p>
-            <p class="mt-16 font-medium">{{ submitted.signerName }}</p>
-          </div>
-        </div>
+        <AppButton :label="isSubmitting ? 'Menyimpan...' : 'Simpan Pengajuan'" :disabled="isSubmitting" @click="submitForm" />
       </div>
     </div>
   </div>
 </template>
-
-<style>
-/* Saat print, sembunyikan seluruh layout admin (sidebar, navbar, dsb via
-   AdminLayout.vue yang sudah pakai print:hidden) dan hanya tampilkan
-   #print-area, dipaksa ke ukuran halaman penuh tanpa dekorasi kartu. */
-@media print {
-  body * {
-    visibility: hidden;
-  }
-  #print-area,
-  #print-area * {
-    visibility: visible;
-  }
-  #print-area {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-  }
-}
-</style>
