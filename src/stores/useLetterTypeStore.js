@@ -1,434 +1,103 @@
 import { ref } from 'vue'
+import * as letterTypeService from '@/services/letter-type.service'
 
-const rows = ref([
-  {
-    letter_type_id: 1,
-    code: 'SPPD-SURAT-PERINTAH-01',
-    letter_name: 'SPPD (Surat Perintah Perjalanan Dinas)',
-    category: 'Perintah',
-    number_prefix: '90/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Rasyifa Anom S., AMd.Kes',
-    signature_method: 'manual',
-    is_active: true,
-    created_at: '2026-04-18T10:00:00',
-  },
-  {
-    letter_type_id: 2,
-    code: 'SURAT-KETERANGAN-BELUM-02',
-    letter_name: 'Surat Keterangan Belum Menikah',
-    category: 'Keterangan',
-    number_prefix: '100/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Siti Aminah',
-    signature_method: 'digital',
-    is_active: true,
-    created_at: '2026-05-02T08:30:00',
-  },
-  {
-    letter_type_id: 3,
-    code: 'SURAT-KETERANGAN-USAHA-03',
-    letter_name: 'Surat Keterangan Usaha',
-    category: 'Keterangan',
-    number_prefix: '110/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Ahmad Hidayat',
-    signature_method: 'manual',
-    is_active: true,
-    created_at: '2026-05-14T11:00:00',
-  },
-  {
-    letter_type_id: 4,
-    code: 'SURAT-KETERANGAN-TIDAK-04',
-    letter_name: 'Surat Keterangan Tidak Mampu Sekolah',
-    category: 'Keterangan',
-    number_prefix: '120/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Rasyifa Anom S., AMd.Kes',
-    signature_method: 'digital',
-    is_active: true,
-    created_at: '2026-05-27T13:15:00',
-  },
-  {
-    letter_type_id: 5,
-    code: 'SURAT-KETERANGAN-TIDAK-05',
-    letter_name: 'Surat Keterangan Tidak Mampu',
-    category: 'Keterangan',
-    number_prefix: '130/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Siti Aminah',
-    signature_method: 'manual',
-    is_active: true,
-    created_at: '2026-06-06T09:45:00',
-  },
-  {
-    letter_type_id: 6,
-    code: 'SURAT-KETERANGAN-UMUM-06',
-    letter_name: 'Surat Keterangan Umum',
-    category: 'Keterangan',
-    number_prefix: '140/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Ahmad Hidayat',
-    signature_method: 'digital',
-    is_active: true,
-    created_at: '2026-06-15T10:30:00',
-  },
-  {
-    letter_type_id: 7,
-    code: 'SURAT-KETERANGAN-PENGHASILAN-07',
-    letter_name: 'Surat Keterangan Penghasilan',
-    category: 'Keterangan',
-    number_prefix: '150/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Rasyifa Anom S., AMd.Kes',
-    signature_method: 'manual',
-    is_active: true,
-    created_at: '2026-06-23T14:00:00',
-  },
-  {
-    letter_type_id: 8,
-    code: 'SURAT-PERNYATAAN-DOMISILI-08',
-    letter_name: 'Surat Pernyataan Domisili Usaha',
-    category: 'Keterangan',
-    number_prefix: '160/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Siti Aminah',
-    signature_method: 'digital',
-    is_active: true,
-    created_at: '2026-07-01T08:00:00',
-  },
-  {
-    letter_type_id: 9,
-    code: 'SURAT-IJIN-KERAMAIAN-09',
-    letter_name: 'Surat Ijin Keramaian',
-    category: 'Keterangan',
-    number_prefix: '170/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Ahmad Hidayat',
-    signature_method: 'manual',
-    is_active: true,
-    created_at: '2026-07-09T11:30:00',
-  },
-  {
-    letter_type_id: 10,
-    code: 'SKCK-10',
-    letter_name: 'SKCK',
-    category: 'Pengantar',
-    number_prefix: '180/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Rasyifa Anom S., AMd.Kes',
-    signature_method: 'digital',
-    is_active: true,
-    created_at: '2026-07-17T09:15:00',
-  },
-  {
-    letter_type_id: 11,
-    code: 'SURAT-KETERANGAN-UMUM-11',
-    letter_name: 'Surat Keterangan Umum',
-    category: 'Pengantar',
-    number_prefix: '190/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Siti Aminah',
-    signature_method: 'manual',
-    is_active: true,
-    created_at: '2026-07-25T13:45:00',
-  },
-  {
-    letter_type_id: 12,
-    code: 'SURAT-PENGANTAR-DUPLIKAT-12',
-    letter_name: 'Surat Pengantar Duplikat Nikah',
-    category: 'Pengantar',
-    number_prefix: '200/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Ahmad Hidayat',
-    signature_method: 'digital',
-    is_active: true,
-    created_at: '2026-04-05T09:00:00',
-  },
-  {
-    letter_type_id: 13,
-    code: 'SURAT-PERMOHONAN-MASUK-13',
-    letter_name: 'Surat Permohonan Masuk Penduduk',
-    category: 'Permohonan',
-    number_prefix: '210/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Rasyifa Anom S., AMd.Kes',
-    signature_method: 'manual',
-    is_active: true,
-    created_at: '2026-04-18T10:00:00',
-  },
-  {
-    letter_type_id: 14,
-    code: 'SURAT-PERMOHONAN-KELAHIRAN-14',
-    letter_name: 'Surat Permohonan Kelahiran Lama',
-    category: 'Permohonan',
-    number_prefix: '220/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Siti Aminah',
-    signature_method: 'digital',
-    is_active: true,
-    created_at: '2026-05-02T08:30:00',
-  },
-  {
-    letter_type_id: 15,
-    code: 'SURAT-PERMOHONAN-KELAHIRAN-15',
-    letter_name: 'Surat Permohonan Kelahiran Baru',
-    category: 'Permohonan',
-    number_prefix: '230/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Ahmad Hidayat',
-    signature_method: 'manual',
-    is_active: true,
-    created_at: '2026-05-14T11:00:00',
-  },
-  {
-    letter_type_id: 16,
-    code: 'SURAT-PERMOHONAN-KEMATIAN-16',
-    letter_name: 'Surat Permohonan Kematian Baru',
-    category: 'Permohonan',
-    number_prefix: '240/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Rasyifa Anom S., AMd.Kes',
-    signature_method: 'digital',
-    is_active: true,
-    created_at: '2026-05-27T13:15:00',
-  },
-  {
-    letter_type_id: 17,
-    code: 'SURAT-PERMOHONAN-KEMATIAN-17',
-    letter_name: 'Surat Permohonan Kematian Lama',
-    category: 'Permohonan',
-    number_prefix: '250/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Siti Aminah',
-    signature_method: 'manual',
-    is_active: true,
-    created_at: '2026-06-06T09:45:00',
-  },
-  {
-    letter_type_id: 18,
-    code: 'SURAT-PERMOHONAN-PERUBAHAN-18',
-    letter_name: 'Surat Permohonan Perubahan KTP',
-    category: 'Permohonan',
-    number_prefix: '260/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Ahmad Hidayat',
-    signature_method: 'digital',
-    is_active: true,
-    created_at: '2026-06-15T10:30:00',
-  },
-  {
-    letter_type_id: 19,
-    code: 'SURAT-PERMOHONAN-PINDAH-19',
-    letter_name: 'Surat Permohonan Pindah Penduduk',
-    category: 'Permohonan',
-    number_prefix: '270/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Rasyifa Anom S., AMd.Kes',
-    signature_method: 'manual',
-    is_active: true,
-    created_at: '2026-06-23T14:00:00',
-  },
-  {
-    letter_type_id: 20,
-    code: 'SURAT-PERMOHONAN-PERUBAHAN-20',
-    letter_name: 'Surat Permohonan Perubahan KK',
-    category: 'Permohonan',
-    number_prefix: '280/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Siti Aminah',
-    signature_method: 'digital',
-    is_active: true,
-    created_at: '2026-07-01T08:00:00',
-  },
-  {
-    letter_type_id: 21,
-    code: 'SURAT-KETERANGAN-ASAL-21',
-    letter_name: 'Surat Keterangan Asal Tanah',
-    category: 'Permohonan',
-    number_prefix: '290/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Ahmad Hidayat',
-    signature_method: 'manual',
-    is_active: true,
-    created_at: '2026-07-09T11:30:00',
-  },
-  {
-    letter_type_id: 22,
-    code: 'ELEMEN-PERUBAHAN-DATA-22',
-    letter_name: 'Elemen Perubahan Data',
-    category: 'Permohonan',
-    number_prefix: '300/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Rasyifa Anom S., AMd.Kes',
-    signature_method: 'digital',
-    is_active: true,
-    created_at: '2026-07-17T09:15:00',
-  },
-  {
-    letter_type_id: 23,
-    code: 'SURAT-PERMOHONAN-KIA-23',
-    letter_name: 'Surat Permohonan KIA',
-    category: 'Permohonan',
-    number_prefix: '310/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Siti Aminah',
-    signature_method: 'manual',
-    is_active: true,
-    created_at: '2026-07-25T13:45:00',
-  },
-  {
-    letter_type_id: 24,
-    code: 'SURAT-KETERANGAN-BEDA-24',
-    letter_name: 'Surat Keterangan Beda Nama',
-    category: 'Permohonan',
-    number_prefix: '320/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Ahmad Hidayat',
-    signature_method: 'digital',
-    is_active: true,
-    created_at: '2026-04-05T09:00:00',
-  },
-  {
-    letter_type_id: 25,
-    code: 'SURAT-HARGA-TANAH-25',
-    letter_name: 'Surat Harga Tanah',
-    category: 'Permohonan',
-    number_prefix: '330/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Rasyifa Anom S., AMd.Kes',
-    signature_method: 'manual',
-    is_active: true,
-    created_at: '2026-04-18T10:00:00',
-  },
-  {
-    letter_type_id: 26,
-    code: 'SURAT-PERMOHONAN-CERAI-26',
-    letter_name: 'Surat Permohonan Cerai',
-    category: 'Permohonan',
-    number_prefix: '340/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Siti Aminah',
-    signature_method: 'digital',
-    is_active: true,
-    created_at: '2026-05-02T08:30:00',
-  },
-  {
-    letter_type_id: 27,
-    code: 'SURAT-PERMOHONAN-NIKAH-27',
-    letter_name: 'Surat Permohonan Nikah Laki-laki',
-    category: 'Permohonan',
-    number_prefix: '350/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Ahmad Hidayat',
-    signature_method: 'manual',
-    is_active: true,
-    created_at: '2026-05-14T11:00:00',
-  },
-  {
-    letter_type_id: 28,
-    code: 'SURAT-PERMOHONAN-NIKAH-28',
-    letter_name: 'Surat Permohonan Nikah Perempuan',
-    category: 'Permohonan',
-    number_prefix: '360/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Rasyifa Anom S., AMd.Kes',
-    signature_method: 'digital',
-    is_active: true,
-    created_at: '2026-05-27T13:15:00',
-  },
-  {
-    letter_type_id: 29,
-    code: 'SURAT-REKOMENDASI-PEMBELIAN-29',
-    letter_name: 'Surat Rekomendasi Pembelian Jenis BBM',
-    category: 'Permohonan',
-    number_prefix: '370/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Siti Aminah',
-    signature_method: 'manual',
-    is_active: true,
-    created_at: '2026-06-06T09:45:00',
-  },
-  {
-    letter_type_id: 30,
-    code: 'PERMOHONAN-DATA-LETTER-30',
-    letter_name: 'Permohonan Data Letter C',
-    category: 'Permohonan',
-    number_prefix: '380/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Ahmad Hidayat',
-    signature_method: 'digital',
-    is_active: true,
-    created_at: '2026-06-15T10:30:00',
-  },
-  {
-    letter_type_id: 31,
-    code: 'SURAT-PERNYATAAN-BEDA-31',
-    letter_name: 'Surat Pernyataan Beda Nama',
-    category: 'Pernyataan',
-    number_prefix: '390/',
-    processing_time: '15 menit',
-    document_count: 2,
-    signer_name: 'Rasyifa Anom S., AMd.Kes',
-    signature_method: 'manual',
-    is_active: true,
-    created_at: '2026-06-23T14:00:00',
-  },
-])
+const rows = ref([])
+const signers = ref([])
+const loading = ref(false)
+const error = ref(null)
+
+function normalizeLetterType(type) {
+  const signer = type.signer ?? {}
+  return {
+    ...type,
+    signer_name: signer.name ?? type.signer_name ?? '-',
+    signer_position: signer.position ?? type.signer_position ?? '-',
+    document_count: type.document_count ?? type.documents_count ?? 0,
+    documents: type.documents ?? [],
+    fields: type.fields ?? [],
+  }
+}
+function upsertRow(type) {
+  const normalized = normalizeLetterType(type)
+  const index = rows.value.findIndex(
+    (row) => String(row.letter_type_id) === String(normalized.letter_type_id),
+  )
+  if (index === -1) rows.value.push(normalized)
+  else rows.value[index] = normalized
+  return normalized
+}
+
+async function fetchRows() {
+  loading.value = true
+  error.value = null
+  try {
+    rows.value = (await letterTypeService.getLetterTypes()).map(normalizeLetterType)
+    return rows.value
+  } catch (err) {
+    error.value = err
+    throw err
+  } finally {
+    loading.value = false
+  }
+}
+
+async function fetchById(id) {
+  return upsertRow(await letterTypeService.getLetterType(id))
+}
+
+async function fetchSigners() {
+  signers.value = await letterTypeService.getSigners()
+  return signers.value
+}
 
 function getById(id) {
-  // route.params.id datang sebagai string, letter_type_id disimpan sebagai number
-  return rows.value.find((r) => String(r.letter_type_id) === String(id)) || null
+  return rows.value.find((row) => String(row.letter_type_id) === String(id)) || null
 }
 
-function addLetterType(payload) {
-  const nextId = rows.value.length ? Math.max(...rows.value.map((r) => r.letter_type_id)) + 1 : 1
-  const newRow = { ...payload, letter_type_id: nextId, created_at: new Date().toISOString() }
-  rows.value.push(newRow)
-  return newRow
+async function addLetterType(payload) {
+  return upsertRow(await letterTypeService.createLetterType(payload))
 }
 
-function updateLetterType(id, payload) {
-  const idx = rows.value.findIndex((r) => String(r.letter_type_id) === String(id))
-  if (idx === -1) return null
-  rows.value[idx] = { ...rows.value[idx], ...payload }
-  return rows.value[idx]
+async function updateLetterType(id, payload) {
+  return upsertRow(await letterTypeService.updateLetterType(id, payload))
 }
 
-function removeLetterType(id) {
-  rows.value = rows.value.filter((r) => String(r.letter_type_id) !== String(id))
+async function removeLetterType(id) {
+  await letterTypeService.deleteLetterType(id)
+  rows.value = rows.value.filter(
+    (row) => String(row.letter_type_id) !== String(id),
+  )
 }
+
+const getDocuments = letterTypeService.getDocuments
+const createDocument = letterTypeService.createDocument
+const updateDocument = letterTypeService.updateDocument
+const deleteDocument = letterTypeService.deleteDocument
+const getFields = letterTypeService.getFields
+const createField = letterTypeService.createField
+const updateField = letterTypeService.updateField
+const deleteField = letterTypeService.deleteField
 
 export function useLetterTypeStore() {
-  return { rows, getById, addLetterType, updateLetterType, removeLetterType }
+  return {
+    rows,
+    signers,
+    loading,
+    error,
+    fetchRows,
+    fetchById,
+    fetchSigners,
+    getById,
+    addLetterType,
+    updateLetterType,
+    removeLetterType,
+    getDocuments,
+    createDocument,
+    updateDocument,
+    deleteDocument,
+    getFields,
+    createField,
+    updateField,
+    deleteField,
+  }
 }

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import Tag from 'primevue/tag'
 import AppDataTable from '@/components/common/AppDataTable.vue'
@@ -9,7 +9,15 @@ import { useLetterStore } from '@/stores/useLetterStore'
 
 const router = useRouter()
 const route = useRoute()
-const { rows } = useLetterStore()
+const { rows, fetchRows } = useLetterStore()
+
+onMounted(async () => {
+  try {
+    await fetchRows()
+  } catch (error) {
+    console.error('Gagal memuat antrean otorisasi:', error)
+  }
+})
 
 const columns = [
   { field: 'requestId', header: 'Request ID', sortable: true },

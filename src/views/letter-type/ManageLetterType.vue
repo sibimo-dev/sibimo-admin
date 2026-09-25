@@ -1,379 +1,334 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
-import Card from 'primevue/card'
-import Select from 'primevue/select'
-import Textarea from 'primevue/textarea'
-import ToggleSwitch from 'primevue/toggleswitch'
-import Checkbox from 'primevue/checkbox'
 import AppButton from '@/components/common/AppButton.vue'
 import AppInput from '@/components/common/AppInput.vue'
-import AppModal from '@/components/common/AppModal.vue'
 import { useLetterTypeStore } from '@/stores/useLetterTypeStore'
 
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
-const { getById, addLetterType, updateLetterType } = useLetterTypeStore()
+const store = useLetterTypeStore()
 
 const isNew = computed(() => route.params.id === 'new' || !route.params.id)
 const isLoading = ref(false)
 const isSaving = ref(false)
+const requirements = ref([])
+const fields = ref([])
 
-// ====== Dropdown options (replace with master data fetch later) ======
-const categoryOptions = [
-  { label: 'Perintah', value: 'Perintah' },
-  { label: 'Keterangan', value: 'Keterangan' },
-  { label: 'Pengantar', value: 'Pengantar' },
-  { label: 'Permohonan', value: 'Permohonan' },
-  { label: 'Pernyataan', value: 'Pernyataan' },
-]
-
-const signatureMethodOptions = [
-  { label: 'Digital (TTE)', value: 'digital' },
-  { label: 'Manual (Tanda Tangan Basah)', value: 'manual' },
-]
-
-const signerOptions = [
-  { label: 'Ahmad Hidayat - Kepala Desa', value: 1 },
-  { label: 'Rasyifa Anom S., AMd.Kes - Kasi Kesejahteraan', value: 2 },
-  { label: 'Siti Aminah - Kasi Pemerintahan', value: 3 },
-]
-// Dipakai untuk isi ulang `signer_name` (dibaca LetterCreateView.vue) tanpa
-// perlu join tabel signer sungguhan -- sementara sampai backend siap.
-const signerNameById = Object.fromEntries(
-  signerOptions.map((s) => [s.value, s.label.split(' - ')[0]]),
-)
-
-// ====== Main form ======
 const form = reactive({
   letter_type_id: null,
   code: '',
-  number_prefix: '',
   letter_name: '',
-  category: null,
+  category: '',
+  number_prefix: '',
   processing_time: '',
-  signature_method: null,
+  signature_method: 'manual',
+  signer_id: null,
   description: '',
   is_active: true,
-  signer_id: null,
 })
 
-const descriptionLength = computed(() => form.description.length)
-
-// ====== Document requirements ======
-const requirements = ref([
-  { id: 1, document_name: 'Kartu Tanda Penduduk (KTP)', description: 'Fotokopi KTP pemohon', is_required: true },
-  { id: 2, document_name: 'Kartu Keluarga (KK)', description: 'Fotokopi KK pemohon', is_required: true },
-  { id: 3, document_name: 'Foto Tempat Usaha', description: 'Minimal 2 foto dari sisi berbeda', is_required: false },
-])
-
-const showRequirementModal = ref(false)
-const requirementForm = reactive({ id: null, document_name: '', description: '', is_required: false })
-
-function openAddRequirement() {
-  requirementForm.id = null
-  requirementForm.document_name = ''
-  requirementForm.description = ''
-  requirementForm.is_required = false
-  showRequirementModal.value = true
-}
-
-function saveRequirement() {
-  if (!requirementForm.document_name) {
-    toast.add({ severity: 'warn', summary: 'Nama dokumen wajib diisi', life: 2000 })
-    return
-  }
-  if (requirementForm.id) {
-    const idx = requirements.value.findIndex((r) => r.id === requirementForm.id)
-    requirements.value[idx] = { ...requirementForm }
-  } else {
-    requirements.value.push({ ...requirementForm, id: Date.now() })
-  }
-  showRequirementModal.value = false
-}
-
-function removeRequirement(requirement) {
-  requirements.value = requirements.value.filter((r) => r.id !== requirement.id)
-}
-
-// ====== Meta info (last updated) ======
-const meta = reactive({
-  updated_at: '24 Okt 2023, 14:30 WIB',
-  updated_by: 'Admin SIBIMO',
+const requirementForm = reactive({
+  id: null,
+  document_name: '',
+  description: '',
+  is_required: false,
 })
 
-// ====== Load data on edit mode ======
-onMounted(async () => {
+const fieldForm = reactive({
+  id: null,
+  field_label: '',
+  field_key: '',
+  field_type: 'text',
+  is_required: false,
+  optionsText: '',
+  sort_order: 0,
+})
+
+const categoryOptions = ['Perintah', 'Keterangan', 'Pengantar', 'Permohonan', 'Pernyataan']
+const fieldTypeOptions = ['text', 'textarea', 'number', 'date', 'select']
+const signerOptions = computed(() =>
+  store.signers.value.map((signer) => ({
+    value: signer.staff_id,
+    label: signer.name + ' - ' + signer.position,
+  })),
+)
+
+function resetRequirementForm() {
+  Object.assign(requirementForm, {
+    id: null,
+    document_name: '',
+    description: '',
+    is_required: false,
+  })
+}
+
+function resetFieldForm() {
+  Object.assign(fieldForm, {
+    id: null,
+    field_label: '',
+    field_key: '',
+    field_type: 'text',
+    is_required: false,
+    optionsText: '',
+    sort_order: fields.value.length,
+  })
+}
+
+async function loadRelatedData() {
   if (isNew.value) return
+  const type = await store.fetchById(route.params.id)
+  Object.assign(form, type)
+  requirements.value = await store.getDocuments(route.params.id)
+  fields.value = await store.getFields(route.params.id)
+  resetRequirementForm()
+  resetFieldForm()
+}
+
+onMounted(async () => {
   isLoading.value = true
   try {
-    const data = getById(route.params.id)
-    if (!data) {
-      toast.add({ severity: 'error', summary: 'Tipe surat tidak ditemukan', life: 2500 })
-      router.push({ name: 'letter-type-list' })
-      return
-    }
-    Object.assign(form, data)
+    await store.fetchSigners()
+    await loadRelatedData()
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal memuat tipe surat',
+      detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+      life: 3000,
+    })
+    if (!isNew.value) router.push({ name: 'letter-type-list' })
   } finally {
     isLoading.value = false
   }
 })
 
-// ====== Save / cancel ======
-function handleCancel() {
-  router.push({ name: 'letter-type-list' })
-}
-
 async function handleSave() {
-  if (!form.code || !form.number_prefix || !form.letter_name || !form.category || !form.signature_method) {
-    toast.add({ severity: 'warn', summary: 'Lengkapi field wajib (*) terlebih dahulu', life: 2500 })
+  if (!form.code || !form.letter_name || !form.category || !form.signature_method) {
+    toast.add({ severity: 'warn', summary: 'Lengkapi field wajib', life: 2500 })
     return
   }
 
   isSaving.value = true
   try {
     const payload = {
-      ...form,
-      signer_name: signerNameById[form.signer_id] || '',
-      document_count: requirements.value.length,
+      code: form.code,
+      letter_name: form.letter_name,
+      category: form.category,
+      number_prefix: form.number_prefix || null,
+      processing_time: form.processing_time || null,
+      signature_method: form.signature_method,
+      signer_id: form.signer_id || null,
+      description: form.description || null,
+      is_active: form.is_active,
     }
+    const saved = isNew.value
+      ? await store.addLetterType(payload)
+      : await store.updateLetterType(form.letter_type_id, payload)
 
+    toast.add({ severity: 'success', summary: 'Tipe surat berhasil disimpan', life: 2000 })
     if (isNew.value) {
-      addLetterType(payload)
-    } else {
-      updateLetterType(form.letter_type_id, payload)
+      router.replace({ name: 'letter-type-manage', params: { id: saved.letter_type_id } })
     }
-
-    toast.add({ severity: 'success', summary: 'Perubahan berhasil disimpan', life: 2000 })
-    router.push({ name: 'letter-type-list' })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal menyimpan tipe surat',
+      detail: error.response?.data?.message ?? 'Periksa data yang dikirim.',
+      life: 3000,
+    })
   } finally {
     isSaving.value = false
   }
 }
+
+async function saveRequirement() {
+  if (!requirementForm.document_name || isNew.value) return
+  try {
+    const payload = {
+      document_name: requirementForm.document_name,
+      description: requirementForm.description || null,
+      is_required: requirementForm.is_required,
+    }
+    if (requirementForm.id) await store.updateDocument(requirementForm.id, payload)
+    else await store.createDocument(form.letter_type_id, payload)
+    requirements.value = await store.getDocuments(form.letter_type_id)
+    resetRequirementForm()
+    toast.add({ severity: 'success', summary: 'Dokumen persyaratan disimpan', life: 1800 })
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Gagal menyimpan dokumen persyaratan', life: 2500 })
+  }
+}
+
+async function removeRequirement(item) {
+  try {
+    await store.deleteDocument(item.letter_type_document_id)
+    requirements.value = await store.getDocuments(form.letter_type_id)
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Gagal menghapus dokumen persyaratan', life: 2500 })
+  }
+}
+
+function editRequirement(item) {
+  Object.assign(requirementForm, {
+    id: item.letter_type_document_id,
+    document_name: item.document_name,
+    description: item.description ?? '',
+    is_required: Boolean(item.is_required),
+  })
+}
+
+async function saveField() {
+  if (!fieldForm.field_label || !fieldForm.field_key || isNew.value) return
+  try {
+    const options = fieldForm.optionsText
+      .split('\n')
+      .map((value) => value.trim())
+      .filter(Boolean)
+    const payload = {
+      field_label: fieldForm.field_label,
+      field_key: fieldForm.field_key,
+      field_type: fieldForm.field_type,
+      is_required: fieldForm.is_required,
+      options: fieldForm.field_type === 'select' ? options : null,
+      sort_order: Number(fieldForm.sort_order) || 0,
+    }
+    if (fieldForm.id) await store.updateField(fieldForm.id, payload)
+    else await store.createField(form.letter_type_id, payload)
+    fields.value = await store.getFields(form.letter_type_id)
+    resetFieldForm()
+    toast.add({ severity: 'success', summary: 'Field dinamis disimpan', life: 1800 })
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Gagal menyimpan field dinamis', life: 2500 })
+  }
+}
+
+async function removeField(item) {
+  try {
+    await store.deleteField(item.field_id)
+    fields.value = await store.getFields(form.letter_type_id)
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Gagal menghapus field dinamis', life: 2500 })
+  }
+}
+
+function editField(item) {
+  Object.assign(fieldForm, {
+    id: item.field_id,
+    field_label: item.field_label,
+    field_key: item.field_key,
+    field_type: item.field_type,
+    is_required: Boolean(item.is_required),
+    optionsText: (item.options ?? []).join('\n'),
+    sort_order: item.sort_order ?? 0,
+  })
+}
 </script>
 
 <template>
-  <div>
-    <!-- Header -->
-    <div class="mb-6">
-      <h1 class="text-2xl font-bold text-gray-800 m-0">Kelola Tipe Surat</h1>
-      <p class="text-sm text-gray-500 mt-1 mb-0">
-        Tambahkan atau edit konfigurasi tipe layanan surat. Pastikan kode unik dan template view sesuai.
-      </p>
+  <div class="space-y-6">
+    <div class="flex items-center justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-800">{{ isNew ? 'Tambah' : 'Kelola' }} Tipe Surat</h1>
+        <p class="text-sm text-gray-500 mt-1">Konfigurasi tipe surat dari backend.</p>
+      </div>
+      <AppButton label="Kembali" variant="outline" @click="router.push({ name: 'letter-type-list' })" />
     </div>
 
-    <!--
-      Informasi Dasar & Penandatangan: SENGAJA full-width, TIDAK di dalam
-      grid 2 kolom. Sebelumnya kedua section ini ada di kolom kiri (1fr)
-      sementara sidebar (Terakhir Diubah + tombol) ada di kolom kanan
-      (320px) untuk SELURUH tinggi halaman -- karena sidebar didorong ke
-      bawah (justify-end), area kanan jadi kosong melompong pas sejajar
-      dengan section ini. Wireframe-nya split 2 kolom cuma di baris
-      Persyaratan Dokumen (lihat di bawah), bukan dari atas.
-    -->
-    <div class="flex flex-col gap-5 mb-5">
-      <!-- Basic Info -->
-      <Card>
-        <template #content>
-          <div class="flex items-center justify-between mb-5">
-            <h2 class="text-base font-semibold text-gray-800 m-0">Informasi Dasar</h2>
-            <div class="flex items-center gap-2">
-              <span class="text-xs font-medium text-gray-500 uppercase tracking-wide">Status:</span>
-              <ToggleSwitch v-model="form.is_active" />
-              <span class="text-sm font-medium text-gray-700">
-                {{ form.is_active ? 'Aktif' : 'Nonaktif' }}
-              </span>
-            </div>
-          </div>
+    <div v-if="isLoading" class="rounded-xl bg-white border p-6 text-sm text-gray-500">Memuat data...</div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <AppInput v-model="form.code" label="Kode Tipe Surat" placeholder="e.g., SKU-01" required />
-            <AppInput v-model="form.number_prefix" label="Prefix Penomoran" placeholder="e.g., 400/SKU/" required />
-          </div>
+    <template v-else>
+      <section class="rounded-xl bg-white border p-6 space-y-4">
+        <h2 class="font-semibold text-gray-800">Informasi Dasar</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <AppInput v-model="form.code" label="Kode Tipe Surat" required />
+          <AppInput v-model="form.letter_name" label="Nama Tipe Surat" required />
+          <label class="text-sm text-gray-600">Kategori
+            <select v-model="form.category" class="mt-1 w-full border rounded-lg px-3 py-2">
+              <option value="">Pilih kategori</option>
+              <option v-for="item in categoryOptions" :key="item" :value="item">{{ item }}</option>
+            </select>
+          </label>
+          <AppInput v-model="form.number_prefix" label="Prefix Nomor Surat" />
+          <AppInput v-model="form.processing_time" label="Estimasi Proses" />
+          <label class="text-sm text-gray-600">Metode Tanda Tangan
+            <select v-model="form.signature_method" class="mt-1 w-full border rounded-lg px-3 py-2">
+              <option value="manual">Manual</option>
+              <option value="digital">Digital</option>
+            </select>
+          </label>
+          <label class="text-sm text-gray-600 md:col-span-2">Penandatangan
+            <select v-model="form.signer_id" class="mt-1 w-full border rounded-lg px-3 py-2">
+              <option :value="null">Pilih penandatangan</option>
+              <option v-for="item in signerOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
+          </label>
+          <label class="text-sm text-gray-600 md:col-span-2">Deskripsi
+            <textarea v-model="form.description" rows="3" class="mt-1 w-full border rounded-lg px-3 py-2" />
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-600">
+            <input v-model="form.is_active" type="checkbox" /> Aktif
+          </label>
+        </div>
+        <AppButton :label="isSaving ? 'Menyimpan...' : 'Simpan Tipe Surat'" :disabled="isSaving" @click="handleSave" />
+      </section>
 
-          <div class="mt-4">
-            <AppInput
-              v-model="form.letter_name"
-              label="Nama Layanan Surat"
-              placeholder="e.g., Surat Keterangan Usaha"
-              required
-            />
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                Kategori Layanan <span class="text-red-500">*</span>
-              </label>
-              <Select
-                v-model="form.category"
-                :options="categoryOptions"
-                option-label="label"
-                option-value="value"
-                placeholder="Pilih Kategori"
-                class="w-full"
-              />
-            </div>
-            <AppInput v-model="form.processing_time" label="Estimasi Proses" placeholder="e.g., 15 menit" />
-          </div>
-
-          <div class="mt-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              Metode Tanda Tangan <span class="text-red-500">*</span>
-            </label>
-            <Select
-              v-model="form.signature_method"
-              :options="signatureMethodOptions"
-              option-label="label"
-              option-value="value"
-              placeholder="Pilih Metode"
-              class="w-full"
-            />
-          </div>
-
-          <div class="mt-4">
-            <div class="flex items-center justify-between mb-1">
-              <label class="block text-sm font-medium text-gray-700">Deskripsi</label>
-              <span class="text-xs text-gray-400">{{ descriptionLength }}/255</span>
-            </div>
-            <Textarea
-              v-model="form.description"
-              :maxlength="255"
-              rows="3"
-              class="w-full"
-              placeholder="Jelaskan kegunaan dan informasi singkat mengenai layanan surat ini..."
-            />
-          </div>
-        </template>
-      </Card>
-
-      <!-- Signer -->
-      <Card>
-        <template #content>
-          <h2 class="text-base font-semibold text-gray-800 mb-5">Penandatangan</h2>
-
-          <div class="grid grid-cols-1 sm:grid-cols-[1fr_2fr] gap-4 items-start">
-            <label class="text-sm font-medium text-gray-700 pt-2 sm:text-right">
-              Pilih Pejabat Penandatangan <span class="text-red-500">*</span>
-            </label>
-            <Select
-              v-model="form.signer_id"
-              :options="signerOptions"
-              option-label="label"
-              option-value="value"
-              placeholder="Pilih Pejabat"
-              class="w-full"
-            />
-          </div>
-        </template>
-      </Card>
-    </div>
-
-    <!--
-      Baris terakhir: split 2 kolom SEKARANG mulai di sini saja --
-      Persyaratan Dokumen (kiri, lebar) + Terakhir Diubah & tombol
-      (kanan, sempit) -- sesuai wireframe.
-    -->
-    <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 items-start">
-      <!-- Document Requirements -->
-      <Card>
-        <template #content>
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="flex items-center gap-2 text-base font-semibold text-gray-800 m-0">
-              <i class="pi pi-folder text-gray-500"></i> Persyaratan Dokumen
-            </h2>
-            <AppButton
-              label="Tambah Dokumen"
-              icon="pi pi-plus"
-              size="small"
-              variant="secondary"
-              @click="openAddRequirement"
-            />
-          </div>
-
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="text-left text-xs uppercase tracking-wide text-gray-400 border-b border-gray-200">
-                <th class="py-2 font-medium">Nama Dokumen</th>
-                <th class="py-2 font-medium">Deskripsi Singkat</th>
-                <th class="py-2 font-medium text-center w-20">Wajib</th>
-                <th class="py-2 font-medium text-center w-16">Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="requirement in requirements"
-                :key="requirement.id"
-                class="border-b border-gray-100 last:border-0"
-              >
-                <td class="py-3 pr-2 font-medium text-gray-800">{{ requirement.document_name }}</td>
-                <td class="py-3 pr-2 text-gray-500">{{ requirement.description }}</td>
-                <td class="py-3 text-center">
-                  <Checkbox v-model="requirement.is_required" :binary="true" />
-                </td>
-                <td class="py-3 text-center">
-                  <button class="text-gray-400 hover:text-red-500" @click="removeRequirement(requirement)">
-                    <i class="pi pi-trash"></i>
-                  </button>
-                </td>
-              </tr>
-              <tr v-if="requirements.length === 0">
-                <td colspan="4" class="py-6 text-center text-gray-400 text-sm">
-                  Belum ada persyaratan dokumen.
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </template>
-      </Card>
-
-      <!-- Sidebar: meta info + tombol -->
-      <div class="flex flex-col gap-4">
-        <Card v-if="!isNew">
-          <template #content>
-            <div class="flex items-start gap-3">
-              <i class="pi pi-history text-gray-400 mt-0.5"></i>
-              <div class="text-sm">
-                <div class="text-gray-500">Terakhir Diubah</div>
-                <div class="font-medium text-gray-800">{{ meta.updated_at }}</div>
-                <div class="text-gray-500">Oleh: {{ meta.updated_by }}</div>
+      <section v-if="!isNew" class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div class="rounded-xl bg-white border p-6 space-y-4">
+          <h2 class="font-semibold text-gray-800">Dokumen Persyaratan</h2>
+          <div class="space-y-2">
+            <div v-for="item in requirements" :key="item.letter_type_document_id" class="flex items-center justify-between border rounded-lg p-3">
+              <div>
+                <p class="text-sm font-medium">{{ item.document_name }}</p>
+                <p class="text-xs text-gray-500">{{ item.description || 'Tanpa deskripsi' }} · {{ item.is_required ? 'Wajib' : 'Opsional' }}</p>
+              </div>
+              <div class="flex gap-2">
+                <button class="text-xs text-blue-600" @click="editRequirement(item)">Edit</button>
+                <button class="text-xs text-red-600" @click="removeRequirement(item)">Hapus</button>
               </div>
             </div>
-          </template>
-        </Card>
+          </div>
+          <input v-model="requirementForm.document_name" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Nama dokumen" />
+          <input v-model="requirementForm.description" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Deskripsi" />
+          <label class="flex items-center gap-2 text-sm"><input v-model="requirementForm.is_required" type="checkbox" /> Wajib</label>
+          <div class="flex gap-2">
+            <AppButton label="Simpan Dokumen" size="small" @click="saveRequirement" />
+            <AppButton v-if="requirementForm.id" label="Batal" size="small" variant="outline" @click="resetRequirementForm" />
+          </div>
+        </div>
 
-        <Card>
-          <template #content>
-            <div class="flex flex-col gap-2">
-              <AppButton
-                label="Simpan Perubahan"
-                icon="pi pi-save"
-                variant="primary"
-                class="w-full"
-                :loading="isSaving"
-                @click="handleSave"
-              />
-              <AppButton label="Batal" variant="secondary" outlined class="w-full" @click="handleCancel" />
+        <div class="rounded-xl bg-white border p-6 space-y-4">
+          <h2 class="font-semibold text-gray-800">Field Dinamis</h2>
+          <div class="space-y-2 max-h-96 overflow-auto">
+            <div v-for="item in fields" :key="item.field_id" class="flex items-center justify-between border rounded-lg p-3">
+              <div>
+                <p class="text-sm font-medium">{{ item.field_label }}</p>
+                <p class="text-xs text-gray-500">{{ item.field_key }} · {{ item.field_type }} · {{ item.is_required ? 'Wajib' : 'Opsional' }}</p>
+              </div>
+              <div class="flex gap-2">
+                <button class="text-xs text-blue-600" @click="editField(item)">Edit</button>
+                <button class="text-xs text-red-600" @click="removeField(item)">Hapus</button>
+              </div>
             </div>
-          </template>
-        </Card>
-      </div>
-    </div>
-
-    <!-- Add/Edit Document Requirement Modal -->
-    <AppModal
-      v-model="showRequirementModal"
-      :title="requirementForm.id ? 'Edit Dokumen Syarat' : 'Tambah Dokumen Syarat'"
-      @save="saveRequirement"
-    >
-      <AppInput v-model="requirementForm.document_name" label="Nama Dokumen" required />
-      <AppInput v-model="requirementForm.description" label="Deskripsi Singkat" />
-      <div class="flex items-center gap-2 mt-2">
-        <Checkbox v-model="requirementForm.is_required" :binary="true" input-id="requirementRequired" />
-        <label for="requirementRequired" class="text-sm text-gray-700">Wajib diunggah</label>
-      </div>
-    </AppModal>
+          </div>
+          <input v-model="fieldForm.field_label" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Label field" />
+          <input v-model="fieldForm.field_key" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="field_key" />
+          <div class="grid grid-cols-2 gap-2">
+            <select v-model="fieldForm.field_type" class="border rounded-lg px-3 py-2 text-sm">
+              <option v-for="item in fieldTypeOptions" :key="item" :value="item">{{ item }}</option>
+            </select>
+            <input v-model.number="fieldForm.sort_order" type="number" class="border rounded-lg px-3 py-2 text-sm" placeholder="Urutan" />
+          </div>
+          <textarea v-if="fieldForm.field_type === 'select'" v-model="fieldForm.optionsText" rows="3" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Satu opsi per baris" />
+          <label class="flex items-center gap-2 text-sm"><input v-model="fieldForm.is_required" type="checkbox" /> Wajib</label>
+          <div class="flex gap-2">
+            <AppButton label="Simpan Field" size="small" @click="saveField" />
+            <AppButton v-if="fieldForm.id" label="Batal" size="small" variant="outline" @click="resetFieldForm" />
+          </div>
+        </div>
+      </section>
+    </template>
   </div>
 </template>
