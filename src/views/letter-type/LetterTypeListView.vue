@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
@@ -18,7 +18,20 @@ import { useLetterTypeStore } from '@/stores/useLetterTypeStore'
 const router = useRouter()
 const confirm = useConfirm()
 const toast = useToast()
-const { rows, removeLetterType, updateLetterType } = useLetterTypeStore()
+const { rows, removeLetterType, updateLetterType, fetchRows } = useLetterTypeStore()
+
+onMounted(async () => {
+  try {
+    await fetchRows()
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal memuat tipe surat',
+      detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+      life: 3000,
+    })
+  }
+})
 
 // ====== Category (for filter & badge severity) ======
 const categorySeverity = {
@@ -73,12 +86,17 @@ const stats = computed(() => {
 async function toggleStatus(data) {
   // TODO: call API here
   // await letterTypeService.updateStatus(data.letter_type_id, data.is_active)
-  updateLetterType(data.letter_type_id, { is_active: data.is_active })
-  toast.add({
-    severity: data.is_active ? 'success' : 'secondary',
-    summary: `Status "${data.letter_name}" diubah menjadi ${data.is_active ? 'Aktif' : 'Nonaktif'}`,
-    life: 2000,
-  })
+  try {
+    await updateLetterType(data.letter_type_id, { is_active: data.is_active })
+    toast.add({
+      severity: data.is_active ? 'success' : 'secondary',
+      summary: `Status "${data.letter_name}" diubah menjadi ${data.is_active ? 'Aktif' : 'Nonaktif'}`,
+      life: 2000,
+    })
+  } catch (error) {
+    data.is_active = !data.is_active
+    toast.add({ severity: 'error', summary: 'Gagal mengubah status tipe surat', life: 2500 })
+  }
 }
 
 // ====== Navigate to create/manage page ======
@@ -99,9 +117,13 @@ function handleDelete(data) {
     acceptLabel: 'Hapus',
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
-    accept: () => {
-      removeLetterType(data.letter_type_id)
-      toast.add({ severity: 'success', summary: 'Berhasil dihapus', life: 2000 })
+    accept: async () => {
+      try {
+        await removeLetterType(data.letter_type_id)
+        toast.add({ severity: 'success', summary: 'Berhasil dihapus', life: 2000 })
+      } catch (error) {
+        toast.add({ severity: 'error', summary: 'Gagal menghapus tipe surat', life: 2500 })
+      }
     },
   })
 }

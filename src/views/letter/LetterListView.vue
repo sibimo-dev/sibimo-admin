@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Tag from 'primevue/tag'
 import Dialog from 'primevue/dialog'
@@ -16,7 +16,15 @@ import AppInput from '@/components/common/AppInput.vue'
 import { useLetterStore } from '@/stores/useLetterStore'
 
 const router = useRouter()
-const { rows } = useLetterStore()
+const { rows, fetchRows } = useLetterStore()
+
+onMounted(async () => {
+  try {
+    await fetchRows()
+  } catch (error) {
+    console.error('Gagal memuat pengajuan surat:', error)
+  }
+})
 
 const columns = [
   { field: 'requestId', header: 'Request ID', sortable: true },
