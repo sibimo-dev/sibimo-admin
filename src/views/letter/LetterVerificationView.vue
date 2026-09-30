@@ -14,6 +14,7 @@ const record = ref(null)
 const notes = ref('')
 const loading = ref(true)
 const saving = ref(false)
+const pdfLoading = ref(false)
 
 const formEntries = computed(() => Object.entries(record.value?.formData ?? {}))
 const attachments = computed(() => record.value?.attachments ?? [])
@@ -54,6 +55,24 @@ async function verify(status) {
     })
   } finally {
     saving.value = false
+  }
+}
+
+async function previewPdf() {
+  if (!record.value) return
+  pdfLoading.value = true
+  try {
+    const { blob } = await store.getLetterPdf(record.value.id)
+    store.openPdfBlob(blob)
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Preview PDF gagal',
+      detail: error.response?.data?.message ?? 'Template surat belum tersedia.',
+      life: 3000,
+    })
+  } finally {
+    pdfLoading.value = false
   }
 }
 </script>
@@ -101,6 +120,16 @@ async function verify(status) {
           </a>
         </div>
         <p v-else class="text-sm text-slate-500">Belum ada lampiran.</p>
+      </section>
+
+      <section class="bg-white rounded-xl border p-5 flex flex-wrap gap-3">
+        <AppButton
+          label="Preview Surat"
+          icon="pi pi-eye"
+          variant="outline"
+          :disabled="pdfLoading"
+          @click="previewPdf"
+        />
       </section>
 
       <section class="bg-white rounded-xl border p-5 space-y-4">

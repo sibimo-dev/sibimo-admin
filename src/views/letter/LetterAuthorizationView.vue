@@ -17,6 +17,7 @@ const selectedSignerId = ref(null)
 const signatureType = ref('manual')
 const loading = ref(true)
 const saving = ref(false)
+const pdfLoading = ref(false)
 
 const signerOptions = computed(() => typeStore.signers.value)
 
@@ -61,6 +62,42 @@ async function authorize() {
     saving.value = false
   }
 }
+
+async function previewPdf() {
+  if (!record.value) return
+  pdfLoading.value = true
+  try {
+    const { blob } = await letterStore.getLetterPdf(record.value.id)
+    letterStore.openPdfBlob(blob)
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Preview PDF gagal',
+      detail: error.response?.data?.message ?? 'Template surat belum tersedia.',
+      life: 3000,
+    })
+  } finally {
+    pdfLoading.value = false
+  }
+}
+
+async function downloadPdf() {
+  if (!record.value) return
+  pdfLoading.value = true
+  try {
+    const { blob, filename } = await letterStore.getLetterPdf(record.value.id, true)
+    letterStore.downloadPdfBlob(blob, filename)
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Download PDF gagal',
+      detail: error.response?.data?.message ?? 'Template surat belum tersedia.',
+      life: 3000,
+    })
+  } finally {
+    pdfLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -89,6 +126,15 @@ async function authorize() {
       </section>
 
       <section class="bg-white rounded-xl border p-5 space-y-4">
+        <div class="flex flex-wrap gap-3">
+          <AppButton
+            label="Preview Surat"
+            icon="pi pi-eye"
+            variant="outline"
+            :disabled="pdfLoading"
+            @click="previewPdf"
+          />
+        </div>
         <label class="block text-sm text-slate-600">Penandatangan
           <select v-model="selectedSignerId" class="mt-1 w-full border rounded-lg px-3 py-2">
             <option :value="null">Pilih penandatangan</option>
@@ -104,6 +150,14 @@ async function authorize() {
           </select>
         </label>
         <AppButton label="Simpan Otorisasi" :disabled="saving" @click="authorize" />
+      </section>
+
+      <section v-if="record.backendStatus === 'authorized'" class="bg-white rounded-xl border p-5">
+        <AppButton
+          label="Download PDF"
+          icon="pi pi-download"
+          @click="downloadPdf"
+        />
       </section>
     </div>
   </div>
