@@ -7,6 +7,7 @@ import AppSelect from '@/components/common/AppSelect.vue'
 import { useLetterStore } from '@/stores/useLetterStore'
 import { useLetterTypeStore } from '@/stores/useLetterTypeStore'
 import { downloadLetterPdf, getLetterPdf } from '@/services/letter-request.service'
+import { mediaUrl } from '@/services/media'
 
 const route = useRoute()
 const router = useRouter()
@@ -59,6 +60,19 @@ const isAuthorized = computed(() =>
 
 const selectedSigner = computed(
   () => typeStore.signers.value.find((s) => s.staff_id === selectedSignerId.value) ?? null,
+)
+
+// Gambar TTD milik penandatangan terpilih (hanya relevan untuk TTD digital).
+const signatureImageUrl = computed(() =>
+  selectedSigner.value?.signature_image ? mediaUrl(selectedSigner.value.signature_image) : '',
+)
+
+// TTD digital butuh gambar TTD milik penandatangan; TTD manual dikosongkan untuk tanda tangan basah.
+const missingSignatureImage = computed(
+  () =>
+    signatureType.value === 'digital' &&
+    !!selectedSigner.value &&
+    !selectedSigner.value.signature_image,
 )
 
 const verifierName = computed(() => {
@@ -171,6 +185,15 @@ async function save() {
   }
   if (!selectedSignerId.value) {
     toast.add({ severity: 'warn', summary: 'Pilih penandatangan terlebih dahulu', life: 2500 })
+    return
+  }
+  if (missingSignatureImage.value) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Penandatangan belum punya gambar TTD digital',
+      detail: 'Unggah gambar TTD-nya dulu atau pilih tanda tangan manual.',
+      life: 3500,
+    })
     return
   }
 
@@ -355,8 +378,26 @@ function sendNotification() {
               :options="signatureOptions"
               placeholder="Pilih jenis tanda tangan"
               :disabled="!canAuthorize"
-              class="mb-3"
+              class="mb-2"
             />
+            <div
+              class="mb-3 h-24 rounded-lg border border-dashed flex items-center justify-center overflow-hidden px-3 text-center"
+              :class="missingSignatureImage ? 'border-red-300 bg-red-50' : 'border-slate-300 bg-slate-50'"
+            >
+              <img
+                v-if="signatureType === 'digital' && signatureImageUrl"
+                :src="signatureImageUrl"
+                alt="TTD digital"
+                class="max-w-full max-h-full object-contain"
+              />
+              <span v-else-if="missingSignatureImage" class="text-xs text-red-600">
+                Penandatangan ini belum punya gambar TTD digital. Unggah di menu Penandatangan.
+              </span>
+              <span v-else-if="signatureType === 'manual'" class="text-xs text-slate-400">
+                Area tanda tangan basah. Dikosongkan, ditandatangani setelah dicetak.
+              </span>
+              <span v-else class="text-xs text-slate-400">Pilih penandatangan untuk melihat TTD.</span>
+            </div>
 
             <label class="block text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-1">
               Ubah Status

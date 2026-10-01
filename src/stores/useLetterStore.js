@@ -38,6 +38,8 @@ function normalizeRequest(item) {
     purpose: type.letter_name ?? '-',
     category: type.category ?? '-',
     letterTypeId: item.letter_type_id,
+    templateView: type.blade_view ?? null,
+    templateAvailable: Boolean(type.blade_view),
     letterNumber: item.letter_number ?? '',
     signatureType: item.signature_type === 'digital' ? 'Digital' : 'Manual',
     status: statusLabels[item.status] ?? item.status,
@@ -128,6 +130,9 @@ async function updateStatus(requestId, payload) {
 const getStatusHistories = letterRequestService.getStatusHistories
 const getAttachments = letterRequestService.getAttachments
 const uploadAttachment = letterRequestService.uploadAttachment
+const getLetterPdf = letterRequestService.getLetterPdf
+const openPdfBlob = letterRequestService.openPdfBlob
+const downloadPdfBlob = letterRequestService.downloadPdfBlob
 
 export function useLetterStore() {
   return {
@@ -147,5 +152,8 @@ export function useLetterStore() {
     getStatusHistories,
     getAttachments,
     uploadAttachment,
+    getLetterPdf,
+    openPdfBlob,
+    downloadPdfBlob,
   }
 }

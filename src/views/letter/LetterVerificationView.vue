@@ -15,49 +15,7 @@ const record = ref(null)
 const notes = ref('')
 const loading = ref(true)
 const saving = ref(false)
-const selectedAttachment = ref(null)
-
-const statusMeta = {
-  submitted: { label: 'Menunggu Verifikasi', class: 'bg-slate-200 text-slate-600' },
-  verified: { label: 'Menunggu Otorisasi', class: 'bg-sky-100 text-sky-700' },
-  authorized: { label: 'Disetujui', class: 'bg-emerald-100 text-emerald-700' },
-  completed: { label: 'Selesai', class: 'bg-emerald-100 text-emerald-700' },
-  rejected: { label: 'Ditolak', class: 'bg-red-100 text-red-700' },
-}
-
-const status = computed(
-  () =>
-    statusMeta[record.value?.backendStatus] ?? {
-      label: record.value?.status ?? '-',
-      class: 'bg-slate-200 text-slate-600',
-    },
-)
-const canVerify = computed(() => record.value?.backendStatus === 'submitted')
-
-function humanize(key) {
-  const text = String(key).replace(/[_-]+/g, ' ').trim()
-  return text.charAt(0).toUpperCase() + text.slice(1)
-}
-
-const infoCells = computed(() => {
-  const r = record.value
-  if (!r) return []
-  return [
-    { label: 'Jenis Surat', value: r.category },
-    { label: 'Jenis Layanan', value: r.purpose },
-    { label: 'Kode Tipe Surat', value: r.letter_type?.code },
-    { label: 'Tanggal Pengajuan', value: r.date },
-    { label: 'Nama Lengkap', value: r.citizenName },
-    { label: 'NIK', value: r.citizenId },
-    { label: 'No Telepon', value: r.citizenPhone },
-  ]
-})
-const extraCells = computed(() =>
-  Object.entries(record.value?.formData ?? {}).map(([key, value]) => ({
-    label: humanize(key),
-    value: typeof value === 'object' && value !== null ? JSON.stringify(value) : value,
-  })),
-)
+const pdfLoading = ref(false)
 
 const attachments = computed(() => record.value?.attachments ?? [])
 const activeAttachment = computed(() => selectedAttachment.value ?? attachments.value[0] ?? null)
@@ -117,6 +75,24 @@ async function verify(newStatus) {
     })
   } finally {
     saving.value = false
+  }
+}
+
+async function previewPdf() {
+  if (!record.value) return
+  pdfLoading.value = true
+  try {
+    const { blob } = await store.getLetterPdf(record.value.id)
+    store.openPdfBlob(blob)
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Preview PDF gagal',
+      detail: error.response?.data?.message ?? 'Template surat belum tersedia.',
+      life: 3000,
+    })
+  } finally {
+    pdfLoading.value = false
   }
 }
 </script>
@@ -302,6 +278,61 @@ async function verify(newStatus) {
           </section>
         </div>
       </div>
+<<<<<<< HEAD
+=======
+
+      <section class="bg-white rounded-xl border p-5">
+        <h2 class="font-semibold text-slate-800 mb-4">Data Pemohon</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <div><span class="text-slate-500">Nama:</span> {{ record.citizenName }}</div>
+          <div><span class="text-slate-500">NIK:</span> {{ record.citizenId }}</div>
+          <div><span class="text-slate-500">Telepon:</span> {{ record.citizenPhone || '-' }}</div>
+          <div><span class="text-slate-500">Alamat:</span> {{ record.citizenAddress || '-' }}</div>
+          <div><span class="text-slate-500">Kategori:</span> {{ record.category }}</div>
+          <div><span class="text-slate-500">Sumber:</span> {{ record.source }}</div>
+        </div>
+      </section>
+
+      <section class="bg-white rounded-xl border p-5">
+        <h2 class="font-semibold text-slate-800 mb-4">Data Tambahan</h2>
+        <div v-if="formEntries.length" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <div v-for="[key, value] in formEntries" :key="key">
+            <span class="text-slate-500">{{ key }}:</span> {{ value || '-' }}
+          </div>
+        </div>
+        <p v-else class="text-sm text-slate-500">Tidak ada data tambahan.</p>
+      </section>
+
+      <section class="bg-white rounded-xl border p-5">
+        <h2 class="font-semibold text-slate-800 mb-4">Lampiran</h2>
+        <div v-if="attachments.length" class="space-y-2">
+          <a v-for="item in attachments" :key="item.attachment_id" :href="item.file_path" target="_blank" rel="noreferrer" class="block border rounded-lg p-3 text-sm text-blue-600 hover:bg-blue-50">
+            {{ item.file_name }} · {{ item.letter_type_document?.document_name || 'Dokumen' }}
+          </a>
+        </div>
+        <p v-else class="text-sm text-slate-500">Belum ada lampiran.</p>
+      </section>
+
+      <section class="bg-white rounded-xl border p-5 flex flex-wrap gap-3">
+        <AppButton
+          label="Preview Surat"
+          icon="pi pi-eye"
+          variant="outline"
+          :disabled="pdfLoading"
+          @click="previewPdf"
+        />
+      </section>
+
+      <section class="bg-white rounded-xl border p-5 space-y-4">
+        <label class="block text-sm text-slate-600">Catatan Verifikasi
+          <textarea v-model="notes" rows="4" class="mt-1 w-full border rounded-lg px-3 py-2" />
+        </label>
+        <div class="flex gap-3">
+          <AppButton label="Tolak" variant="outline" :disabled="saving" @click="verify('rejected')" />
+          <AppButton label="Verifikasi" :disabled="saving" @click="verify('verified')" />
+        </div>
+      </section>
+>>>>>>> origin/main
     </div>
   </div>
 </template>
