@@ -16,6 +16,17 @@ export const verifyLetterRequest = (id, payload) =>
 export const authorizeLetterRequest = (id, payload) =>
   unwrap(api.post('/letter-requests/' + id + '/authorize', payload))
 
+// PDF dirender backend dari template blade (resources/views/letters) sesuai tipe surat.
+export const getLetterPdf = (id, { download = false } = {}) =>
+  api
+    .get('/letter-requests/' + id + '/pdf', {
+      params: download ? { download: true } : undefined,
+      responseType: 'blob',
+    })
+    .then((response) => response.data)
+
+export const downloadLetterPdf = (id) => getLetterPdf(id, { download: true })
+
 export const getStatusHistories = (id) =>
   unwrap(api.get('/letter-requests/' + id + '/status-histories'))
 export const getAttachments = (id) =>

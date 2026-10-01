@@ -5,6 +5,7 @@ import Menu from 'primevue/menu'
 import Button from 'primevue/button'
 import { useAuthStore } from '@/stores/auth.store'
 import { useUiStore } from '@/stores/ui.store'
+import NotificationBell from '@/components/layout/NotificationBell.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -63,6 +64,8 @@ function toggleMenu(event) {
     </div>
 
     <div class="flex items-center gap-3">
+      <NotificationBell />
+
       <span class="w-px h-6 bg-neutral-100" />
 
       <button
