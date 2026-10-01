@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useToast } from 'primevue/usetoast'
 import Tag from 'primevue/tag'
 import Dialog from 'primevue/dialog'
 import SelectButton from 'primevue/selectbutton'
@@ -16,7 +17,9 @@ import AppInput from '@/components/common/AppInput.vue'
 import { useLetterStore } from '@/stores/useLetterStore'
 
 const router = useRouter()
-const { rows, fetchRows } = useLetterStore()
+const toast = useToast()
+const { rows, fetchRows, getLetterPdf, openPdfBlob, downloadPdfBlob } = useLetterStore()
+const pdfLoadingId = ref(null)
 
 onMounted(async () => {
   try {
@@ -113,6 +116,40 @@ function handleAction(data) {
     ...target,
     query: { highlight: data.requestId },
   })
+}
+
+async function previewPdf(data) {
+  pdfLoadingId.value = data.id
+  try {
+    const { blob } = await getLetterPdf(data.id)
+    openPdfBlob(blob)
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Preview PDF gagal',
+      detail: error.response?.data?.message ?? 'Template surat belum tersedia.',
+      life: 3000,
+    })
+  } finally {
+    pdfLoadingId.value = null
+  }
+}
+
+async function downloadLetterPdf(data) {
+  pdfLoadingId.value = data.id
+  try {
+    const { blob, filename } = await getLetterPdf(data.id, true)
+    downloadPdfBlob(blob, filename)
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Download PDF gagal',
+      detail: error.response?.data?.message ?? 'Template surat belum tersedia.',
+      life: 3000,
+    })
+  } finally {
+    pdfLoadingId.value = null
+  }
 }
 
 
@@ -494,6 +531,21 @@ function downloadExcel() {
             <Tag :value="data.status" :severity="statusColor[data.status]" />
           </template>
           <template #actions="{ data }">
+            <AppButton
+              label="Preview"
+              variant="outline"
+              size="small"
+              :disabled="pdfLoadingId === data.id"
+              @click="previewPdf(data)"
+            />
+            <AppButton
+              v-if="data.backendStatus === 'authorized'"
+              label="PDF"
+              variant="outline"
+              size="small"
+              :disabled="pdfLoadingId === data.id"
+              @click="downloadLetterPdf(data)"
+            />
             <AppButton
               v-if="actionLabel[data.status]"
               :label="actionLabel[data.status]"

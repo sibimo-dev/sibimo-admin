@@ -35,6 +35,22 @@ const categories = computed(() => [...new Set(activeTypes.value.map((type) => ty
 const typesInCategory = computed(() =>
   activeTypes.value.filter((type) => type.category === selectedCategory.value),
 )
+const fieldSections = computed(() => {
+  const sections = []
+  const byName = new Map()
+
+  fields.value.forEach((field) => {
+    const name = field.section_name || 'Data Tambahan'
+    if (!byName.has(name)) {
+      const section = { name, fields: [] }
+      byName.set(name, section)
+      sections.push(section)
+    }
+    byName.get(name).fields.push(field)
+  })
+
+  return sections
+})
 
 onMounted(async () => {
   isLoading.value = true
@@ -222,17 +238,22 @@ function resetForm() {
           <AppInput v-model="form.notes" label="Catatan" />
         </section>
 
-        <section v-if="fields.length" class="space-y-4 border-t pt-5">
+        <section v-if="fieldSections.length" class="space-y-6 border-t pt-5">
           <h3 class="font-semibold text-slate-800">Data Tambahan Surat</h3>
-          <div v-for="field in fields" :key="field.field_id">
-            <label class="block text-sm text-slate-600">{{ field.field_label }} <span v-if="field.is_required" class="text-red-500">*</span></label>
-            <select v-if="field.field_type === 'select'" v-model="dynamicValues[field.field_key]" class="mt-1 w-full border rounded-lg px-3 py-2">
-              <option value="">Pilih {{ field.field_label }}</option>
-              <option v-for="option in field.options || []" :key="option" :value="option">{{ option }}</option>
-            </select>
-            <textarea v-else-if="field.field_type === 'textarea'" v-model="dynamicValues[field.field_key]" rows="3" class="mt-1 w-full border rounded-lg px-3 py-2" />
-            <input v-else v-model="dynamicValues[field.field_key]" :type="field.field_type === 'number' ? 'number' : field.field_type" class="mt-1 w-full border rounded-lg px-3 py-2" />
-            <p v-if="errors[field.field_key]" class="text-xs text-red-600 mt-1">{{ errors[field.field_key] }}</p>
+          <div v-for="section in fieldSections" :key="section.name" class="space-y-4">
+            <h4 class="text-sm font-semibold text-slate-700">{{ section.name }}</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div v-for="field in section.fields" :key="field.field_id">
+                <label class="block text-sm text-slate-600">{{ field.field_label }} <span v-if="field.is_required" class="text-red-500">*</span></label>
+                <select v-if="field.field_type === 'select'" v-model="dynamicValues[field.field_key]" class="mt-1 w-full border rounded-lg px-3 py-2">
+                  <option value="">Pilih {{ field.field_label }}</option>
+                  <option v-for="option in field.options || []" :key="option" :value="option">{{ option }}</option>
+                </select>
+                <textarea v-else-if="field.field_type === 'textarea'" v-model="dynamicValues[field.field_key]" rows="3" class="mt-1 w-full border rounded-lg px-3 py-2" />
+                <input v-else v-model="dynamicValues[field.field_key]" :type="field.field_type === 'number' ? 'number' : field.field_type" class="mt-1 w-full border rounded-lg px-3 py-2" />
+                <p v-if="errors[field.field_key]" class="text-xs text-red-600 mt-1">{{ errors[field.field_key] }}</p>
+              </div>
+            </div>
           </div>
         </section>
 
