@@ -1,21 +1,31 @@
 <script setup>
 import { onMounted, reactive, ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 import { useToast } from "primevue/usetoast";
+import Button from "primevue/button";
 import Card from "primevue/card";
+import Dialog from "primevue/dialog";
+import Image from "primevue/image";
 import Select from "primevue/select";
 import Tag from "primevue/tag";
-import AppButton from "@/components/common/AppButton.vue";
-import {getComplaint,updateComplaintStatus,} from "@/services/complaint.service";
+import {
+  getComplaint,
+  updateComplaintStatus,
+  // publishComplaint, // TODO: enable after it is created in complaint.service.js
+} from "@/services/complaint.service";
 import { getListCache, updateListCache } from "@/services/list-cache";
+
 const route = useRoute();
-const router = useRouter();
 const toast = useToast();
+
 const cachedComplaint = getListCache("complaints")?.find(
   (item) => item.complaint_id === Number(route.params.id)
 );
 const loading = ref(!cachedComplaint);
 const saving = ref(false);
+const publishing = ref(false);
+const isPublishDialogVisible = ref(false);
+
 const complaint = reactive({
   complaint_id: null,
   status: "Submitted",
@@ -25,10 +35,12 @@ const complaint = reactive({
   submitted_at: "",
   reporter_name: "",
   reporter_phone: "",
+  is_published: false,
   attachments: [],
   ...cachedComplaint,
 });
 const selectedStatus = ref(cachedComplaint?.status ?? "Submitted");
+
 const statusOptions = [
   { label: "Menunggu Verifikasi", value: "Submitted" },
   { label: "Sedang Diproses", value: "In Progress" },
@@ -41,9 +53,35 @@ const statusLabel = {
   Resolved: "Selesai",
   Rejected: "Ditolak",
 };
-function messageFrom(error, fallback) {
+const categoryLabel = {
+  Infrastructure: "Infrastruktur",
+  "Public Service": "Pelayanan Publik",
+  Environment: "Lingkungan",
+  Security: "Keamanan",
+  Other: "Lainnya",
+};
+// Full class names so Tailwind can detect them
+const statusPillClass = {
+  Submitted: "bg-amber-100 text-amber-800",
+  "In Progress": "bg-blue-100 text-blue-800",
+  Resolved: "bg-emerald-100 text-emerald-800",
+  Rejected: "bg-red-100 text-red-800",
+};
+
+// Tailwind v4 classes reading the CSS variables from the global stylesheet
+// (--accent, --accent-bg, --border, --text-h). The trailing "!" makes them
+// win over the PrimeVue theme styles.
+const accentButtonClass =
+  "bg-(--accent)! border-(--accent)! text-white! hover:bg-(--accent)/90! hover:border-(--accent)/90!";
+const accentOutlinedButtonClass =
+  "bg-transparent! border-(--accent)! text-(--accent)! hover:bg-(--accent-bg)!";
+const neutralOutlinedButtonClass =
+  "bg-transparent! border-(--border)! text-(--text-h)! hover:bg-(--accent-bg)!";
+
+function getErrorMessage(error, fallback) {
   return error.response?.data?.message ?? fallback;
 }
+
 async function loadComplaint({ background = false } = {}) {
   if (!background) loading.value = true;
   try {
@@ -53,7 +91,7 @@ async function loadComplaint({ background = false } = {}) {
     toast.add({
       severity: "error",
       summary: "Gagal memuat pengaduan",
-      detail: messageFrom(error, "Coba lagi."),
+      detail: getErrorMessage(error, "Coba lagi."),
       life: 3500,
     });
   } finally {
@@ -84,11 +122,48 @@ async function handleSave() {
     toast.add({
       severity: "error",
       summary: "Gagal memperbarui status",
-      detail: messageFrom(error, "Coba lagi."),
+      detail: getErrorMessage(error, "Coba lagi."),
       life: 3500,
     });
   } finally {
     saving.value = false;
+  }
+}
+
+function openPublishDialog() {
+  isPublishDialogVisible.value = true;
+}
+
+async function handlePublish() {
+  publishing.value = true;
+  try {
+    // TODO: replace with the real publish service call
+    // e.g. await publishComplaint(complaint.complaint_id);
+    complaint.is_published = true;
+
+    updateListCache("complaints", (items) =>
+      items.map((item) =>
+        item.complaint_id === complaint.complaint_id
+          ? { ...item, is_published: true }
+          : item
+      )
+    );
+
+    isPublishDialogVisible.value = false;
+    toast.add({
+      severity: "success",
+      summary: "Aduan berhasil dipublikasikan",
+      life: 2500,
+    });
+  } catch (error) {
+    toast.add({
+      severity: "error",
+      summary: "Gagal mempublikasikan aduan",
+      detail: getErrorMessage(error, "Coba lagi."),
+      life: 3500,
+    });
+  } finally {
+    publishing.value = false;
   }
 }
 
@@ -104,21 +179,9 @@ function printComplaint() {
     return;
   }
 
-  const statusColors = {
-    Submitted: { bg: "#fef3c7", text: "#92400e" },
-    "In Progress": { bg: "#dbeafe", text: "#1e40af" },
-    Resolved: { bg: "#d1fae5", text: "#065f46" },
-    Rejected: { bg: "#fee2e2", text: "#991b1b" },
-  };
-  const statusColor = statusColors[complaint.status] || { bg: "#f3f4f6", text: "#374151" };
-
-  const categoryLabel = {
-    Infrastructure: "Infrastruktur",
-    "Public Service": "Pelayanan Publik",
-    Environment: "Lingkungan",
-    Security: "Keamanan",
-    Other: "Lainnya",
-  }[complaint.category] || complaint.category;
+  const pillClass =
+    statusPillClass[complaint.status] ?? "bg-gray-100 text-gray-700";
+  const category = categoryLabel[complaint.category] || complaint.category;
 
   const formattedDate = complaint.submitted_at
     ? new Date(complaint.submitted_at).toLocaleDateString("id-ID", {
@@ -129,287 +192,80 @@ function printComplaint() {
     : "-";
 
   const attachmentsHtml = complaint.attachments?.length
-    ? `<div class="attachment-grid">${complaint.attachments
+    ? `<div class="grid grid-cols-4 gap-2">${complaint.attachments
         .map(
           (file) =>
-            `<div class="attachment-item"><img src="${file.file_path}" /></div>`
+            `<div class="aspect-square overflow-hidden rounded-lg border border-gray-200"><img src="${file.file_path}" class="h-full w-full object-cover" /></div>`
         )
         .join("")}</div>`
-    : `<p class="empty-text">Tidak ada lampiran yang disertakan.</p>`;
+    : `<p class="text-xs italic text-gray-400">Tidak ada lampiran yang disertakan.</p>`;
 
   const mapsLink =
     complaint.latitude && complaint.longitude
-      ? `<a class="maps-link" href="https://www.google.com/maps?q=${complaint.latitude},${complaint.longitude}">Lihat titik lokasi di Google Maps →</a>`
+      ? `<a class="mt-2 inline-block text-xs font-semibold text-blue-700 no-underline" href="https://www.google.com/maps?q=${complaint.latitude},${complaint.longitude}">Lihat titik lokasi di Google Maps →</a>`
       : "";
+
+  const sectionLabelClass =
+    "mb-1.5 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-wide text-gray-400 before:inline-block before:h-3 before:w-[3px] before:rounded-sm before:bg-blue-900 before:content-['']";
+  const infoBoxClass =
+    "rounded-lg border border-gray-100 bg-gray-50 px-3.5 py-3";
+  const infoLabelClass =
+    "mb-0.5 text-[10.5px] font-semibold uppercase text-gray-400";
 
   win.document.write(`
     <html>
       <head>
         <title>Laporan Aduan #${complaint.complaint_id}</title>
         <meta charset="utf-8" />
-        <style>
-          * { box-sizing: border-box; }
-          body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            color: #1f2937;
-            padding: 48px 56px;
-            max-width: 780px;
-            margin: 0 auto;
-            font-size: 13.5px;
-            line-height: 1.6;
-          }
-
-          .kop {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            border-bottom: 3px solid #1e3a8a;
-            padding-bottom: 16px;
-            margin-bottom: 8px;
-          }
-          .kop-text h1 {
-            font-size: 16px;
-            margin: 0;
-            color: #1e3a8a;
-            letter-spacing: 0.3px;
-          }
-          .kop-text p {
-            margin: 2px 0 0;
-            font-size: 12px;
-            color: #6b7280;
-          }
-
-          .doc-title {
-            text-align: center;
-            margin: 28px 0 4px;
-          }
-          .doc-title h2 {
-            font-size: 15px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin: 0;
-            color: #111827;
-          }
-          .doc-title p {
-            font-size: 12px;
-            color: #6b7280;
-            margin: 4px 0 0;
-          }
-
-          .top-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin: 24px 0 20px;
-            padding: 14px 18px;
-            background: #f8fafc;
-            border-radius: 10px;
-            border: 1px solid #e5e7eb;
-          }
-          .meta-item .label {
-            font-size: 10.5px;
-            text-transform: uppercase;
-            color: #9ca3af;
-            font-weight: 600;
-            letter-spacing: 0.4px;
-          }
-          .meta-item .value {
-            font-size: 13.5px;
-            font-weight: 700;
-            color: #111827;
-            margin-top: 2px;
-          }
-          .status-pill {
-            display: inline-block;
-            padding: 5px 14px;
-            border-radius: 999px;
-            font-size: 11.5px;
-            font-weight: 700;
-            background: ${statusColor.bg};
-            color: ${statusColor.text};
-          }
-
-          .section {
-            margin-bottom: 22px;
-          }
-          .section-label {
-            font-size: 10.5px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #9ca3af;
-            font-weight: 700;
-            margin-bottom: 6px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-          }
-          .section-label::before {
-            content: "";
-            width: 3px;
-            height: 12px;
-            background: #1e3a8a;
-            border-radius: 2px;
-            display: inline-block;
-          }
-
-          .info-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 14px;
-          }
-          .info-box {
-            background: #f9fafb;
-            border: 1px solid #eef0f3;
-            border-radius: 8px;
-            padding: 12px 14px;
-          }
-          .info-box .label {
-            font-size: 10.5px;
-            color: #9ca3af;
-            font-weight: 600;
-            text-transform: uppercase;
-            margin-bottom: 3px;
-          }
-          .info-box .value {
-            font-size: 13.5px;
-            font-weight: 600;
-            color: #111827;
-          }
-
-          .content-box {
-            background: #f9fafb;
-            border: 1px solid #eef0f3;
-            border-radius: 8px;
-            padding: 14px 16px;
-            font-size: 13.5px;
-            color: #1f2937;
-            white-space: pre-line;
-          }
-
-          .location-title {
-            font-weight: 700;
-            font-size: 14px;
-            color: #111827;
-            margin-bottom: 10px;
-          }
-
-          .maps-link {
-            display: inline-block;
-            margin-top: 8px;
-            font-size: 12px;
-            font-weight: 600;
-            color: #1d4ed8;
-            text-decoration: none;
-          }
-
-          .attachment-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-          }
-          .attachment-item {
-            aspect-ratio: 1 / 1;
-            border-radius: 8px;
-            overflow: hidden;
-            border: 1px solid #e5e7eb;
-          }
-          .attachment-item img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-          }
-
-          .empty-text {
-            font-size: 12.5px;
-            color: #9ca3af;
-            font-style: italic;
-          }
-
-          .signature-area {
-            margin-top: 48px;
-            display: flex;
-            justify-content: flex-end;
-          }
-          .signature-block {
-            text-align: center;
-            width: 220px;
-          }
-          .signature-block .place-date {
-            font-size: 12.5px;
-            margin-bottom: 64px;
-          }
-          .signature-block .name {
-            font-size: 13px;
-            font-weight: 700;
-            text-decoration: underline;
-          }
-          .signature-block .role {
-            font-size: 11.5px;
-            color: #6b7280;
-            margin-top: 2px;
-          }
-
-          .footer-note {
-            margin-top: 40px;
-            padding-top: 14px;
-            border-top: 1px solid #e5e7eb;
-            font-size: 10.5px;
-            color: #9ca3af;
-            text-align: center;
-          }
-
-          @media print {
-            body { padding: 24px 32px; }
-          }
-        </style>
+        <script src="https://cdn.tailwindcss.com"><\/script>
       </head>
-      <body>
-        <div class="kop">
-          <div class="kop-text">
-            <h1>PEMERINTAH KALURAHAN BIMOMARTANI</h1>
-            <p>Kapanewon Ngemplak, Kabupaten Sleman, Daerah Istimewa Yogyakarta</p>
+      <body class="mx-auto max-w-3xl px-14 py-12 text-[13.5px] leading-relaxed text-gray-800 print:px-8 print:py-6" style="font-family: 'Segoe UI', Arial, sans-serif;">
+        <div class="mb-2 flex items-center gap-4 border-b-[3px] border-blue-900 pb-4">
+          <div>
+            <h1 class="m-0 text-base tracking-wide text-blue-900">PEMERINTAH KALURAHAN BIMOMARTANI</h1>
+            <p class="mt-0.5 text-xs text-gray-500">Kapanewon Ngemplak, Kabupaten Sleman, Daerah Istimewa Yogyakarta</p>
           </div>
         </div>
 
-        <div class="doc-title">
-          <h2>Laporan Aduan Masyarakat</h2>
-          <p>Nomor Referensi: #${complaint.complaint_id}</p>
+        <div class="mb-1 mt-7 text-center">
+          <h2 class="m-0 text-[15px] font-bold uppercase tracking-widest text-gray-900">Laporan Aduan Masyarakat</h2>
+          <p class="mt-1 text-xs text-gray-500">Nomor Referensi: #${complaint.complaint_id}</p>
         </div>
 
-        <div class="top-meta">
-          <div class="meta-item">
-            <div class="label">Tanggal Pelaporan</div>
-            <div class="value">${formattedDate}</div>
+        <div class="my-6 mb-5 flex items-center justify-between rounded-[10px] border border-gray-200 bg-slate-50 px-[18px] py-3.5">
+          <div>
+            <div class="text-[10.5px] font-semibold uppercase tracking-wide text-gray-400">Tanggal Pelaporan</div>
+            <div class="mt-0.5 font-bold text-gray-900">${formattedDate}</div>
           </div>
-          <div class="meta-item">
-            <div class="label">Kategori</div>
-            <div class="value">${categoryLabel}</div>
+          <div>
+            <div class="text-[10.5px] font-semibold uppercase tracking-wide text-gray-400">Kategori</div>
+            <div class="mt-0.5 font-bold text-gray-900">${category}</div>
           </div>
-          <div class="meta-item">
-            <div class="label">Status</div>
-            <span class="status-pill">${statusLabel[complaint.status] ?? complaint.status}</span>
+          <div>
+            <div class="text-[10.5px] font-semibold uppercase tracking-wide text-gray-400">Status</div>
+            <span class="mt-0.5 inline-block rounded-full px-3.5 py-1 text-[11.5px] font-bold ${pillClass}">${statusLabel[complaint.status] ?? complaint.status}</span>
           </div>
         </div>
 
-        <div class="section">
-          <div class="section-label">Informasi Pelapor</div>
-          <div class="info-grid">
-            <div class="info-box">
-              <div class="label">Nama Pelapor</div>
-              <div class="value">${complaint.reporter_name || "Anonim"}</div>
+        <div class="mb-[22px]">
+          <div class="${sectionLabelClass}">Informasi Pelapor</div>
+          <div class="grid grid-cols-2 gap-3.5">
+            <div class="${infoBoxClass}">
+              <div class="${infoLabelClass}">Nama Pelapor</div>
+              <div class="font-semibold text-gray-900">${complaint.reporter_name || "Anonim"}</div>
             </div>
-            <div class="info-box">
-              <div class="label">Nomor Telepon</div>
-              <div class="value">${complaint.reporter_phone || "Anonim"}</div>
+            <div class="${infoBoxClass}">
+              <div class="${infoLabelClass}">Nomor Telepon</div>
+              <div class="font-semibold text-gray-900">${complaint.reporter_phone || "Anonim"}</div>
             </div>
           </div>
         </div>
 
         ${
           complaint.location
-            ? `<div class="section">
-                <div class="section-label">Lokasi Kejadian</div>
-                <div class="content-box">
+            ? `<div class="mb-[22px]">
+                <div class="${sectionLabelClass}">Lokasi Kejadian</div>
+                <div class="whitespace-pre-line rounded-lg border border-gray-100 bg-gray-50 px-4 py-3.5">
                   ${complaint.location}
                   ${mapsLink}
                 </div>
@@ -417,22 +273,22 @@ function printComplaint() {
             : ""
         }
 
-        <div class="section">
-          <div class="section-label">Judul Aduan</div>
-          <div class="location-title">${complaint.title}</div>
+        <div class="mb-[22px]">
+          <div class="${sectionLabelClass}">Judul Aduan</div>
+          <div class="mb-2.5 text-sm font-bold text-gray-900">${complaint.title}</div>
         </div>
 
-        <div class="section">
-          <div class="section-label">Deskripsi Laporan</div>
-          <div class="content-box">${complaint.description}</div>
+        <div class="mb-[22px]">
+          <div class="${sectionLabelClass}">Deskripsi Laporan</div>
+          <div class="whitespace-pre-line rounded-lg border border-gray-100 bg-gray-50 px-4 py-3.5">${complaint.description}</div>
         </div>
 
-        <div class="section">
-          <div class="section-label">Lampiran / Bukti Pendukung</div>
+        <div class="mb-[22px]">
+          <div class="${sectionLabelClass}">Lampiran / Bukti Pendukung</div>
           ${attachmentsHtml}
         </div>
 
-        <div class="footer-note">
+        <div class="mt-10 border-t border-gray-200 pt-3.5 text-center text-[10.5px] text-gray-400">
           Dokumen ini dicetak otomatis melalui Sistem Informasi Bimomartani (SIBIMO) pada ${new Date().toLocaleString("id-ID")}.
         </div>
       </body>
@@ -441,97 +297,144 @@ function printComplaint() {
 
   win.document.close();
   win.focus();
-  setTimeout(() => win.print(), 500);
+  // Wait for the Tailwind CDN script to generate styles before printing
+  setTimeout(() => win.print(), 1000);
 }
 
 onMounted(() => loadComplaint({ background: Boolean(cachedComplaint) }));
 </script>
+
 <template>
-  <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
-    <div class="flex flex-col gap-5">
-      <div>
-        <h1 class="text-2xl font-bold text-gray-800 m-0">
-          Detail Aduan #{{ complaint.complaint_id }}
-        </h1>
-        <p class="text-sm text-gray-500">
-          Dibuat pada {{ complaint.submitted_at }}
-        </p>
-      </div>
-    <Card>
-        <template #content>
-            <h2 class="font-semibold mb-4">Informasi Pelapor</h2>
-            <p>Nama: {{ complaint.reporter_name || 'Anonim' }}</p>
-            <p>Nomor HP: {{ complaint.reporter_phone || 'Anonim' }}</p>
-        </template>
-    </Card>
-    <Card>
-        <template #content>
-            <h2 class="font-semibold mb-4">{{ complaint.title }}</h2>
-            <Tag :value="complaint.category" severity="secondary" />
-    
-            <div v-if="complaint.location" class="mt-4 rounded-lg bg-gray-50 p-3">
-                
-                <p class="text-sm font-semibold text-gray-700">Lokasi Kejadian</p>
-                <p class="text-sm text-gray-600 mt-1">{{ complaint.location }}</p>
-                <a
-                    v-if="complaint.latitude && complaint.longitude"
-                    :href="`https://www.google.com/maps?q=${complaint.latitude},${complaint.longitude}`"
-                    target="_blank"
-                    class="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-primary-700 underline"
-                >
-                    Lihat di Google Maps ({{ complaint.latitude }}, {{ complaint.longitude }})
-                </a>
-            </div>
-
-            <p class="mt-4">{{ complaint.description }}</p>
-
-            <h3 class="font-semibold mt-5 mb-2">Lampiran</h3>
-            <div v-if="complaint.attachments?.length" class="grid grid-cols-3 gap-2 sm:grid-cols-4">
-            <a
-                v-for="file in complaint.attachments"
-                :key="file.attachment_id"
-                :href="file.file_path"
-                target="_blank"
-                class="block aspect-square overflow-hidden rounded-lg border border-gray-200 bg-gray-50"
-            >
-                <img
-                :src="file.file_path"
-                :alt="file.file_name"
-                class="h-full w-full object-cover"
-                />
-            </a>
-            </div>
-            <p v-else class="text-sm text-gray-400">Belum ada lampiran.</p>
-        </template>
-    </Card>
+  <div class="flex flex-col gap-5">
+    <div>
+      <h1 class="m-0 text-2xl font-bold text-gray-800">
+        Detail Aduan #{{ complaint.complaint_id }}
+      </h1>
+      <p class="text-sm text-gray-500">
+        Dibuat pada {{ complaint.submitted_at }}
+      </p>
     </div>
-    <Card
-      ><template #content
-        ><h2 class="font-semibold mb-4">Status &amp; Tindakan</h2> 
+
+    <div class="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
+    <div class="flex flex-col gap-5">
+      <Card>
+        <template #content>
+          <h2 class="mb-4 font-semibold">Informasi Pelapor</h2>
+          <p>Nama: {{ complaint.reporter_name || "Anonim" }}</p>
+          <p>Nomor HP: {{ complaint.reporter_phone || "Anonim" }}</p>
+        </template>
+      </Card>
+
+      <Card>
+        <template #content>
+          <h2 class="mb-4 font-semibold">{{ complaint.title }}</h2>
+          <Tag :value="complaint.category" severity="secondary" />
+
+          <div v-if="complaint.location" class="mt-4 rounded-lg bg-gray-50 p-3">
+            <p class="text-sm font-semibold text-gray-700">Lokasi Kejadian</p>
+            <p class="mt-1 text-sm text-gray-600">{{ complaint.location }}</p>
+            <Button
+              v-if="complaint.latitude && complaint.longitude"
+              as="a"
+              variant="link"
+              size="small"
+              target="_blank"
+              :href="`https://www.google.com/maps?q=${complaint.latitude},${complaint.longitude}`"
+              :label="`Lihat di Google Maps (${complaint.latitude}, ${complaint.longitude})`"
+              class="mt-1.5 !p-0 text-xs font-medium underline"
+            />
+          </div>
+
+          <p class="mt-4">{{ complaint.description }}</p>
+
+          <h3 class="mb-2 mt-5 font-semibold">Lampiran</h3>
+          <div
+            v-if="complaint.attachments?.length"
+            class="grid grid-cols-3 gap-2 sm:grid-cols-4"
+          >
+            <Image
+              v-for="file in complaint.attachments"
+              :key="file.attachment_id"
+              :src="file.file_path"
+              :alt="file.file_name"
+              preview
+              class="block aspect-square overflow-hidden rounded-lg border border-gray-200 bg-gray-50"
+              image-class="h-full w-full object-cover"
+            />
+          </div>
+          <p v-else class="text-sm text-gray-400">Belum ada lampiran.</p>
+        </template>
+      </Card>
+    </div>
+
+    <Card>
+      <template #content>
+        <h2 class="mb-4 font-semibold">Status &amp; Tindakan</h2>
         <Tag
           :value="statusLabel[complaint.status] ?? complaint.status"
           severity="info"
-          class="mb-3" /><Select
+          class="mb-3"
+        />
+        <Select
           v-model="selectedStatus"
           :options="statusOptions"
           option-label="label"
           option-value="value"
-          class="w-full mb-3" /><AppButton
-        label="Simpan Perubahan"
-        variant="primary"
-        class="w-full"
-        :loading="saving"
-        @click="handleSave"
+          class="mb-3 w-full"
         />
-        <AppButton
-        label="Cetak Aduan"
-        icon="pi pi-print"
-        variant="secondary"
-        outlined
-        class="w-full mt-2"
-        @click="printComplaint"
+        <Button
+          label="Simpan Perubahan"
+          class="w-full"
+          :loading="saving"
+          @click="handleSave"
         />
-    </template>
-    ></Card>
+        <Button
+          label="Publish Aduan"
+          icon="pi pi-send"
+          class="mt-2 w-full"
+          :class="accentButtonClass"
+          :disabled="complaint.is_published"
+          @click="openPublishDialog"
+        />
+        <Button
+          label="Cetak Aduan"
+          icon="pi pi-print"
+          outlined
+          class="mt-2 w-full"
+          :class="accentOutlinedButtonClass"
+          @click="printComplaint"
+        />
+      </template>
+    </Card>
+
+    <Dialog
+      v-model:visible="isPublishDialogVisible"
+      modal
+      header="Konfirmasi Publish"
+      class="w-[26rem] max-w-[90vw]"
+      :closable="!publishing"
+    >
+      <p class="m-0 text-gray-600">
+        Apakah Anda yakin ingin mempublikasikan aduan
+        <strong>#{{ complaint.complaint_id }}</strong>? Aduan yang sudah
+        dipublikasikan dapat dilihat oleh publik.
+      </p>
+      <template #footer>
+        <Button
+          label="Batal"
+          outlined
+          :class="neutralOutlinedButtonClass"
+          :disabled="publishing"
+          @click="isPublishDialogVisible = false"
+        />
+        <Button
+          label="Lanjut Publish"
+          :class="accentButtonClass"
+          :loading="publishing"
+          @click="handlePublish"
+        />
+      </template>
+    </Dialog>
+    </div>
   </div>
 </template>
