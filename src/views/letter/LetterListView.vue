@@ -121,7 +121,7 @@ function handleAction(data) {
 async function previewPdf(data) {
   pdfLoadingId.value = data.id
   try {
-    const { blob } = await getLetterPdf(data.id)
+    const blob = await getLetterPdf(data.id)
     openPdfBlob(blob)
   } catch (error) {
     toast.add({
@@ -138,8 +138,8 @@ async function previewPdf(data) {
 async function downloadLetterPdf(data) {
   pdfLoadingId.value = data.id
   try {
-    const { blob, filename } = await getLetterPdf(data.id, true)
-    downloadPdfBlob(blob, filename)
+    const blob = await getLetterPdf(data.id, true)
+    downloadPdfBlob(blob, `${data.requestId || 'surat'}.pdf`)
   } catch (error) {
     toast.add({
       severity: 'error',

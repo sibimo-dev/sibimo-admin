@@ -82,7 +82,7 @@ async function previewPdf() {
   if (!record.value) return
   pdfLoading.value = true
   try {
-    const { blob } = await store.getLetterPdf(record.value.id)
+    const blob = await store.getLetterPdf(record.value.id)
     store.openPdfBlob(blob)
   } catch (error) {
     toast.add({
