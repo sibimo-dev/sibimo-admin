@@ -17,15 +17,35 @@ export const authorizeLetterRequest = (id, payload) =>
   unwrap(api.post('/letter-requests/' + id + '/authorize', payload))
 
 // PDF dirender backend dari template blade (resources/views/letters) sesuai tipe surat.
-export const getLetterPdf = (id, { download = false } = {}) =>
-  api
-    .get('/letter-requests/' + id + '/pdf', {
-      params: download ? { download: true } : undefined,
-      responseType: 'blob',
-    })
-    .then((response) => response.data)
+// Mendukung pemanggilan lama dengan boolean dan pemanggilan baru dengan object options.
+export const getLetterPdf = async (id, options = {}) => {
+  const download = typeof options === 'boolean' ? options : Boolean(options?.download)
+  const response = await api.get('/letter-requests/' + id + '/pdf', {
+    params: { download: download ? 1 : 0 },
+    responseType: 'blob',
+  })
+
+  return response.data
+}
 
 export const downloadLetterPdf = (id) => getLetterPdf(id, { download: true })
+
+export function openPdfBlob(blob) {
+  const url = URL.createObjectURL(blob)
+  window.open(url, '_blank', 'noopener,noreferrer')
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
+export function downloadPdfBlob(blob, filename = 'surat.pdf') {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename || 'surat.pdf'
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
 
 export const getStatusHistories = (id) =>
   unwrap(api.get('/letter-requests/' + id + '/status-histories'))

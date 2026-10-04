@@ -110,7 +110,7 @@ const TONE = {
 }
 
 // === Sumber data mentah tiap layanan ===
-const { rows: letterRows } = useLetterStore()
+const { rows: letterRows, fetchRows: fetchLetterRows } = useLetterStore()
 const citizens = ref([])
 const complaints = ref([])
 const loans = ref([])
@@ -325,6 +325,12 @@ const upcomingAgenda = computed(() => {
 async function loadDashboard() {
   loading.value = true
   loadError.value = ''
+
+  // Muat surat secara paralel, tetapi jangan menahan seluruh dashboard jika
+  // endpoint persuratan lebih lambat dari widget lainnya.
+  void fetchLetterRows().catch((error) => {
+    console.error('Gagal memuat pengajuan surat untuk dashboard:', error)
+  })
 
   const results = await Promise.allSettled([getCitizens(), getComplaints(), getLoans(), agendaService.list()])
   const [citizensRes, complaintsRes, loansRes, agendasRes] = results

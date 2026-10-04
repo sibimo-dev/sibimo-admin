@@ -1,15 +1,14 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { getLetterRequests } from '@/services/letter-request.service'
-import { getComplaints } from '@/services/complaint.service'
+import { getNotifications } from '@/services/notification.service'
 import { useAuthStore } from '@/stores/auth.store'
 
 /**
  * notification.store - notifikasi pengajuan surat & aduan baru dari publik.
  *
- * Cara kerja (tanpa perubahan backend):
- * - Polling ke endpoint yang sudah ada (`/letter-requests` dan `/complaints`)
- *   tiap POLL_INTERVAL_MS, dan langsung saat tab kembali aktif.
+ * Cara kerja:
+ * - Polling ke endpoint notifikasi backend tiap POLL_INTERVAL_MS, dan langsung
+ *   saat tab kembali aktif.
  * - Yang dianggap notifikasi = pengajuan surat berstatus `submitted` dan aduan
  *   berstatus `Submitted` (menunggu tindakan admin). Surat yang dibuat manual
  *   oleh petugas (source "Manual ...") tidak dihitung karena bukan dari publik.
@@ -18,8 +17,6 @@ import { useAuthStore } from '@/stores/auth.store'
  * - Item yang muncul SETELAH polling pertama memicu callback `onNew` (dipakai
  *   Toast di NotificationBell). Polling pertama hanya jadi baseline.
  *
- * Kalau nanti backend punya endpoint khusus (mis. GET /notifications atau
- * ?status=submitted), cukup ganti isi `loadLetters()` dan `loadComplaints()`.
  */
 
 const POLL_INTERVAL_MS = 30_000
@@ -27,47 +24,25 @@ const MIN_GAP_MS = 5_000
 const MAX_ITEMS = 30
 const STORAGE_PREFIX = 'sibimo_notif_read:'
 
-const isSubmitted = (status) => String(status ?? '').toLowerCase() === 'submitted'
-
-function toLetterNotification(item) {
+function normalizeNotification(item) {
   return {
-    key: `letter:${item.letter_request_id}`,
-    type: 'letter',
-    title: item.letter_type?.letter_name ?? 'Pengajuan surat baru',
-    from: item.applicant_name?.trim() || 'Pemohon',
-    time: item.submitted_at ?? null,
-    to: `/letter/verification/${item.letter_request_id}`,
+    key: item.key,
+    type: item.type,
+    title: item.title || (item.type === 'letter' ? 'Pengajuan surat baru' : 'Aduan baru'),
+    from: item.from || (item.type === 'letter' ? 'Pemohon' : 'Anonim'),
+    time: item.time ?? null,
+    to: item.to,
   }
 }
 
-function toComplaintNotification(item) {
-  return {
-    key: `complaint:${item.complaint_id}`,
-    type: 'complaint',
-    title: item.title?.trim() || 'Aduan baru',
-    from: item.reporter_name?.trim() || 'Anonim',
-    time: item.submitted_at ?? null,
-    to: `/complaint/${item.complaint_id}`,
-  }
-}
+async function loadNotifications() {
+  const list = await getNotifications()
 
-async function loadLetters() {
-  const list = await getLetterRequests()
-  return (Array.isArray(list) ? list : [])
-    .filter((item) => isSubmitted(item.status) && !/manual/i.test(item.source ?? ''))
-    .map(toLetterNotification)
-}
-
-async function loadComplaints() {
-  const list = await getComplaints()
-  return (Array.isArray(list) ? list : [])
-    .filter((item) => isSubmitted(item.status))
-    .map(toComplaintNotification)
+  return (Array.isArray(list) ? list : []).map(normalizeNotification)
 }
 
 export const useNotificationStore = defineStore('notification', () => {
   const authStore = useAuthStore()
-
   const letterItems = ref([])
   const complaintItems = ref([])
   const readKeys = ref(new Set())
@@ -92,14 +67,6 @@ export const useNotificationStore = defineStore('notification', () => {
   const unreadCount = computed(() => allItems.value.filter((item) => !item.read).length)
   const pendingLetterCount = computed(() => letterItems.value.length)
   const pendingComplaintCount = computed(() => complaintItems.value.length)
-
-  function can(permissions) {
-    const granted = authStore.user?.permissions
-    if (!Array.isArray(granted)) return true
-    return permissions.some((permission) => granted.includes(permission))
-  }
-  const canLetters = () => can(['verifikasi-surat', 'pengelolaan-surat'])
-  const canComplaints = () => can(['pengaduan'])
 
   function persistRead() {
     try {
@@ -155,25 +122,21 @@ export const useNotificationStore = defineStore('notification', () => {
     lastRun = Date.now()
 
     try {
-      const [letters, complaints] = await Promise.allSettled([
-        canLetters() ? loadLetters() : Promise.resolve([]),
-        canComplaints() ? loadComplaints() : Promise.resolve([]),
-      ])
+      const notifications = await loadNotifications()
       if (!started) return
 
-      const arrivals = []
-      if (letters.status === 'fulfilled') {
-        arrivals.push(...applySource('letter', letters.value, letterItems))
-      }
-      if (complaints.status === 'fulfilled') {
-        arrivals.push(...applySource('complaint', complaints.value, complaintItems))
-      }
+      const letters = notifications.filter((item) => item.type === 'letter')
+      const complaints = notifications.filter((item) => item.type === 'complaint')
+      const arrivals = [
+        ...applySource('letter', letters, letterItems),
+        ...applySource('complaint', complaints, complaintItems),
+      ]
 
-      loadFailed.value = letters.status === 'rejected' && complaints.status === 'rejected'
-      if (letters.status === 'fulfilled' || complaints.status === 'fulfilled') {
-        lastFetchedAt.value = Date.now()
-      }
+      loadFailed.value = false
+      lastFetchedAt.value = Date.now()
       if (arrivals.length > 0 && onNew) onNew(arrivals)
+    } catch (error) {
+      loadFailed.value = true
     } finally {
       inflight = false
     }
@@ -217,8 +180,6 @@ export const useNotificationStore = defineStore('notification', () => {
     pendingComplaintCount,
     lastFetchedAt,
     loadFailed,
-    canLetters,
-    canComplaints,
     start,
     stop,
     refresh,
