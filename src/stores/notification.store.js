@@ -1,14 +1,15 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { getNotifications } from '@/services/notification.service'
+import { subscribeToAdminNotifications } from '@/services/realtime.service'
 import { useAuthStore } from '@/stores/auth.store'
 
 /**
  * notification.store - notifikasi pengajuan surat & aduan baru dari publik.
  *
  * Cara kerja:
- * - Polling ke endpoint notifikasi backend tiap POLL_INTERVAL_MS, dan langsung
- *   saat tab kembali aktif.
+ * - Subscribe ke Pusher untuk refresh seketika, dengan polling ke endpoint
+ *   notifikasi backend sebagai fallback dan refresh saat tab kembali aktif.
  * - Yang dianggap notifikasi = pengajuan surat berstatus `submitted` dan aduan
  *   berstatus `Submitted` (menunggu tindakan admin). Surat yang dibuat manual
  *   oleh petugas (source "Manual ...") tidak dihitung karena bukan dari publik.
@@ -54,6 +55,8 @@ export const useNotificationStore = defineStore('notification', () => {
   let inflight = false
   let lastRun = 0
   let timer = null
+  let realtimeStop = null
+  let realtimeRefreshTimer = null
   let onNew = null
   const known = new Set()
   const seeded = { letter: false, complaint: false }
@@ -146,6 +149,13 @@ export const useNotificationStore = defineStore('notification', () => {
     if (document.visibilityState === 'visible') refresh()
   }
 
+  function handleRealtimeNotification() {
+    clearTimeout(realtimeRefreshTimer)
+    realtimeRefreshTimer = setTimeout(() => {
+      refresh({ force: true })
+    }, 250)
+  }
+
   function start(callback) {
     if (started) return
     const user = authStore.user
@@ -153,6 +163,9 @@ export const useNotificationStore = defineStore('notification', () => {
     onNew = callback ?? null
     loadRead()
     started = true
+    realtimeStop = subscribeToAdminNotifications(handleRealtimeNotification, () => {
+      // Polling remains active when Pusher is unavailable or disconnected.
+    })
     refresh({ force: true })
     timer = setInterval(refresh, POLL_INTERVAL_MS)
     document.addEventListener('visibilitychange', handleVisibility)
@@ -162,6 +175,10 @@ export const useNotificationStore = defineStore('notification', () => {
     started = false
     clearInterval(timer)
     timer = null
+    clearTimeout(realtimeRefreshTimer)
+    realtimeRefreshTimer = null
+    realtimeStop?.()
+    realtimeStop = null
     onNew = null
     document.removeEventListener('visibilitychange', handleVisibility)
     known.clear()
