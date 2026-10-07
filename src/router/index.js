@@ -7,6 +7,8 @@ import letterRoutes from './modules/letter.routes'
 import letterTypeRoutes from './modules/letter-type.routes'
 import newsRoutes from './modules/news.routes'
 import galleryRoutes from './modules/gallery.routes'
+import developmentRoutes from './modules/development.routes'
+import legalProductRoutes from './modules/legal-product.routes'
 import libraryRoutes from './modules/library.routes'
 import agendaRoutes from './modules/agenda.routes'
 import complaintRoutes from './modules/complaint.routes'
@@ -27,6 +29,8 @@ const protectedRoutes = {
     ...letterTypeRoutes,
     ...newsRoutes,
     ...galleryRoutes,
+    ...developmentRoutes,
+    ...legalProductRoutes,
     ...libraryRoutes,
     ...agendaRoutes,
     ...complaintRoutes,
