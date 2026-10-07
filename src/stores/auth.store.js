@@ -40,16 +40,26 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem('sibimo_user', JSON.stringify(user.value))
       return user.value
     } catch (error) {
-      logout()
+      await logout()
       throw error
     }
   }
 
-  function logout() {
-    token.value = null
-    user.value = null
-    localStorage.removeItem('sibimo_token')
-    localStorage.removeItem('sibimo_user')
+  async function logout() {
+    try {
+      if (token.value) {
+        await authService.logout()
+      }
+    } catch (error) {
+      // Logout lokal tetap dijalankan agar user tidak tertahan di sesi lama
+      // ketika backend sedang tidak tersedia atau token sudah kedaluwarsa.
+      console.warn('Logout backend gagal:', error)
+    } finally {
+      token.value = null
+      user.value = null
+      localStorage.removeItem('sibimo_token')
+      localStorage.removeItem('sibimo_user')
+    }
   }
 
   return { token, user, isAuthenticated, login, fetchCurrentUser, logout }
