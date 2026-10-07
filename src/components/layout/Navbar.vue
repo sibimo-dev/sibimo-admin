@@ -24,8 +24,8 @@ const menuItems = [
   {
     label: 'Keluar',
     icon: 'pi pi-sign-out',
-    command: () => {
-      authStore.logout()
+    command: async () => {
+      await authStore.logout()
       router.push('/login')
     },
   },
