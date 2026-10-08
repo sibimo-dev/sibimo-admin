@@ -31,9 +31,11 @@ const buildFormData = (payload) => {
   ;(payload.progress ?? []).forEach((item, index) => {
     if (item.id) data.append(`progress[${index}][progress_id]`, item.id)
     data.append(`progress[${index}][percentage]`, item.percentage ?? 0)
-    if (item.image_file) data.append(`progress[${index}][image]`, item.image_file)
+    if (item.image_file instanceof File) {
+      data.append(`progress_photos[${item.percentage}]`, item.image_file)
+    }
   })
-
+  
   return data
 }
 
