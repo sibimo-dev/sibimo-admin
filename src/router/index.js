@@ -49,7 +49,7 @@ const router = createRouter({
     protectedRoutes,
     {
       path: '/:pathMatch(.*)*',
-      redirect: '/dashboard',
+      redirect: '/',
     },
   ],
 })
@@ -67,7 +67,7 @@ router.beforeEach((to) => {
   }
 
   if (to.name === 'login' && authStore.isAuthenticated) {
-    return '/dashboard'
+    return '/'
   }
 
   return
