@@ -1,394 +1,217 @@
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import AppButton from '@/components/common/AppButton.vue'
-import AppInput from '@/components/common/AppInput.vue'
-import Tag from 'primevue/tag'
-import { useLetterTypeStore } from '@/stores/useLetterTypeStore'
-import { useLetterStore } from '@/stores/useLetterStore'
 
-const router = useRouter()
-const { rows: letterTypes } = useLetterTypeStore()
-const { addSurat } = useLetterStore()
+import { computed, ref } from "vue";
+import { useRouter } from "vue-router";
+import Message from "primevue/message";
+import ProgressSpinner from "primevue/progressspinner";
+import AppButton from "@/components/common/AppButton.vue";
+import LetterCatalog from "./create/LetterCatalog.vue";
+import LetterWizard from "./create/LetterWizard.vue";
+import BundleWizard from "./create/BundleWizard.vue";
+import RegisterTypePicker from "./create/RegisterTypePicker.vue";
+import { CATALOG_CATEGORIES, CATALOG_SERVICES, SINGLE_LETTERS } from "@/data/letterCatalog";
+import { BUNDLES, findBundle } from "@/data/letterBundles";
+import { buildRegisterBundle } from "@/data/registrationLetters";
+import { CATEGORY_HUES, HUES, hueForCategory } from "./create/pastel";
 
-// Hanya tipe surat aktif yang boleh dipakai bikin surat baru
-const activeTypes = computed(() => letterTypes.value.filter((t) => t.is_active))
+const router = useRouter();
 
-// Kategori diturunkan otomatis dari tipe surat yang ada, bukan daftar statis --
-// begitu ada kategori baru ditambahkan lewat Pengelolaan Tipe Surat, langsung muncul di sini.
-const categories = computed(() => {
-  const unique = [...new Set(activeTypes.value.map((t) => t.category))]
-  return unique.map((cat) => ({
-    key: cat,
-    label: cat,
-    count: activeTypes.value.filter((t) => t.category === cat).length,
-  }))
-})
+// groups | catalog | letter | bundle | register-type | register
+const view = ref("groups");
+const loading = ref(false);
+const failed = ref(false);
+const wizardKey = ref(0); // ganti key = wizard dimulai dari awal lagi
 
-// --- Step control ---
-// 1 = pilih kategori, 2 = pilih jenis surat, 3 = isi form
-const step = ref(1)
+const letter = ref(null); // { title, code, sections, documents, hue, internal }
+const bundle = ref(null);
+const registerBundle = ref(null);
 
-const selectedCategoryKey = ref('')
-const selectedLetterTypeId = ref(null)
+/* ---------- Kelompok ---------- */
+const GROUPS = [
+  {
+    value: "catalog",
+    hue: "sky",
+    icon: "pi pi-file-edit",
+    title: "Pengajuan Surat",
+    description: "Surat satuan dan paket surat (nikah, kelahiran, kematian, Letter C, pindah WNI). Termasuk surat internal: Perintah (SPPD) dan Balasan.",
+    stats: `${SINGLE_LETTERS.length} surat satuan · ${BUNDLES.length} paket surat`,
+  },
+  {
+    value: "register-type",
+    hue: "violet",
+    icon: "pi pi-user-plus",
+    title: "Pendaftaran Warga Baru",
+    description: "Untuk pemohon yang belum terdaftar sebagai penduduk: penduduk tetap, penduduk sementara, atau tinggal sementara.",
+    stats: "3 jenis pendaftaran",
+  },
+];
+const group = (g) => HUES[g.hue];
 
-const typesInSelectedCategory = computed(() =>
-  activeTypes.value.filter((t) => t.category === selectedCategoryKey.value),
-)
-const selectedLetterType = computed(() =>
-  activeTypes.value.find((t) => t.letter_type_id === selectedLetterTypeId.value) || null,
-)
+const heading = computed(
+  () =>
+    ({
+      groups: ["Tambah Surat", "Pilih kelompok surat yang akan ditambahkan."],
+      catalog: ["Pengajuan Surat", "Pilih surat satuan atau paket surat, lalu isi formulirnya."],
+      "register-type": ["Pendaftaran Warga Baru", "Pilih jenis pendaftaran, lalu isi formulir surat yang dibutuhkan."],
+    })[view.value] ?? ["Tambah Surat", "Isi formulir sesuai surat yang dipilih."],
+);
+const headerBack = computed(() => (view.value === "groups" ? () => router.push("/letter") : view.value === "catalog" || view.value === "register-type" ? () => (view.value = "groups") : null));
 
-function pickCategory(categoryKey) {
-  selectedCategoryKey.value = categoryKey
-  selectedLetterTypeId.value = null
-  step.value = 2
-}
+/* ---------- Surat satuan / paket ---------- */
+const letterModules = import.meta.glob("@/data/letters/*/*.js");
 
-function pickType(letterTypeId) {
-  selectedLetterTypeId.value = letterTypeId
-  step.value = 3
-}
-
-function goBack() {
-  if (step.value === 1) {
-    router.push('/letter')
-  } else {
-    step.value -= 1
+async function openService(service) {
+  failed.value = false;
+  if (service.bundle) {
+    bundle.value = findBundle(service.slug);
+    wizardKey.value++;
+    view.value = "bundle";
+    return;
+  }
+  loading.value = true;
+  try {
+    const path = Object.keys(letterModules).find((p) => p.endsWith(`/${service.group}/${service.slug}.js`));
+    if (!path) throw new Error(`Berkas surat ${service.slug}.js tidak ditemukan`);
+    const mod = await letterModules[path]();
+    letter.value = {
+      title: mod.meta?.title ?? service.title,
+      code: mod.meta?.code ?? service.shortCode,
+      sections: mod.sections,
+      documents: mod.documents ?? [],
+      hue: hueForCategory(service.category),
+      internal: service.internal,
+    };
+    wizardKey.value++;
+    view.value = "letter";
+  } catch (err) {
+    console.error("[letter-create] Gagal memuat surat:", err);
+    failed.value = true;
+  } finally {
+    loading.value = false;
   }
 }
 
-// --- Form data pemohon ---
-const form = ref({
-  citizenName: '',
-  citizenId: '',
-  phone: '',
-  address: '',
-  notes: '',
-})
-
-const errors = ref({})
-
-function validateForm() {
-  errors.value = {}
-  if (!form.value.citizenName.trim()) errors.value.citizenName = 'Nama wajib diisi'
-  if (!/^\d{16}$/.test(form.value.citizenId.trim())) {
-    errors.value.citizenId = 'NIK harus 16 digit angka'
+/* ---------- Pendaftaran warga baru ---------- */
+async function openRegister(type) {
+  failed.value = false;
+  loading.value = true;
+  try {
+    registerBundle.value = await buildRegisterBundle({
+      type: type.value,
+      ui: {
+        kindLabel: "Pendaftaran Warga Baru",
+        selectTitle: "Surat apa saja yang dibutuhkan pemohon?",
+        selectHint: "Pilih surat/dokumen kependudukan untuk mendaftar. Setiap surat yang dipilih mendapat satu langkah pengisian sendiri, termasuk data diri.",
+        backLabel: "Kembali ke Jenis Pendaftaran",
+        submitLabel: "Kirim Pendaftaran",
+        confirmTitle: "Kirim Pendaftaran?",
+        confirmText: "Apakah Anda yakin ingin mengirim pendaftaran warga baru sekarang?",
+        confirmNote: "Setelah dikirim, pendaftaran akan masuk ke daftar surat untuk diperiksa dan disetujui.",
+        confirmYes: "Ya, Kirim Pendaftaran",
+        doneTitle: "Pendaftaran Terkirim",
+        failTitle: "Pendaftaran Gagal",
+        doneIntro: "Pendaftaran warga baru berhasil dikirim.",
+        doneMessage: "Data pemohon menunggu pemeriksaan dan persetujuan.",
+      },
+    });
+    wizardKey.value++;
+    view.value = "register";
+  } catch (err) {
+    console.error("[letter-create] Gagal memuat surat pendaftaran:", err);
+    failed.value = true;
+  } finally {
+    loading.value = false;
   }
-  if (!form.value.address.trim()) errors.value.address = 'Alamat wajib diisi'
-  return Object.keys(errors.value).length === 0
 }
 
-const isSubmitting = ref(false)
-const submitted = ref(null)
-
-// Tanggal cetak (dipakai di kop preview surat)
-const printDate = computed(() =>
-  submitted.value
-    ? new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
-    : '',
-)
-
-function submitForm() {
-  if (!validateForm() || !selectedLetterType.value) return
-
-  isSubmitting.value = true
-  const created = addSurat({
-    letterType: selectedLetterType.value,
-    citizenId: form.value.citizenId.trim(),
-    citizenName: form.value.citizenName.trim(),
-    citizenPhone: form.value.phone.trim(),
-    citizenAddress: form.value.address.trim(),
-    notes: form.value.notes.trim(),
-  })
-  isSubmitting.value = false
-  submitted.value = created
-}
-
-function printLetter() {
-  window.print()
-}
-
-function resetAndAddAnother() {
-  step.value = 1
-  selectedCategoryKey.value = ''
-  selectedLetterTypeId.value = null
-  form.value = { citizenName: '', citizenId: '', phone: '', address: '', notes: '' }
-  submitted.value = null
-}
+/* ---------- Navigasi dari wizard ---------- */
+const backFromWizard = () => (view.value = view.value === "register" ? "register-type" : "catalog");
+// "Tambah Surat Lagi" setelah berhasil kirim → kembali ke daftar surat / jenis pendaftaran tadi
+const restartWizard = backFromWizard;
 </script>
 
 <template>
   <div class="min-h-screen bg-slate-50">
-    <div class="mb-6 flex items-center gap-3 print:hidden">
-      <button
-        class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-        @click="goBack"
-      >
-        <i class="pi pi-arrow-left"></i>
-      </button>
+    <div class="mb-6 flex items-center justify-between gap-3">
       <div>
-        <h1 class="text-2xl font-semibold text-slate-800">Tambah Surat</h1>
-        <p class="text-sm text-slate-500 mt-1">
-          Input surat manual untuk warga yang mengajukan langsung ke kelurahan.
-        </p>
+        <h1 class="text-2xl font-semibold text-slate-800">{{ heading[0] }}</h1>
+        <p class="text-sm text-slate-500 mt-1">{{ heading[1] }}</p>
       </div>
+      <AppButton v-if="headerBack" label="Kembali" variant="outline" @click="headerBack" />
     </div>
 
-    <!-- Stepper indicator -->
-    <div class="flex items-center gap-2 mb-6 print:hidden" v-if="!submitted">
-      <div
-        v-for="(label, i) in ['Kategori Surat', 'Jenis Surat', 'Data Pemohon']"
-        :key="label"
-        class="flex items-center gap-2"
-      >
-        <div class="flex items-center gap-2">
-          <div
-            class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold"
-            :class="step >= i + 1 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'"
-          >
-            {{ i + 1 }}
+    <Message v-if="failed" severity="error" :closable="false" class="mb-4">Formulir surat gagal dimuat. Muat ulang halaman ini lalu coba lagi.</Message>
+
+    <div v-if="loading" class="flex justify-center p-10"><ProgressSpinner style="width: 2.5rem; height: 2.5rem" /></div>
+
+    <template v-else>
+      <!-- ============ PILIH KELOMPOK ============ -->
+      <div v-if="view === 'groups'" class="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-4xl">
+        <button
+          v-for="g in GROUPS"
+          :key="g.value"
+          type="button"
+          class="group relative overflow-hidden text-left rounded-3xl border-2 p-6 flex flex-col gap-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400"
+          :class="[group(g).card, group(g).cardHover]"
+          @click="view = g.value"
+        >
+          <span class="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full transition-transform duration-300 group-hover:scale-125" :class="group(g).blob" />
+          <span class="pointer-events-none absolute -right-2 bottom-4 h-12 w-12 rounded-full bg-white/50" />
+          <span class="relative flex h-14 w-14 items-center justify-center rounded-2xl text-2xl shadow-sm" :class="group(g).icon"><i :class="g.icon" /></span>
+          <div class="relative">
+            <h2 class="text-lg font-semibold text-slate-800">{{ g.title }}</h2>
+            <p class="text-sm mt-1 text-slate-500">{{ g.description }}</p>
           </div>
-          <span
-            class="text-sm font-medium"
-            :class="step >= i + 1 ? 'text-slate-800' : 'text-slate-400'"
-          >
-            {{ label }}
-          </span>
-        </div>
-        <div v-if="i < 2" class="w-8 h-px bg-slate-200 mx-1"></div>
-      </div>
-    </div>
-
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 print:hidden" v-if="!submitted">
-      <!-- Step 1: pilih kategori -->
-      <div v-if="step === 1">
-        <h2 class="text-base font-semibold text-slate-800 mb-1">Pilih Kategori Surat</h2>
-        <p class="text-sm text-slate-500 mb-5">
-          Pilih kategori sesuai jenis surat yang diajukan warga. Hanya tipe surat berstatus
-          <span class="font-medium text-slate-700">Aktif</span> yang tersedia di sini.
-        </p>
-
-        <p v-if="categories.length === 0" class="text-sm text-slate-400 py-8 text-center">
-          Belum ada tipe surat aktif. Tambahkan dulu lewat
-          <router-link to="/letter-type" class="text-blue-600 hover:underline">Pengelolaan Tipe Surat</router-link>.
-        </p>
-
-        <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <button
-            v-for="cat in categories"
-            :key="cat.key"
-            class="text-left rounded-xl border border-slate-200 p-4 hover:border-blue-400 hover:bg-blue-50/50 transition-colors"
-            @click="pickCategory(cat.key)"
-          >
-            <p class="font-semibold text-slate-800">{{ cat.label }}</p>
-            <p class="text-xs text-blue-600 mt-3">{{ cat.count }} jenis surat aktif</p>
-          </button>
-        </div>
+          <div class="relative mt-auto flex items-center justify-between pt-1">
+            <span class="text-xs font-medium" :class="group(g).text">{{ g.stats }}</span>
+            <span class="flex items-center gap-1 text-xs font-medium" :class="group(g).text">Pilih <i class="pi pi-arrow-right text-[10px]" /></span>
+          </div>
+        </button>
       </div>
 
-      <!-- Step 2: pilih jenis surat -->
-      <div v-else-if="step === 2">
-        <h2 class="text-base font-semibold text-slate-800 mb-1">
-          Pilih Jenis Surat
-          <span class="text-slate-400 font-normal">— {{ selectedCategoryKey }}</span>
-        </h2>
-        <p class="text-sm text-slate-500 mb-5">Pilih jenis surat spesifik yang diminta warga.</p>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <button
-            v-for="type in typesInSelectedCategory"
-            :key="type.letter_type_id"
-            class="text-left rounded-xl border border-slate-200 px-4 py-3 hover:border-blue-400 hover:bg-blue-50/50 transition-colors"
-            @click="pickType(type.letter_type_id)"
-          >
-            <p class="text-sm font-medium text-slate-700">{{ type.letter_name }}</p>
-            <p class="text-xs text-slate-400 mt-1">
-              {{ type.number_prefix }} · {{ type.processing_time }} · {{ type.signer_name }}
-            </p>
-          </button>
-        </div>
-      </div>
+      <!-- ============ KATALOG SURAT ============ -->
+      <LetterCatalog
+        v-else-if="view === 'catalog'"
+        :services="CATALOG_SERVICES"
+        :categories="CATALOG_CATEGORIES"
+        searchPlaceholder="Ketik jenis surat (Cth: SKTM, Domisili, Nikah, SPPD)..."
+        @select="openService"
+      />
 
-      <!-- Step 3: form data pemohon -->
-      <div v-else-if="step === 3" class="max-w-xl">
-        <h2 class="text-base font-semibold text-slate-800 mb-1">Data Pemohon</h2>
-        <p class="text-sm text-slate-500 mb-4">
-          {{ selectedCategoryKey }} — <span class="font-medium text-slate-700">{{ selectedLetterType?.letter_name }}</span>
-        </p>
+      <!-- ============ WIZARD 1 SURAT ============ -->
+      <LetterWizard
+        v-else-if="view === 'letter' && letter"
+        :key="`letter-${wizardKey}`"
+        :title="letter.title"
+        :code="letter.code"
+        :sections="letter.sections"
+        :documents="letter.documents"
+        :hue="letter.hue"
+        :internal="letter.internal"
+        @back="backFromWizard"
+        @restart="restartWizard"
+      />
 
-        <!-- Info tipe surat: hanya ditampilkan, tidak diedit di sini -- diatur di Pengelolaan Tipe Surat -->
-        <div class="rounded-xl bg-slate-50 border border-slate-100 p-4 mb-5 grid grid-cols-2 gap-3 text-sm">
-          <div>
-            <p class="text-slate-400 text-xs">Kode Nomor</p>
-            <p class="font-medium text-slate-700">{{ selectedLetterType?.number_prefix }}</p>
-          </div>
-          <div>
-            <p class="text-slate-400 text-xs">Estimasi Proses</p>
-            <p class="font-medium text-slate-700">{{ selectedLetterType?.processing_time }}</p>
-          </div>
-          <div>
-            <p class="text-slate-400 text-xs">Penandatangan</p>
-            <p class="font-medium text-slate-700">{{ selectedLetterType?.signer_name }}</p>
-          </div>
-          <div>
-            <p class="text-slate-400 text-xs">Metode TTD</p>
-            <Tag
-              :value="selectedLetterType?.signature_method === 'digital' ? 'Digital' : 'Manual'"
-              severity="contrast"
-              class="mt-0.5"
-            />
-          </div>
-        </div>
+      <!-- ============ WIZARD PAKET SURAT ============ -->
+      <BundleWizard
+        v-else-if="view === 'bundle' && bundle"
+        :key="`bundle-${wizardKey}`"
+        :bundle="bundle"
+        :hue="CATEGORY_HUES.permohonan"
+        @back="backFromWizard"
+        @restart="restartWizard"
+      />
 
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Nama Lengkap</label>
-            <AppInput v-model="form.citizenName" placeholder="Nama sesuai KTP" class="w-full" />
-            <p v-if="errors.citizenName" class="text-xs text-red-500 mt-1">{{ errors.citizenName }}</p>
-          </div>
+      <!-- ============ PENDAFTARAN WARGA BARU ============ -->
+      <RegisterTypePicker v-else-if="view === 'register-type'" :loading="loading" @select="openRegister" />
 
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">NIK</label>
-            <AppInput v-model="form.citizenId" placeholder="16 digit NIK" class="w-full" maxlength="16" />
-            <p v-if="errors.citizenId" class="text-xs text-red-500 mt-1">{{ errors.citizenId }}</p>
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">No. Telepon (opsional)</label>
-            <AppInput v-model="form.phone" placeholder="08xxxxxxxxxx" class="w-full" />
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Alamat</label>
-            <AppInput v-model="form.address" placeholder="Alamat sesuai domisili" class="w-full" />
-            <p v-if="errors.address" class="text-xs text-red-500 mt-1">{{ errors.address }}</p>
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Catatan (opsional)</label>
-            <AppInput
-              v-model="form.notes"
-              placeholder="Catatan tambahan untuk verifikator"
-              class="w-full"
-            />
-          </div>
-        </div>
-
-        <div class="flex items-center gap-3 mt-6">
-          <AppButton label="Kembali" variant="outline" @click="step = 2" />
-          <AppButton
-            :label="isSubmitting ? 'Memproses...' : 'Cetak Surat'"
-            variant="primary"
-            :disabled="isSubmitting"
-            @click="submitForm"
-          />
-        </div>
-      </div>
-    </div>
-
-    <!-- ================= Preview surat siap cetak ================= -->
-    <div v-if="submitted">
-      <!-- Toolbar aksi -- disembunyikan saat print, hanya area surat di bawah yang tercetak -->
-      <div class="flex items-center justify-between mb-4 print:hidden">
-        <div class="flex items-center gap-2 text-sm text-slate-500">
-          <i class="pi pi-check-circle text-green-600"></i>
-          Surat tersimpan (Request ID {{ submitted.requestId }}) — status
-          <span class="font-medium text-slate-700">Pending</span>, menunggu verifikasi.
-        </div>
-        <div class="flex items-center gap-3">
-          <AppButton label="Tambah Surat Lagi" variant="outline" @click="resetAndAddAnother" />
-          <AppButton label="Lihat Daftar Surat" variant="outline" @click="router.push('/letter')" />
-          <AppButton label="Cetak Sekarang" icon="pi pi-print" variant="primary" @click="printLetter" />
-        </div>
-      </div>
-
-      <!-- Area surat: ini yang tercetak (id dipakai oleh CSS @media print di bawah) -->
-      <div id="print-area" class="bg-white rounded-2xl border border-slate-200 shadow-sm mx-auto max-w-3xl p-10 print:shadow-none print:border-0 print:rounded-none print:p-0">
-        <!-- Kop surat -- placeholder, ganti dengan data Profil Desa begitu tersedia -->
-        <div class="flex items-center gap-4 border-b-2 border-slate-800 pb-4 mb-6">
-          <div class="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 text-xs shrink-0">
-            Logo
-          </div>
-          <div class="text-center flex-1">
-            <p class="font-bold text-lg uppercase tracking-wide">Pemerintah Desa</p>
-            <p class="font-bold text-lg uppercase tracking-wide">Kecamatan — Kabupaten</p>
-            <p class="text-xs text-slate-500 mt-1">
-              Alamat Kantor Desa, Kode Pos — Telp. (0000) 000000
-            </p>
-          </div>
-        </div>
-
-        <div class="text-center mb-6">
-          <p class="font-bold underline uppercase">{{ submitted.purpose }}</p>
-          <p class="text-sm text-slate-600">Nomor: {{ submitted.letterNumber }}</p>
-        </div>
-
-        <div class="text-sm leading-relaxed text-slate-800 space-y-4">
-          <p>Yang bertanda tangan di bawah ini menerangkan bahwa:</p>
-
-          <table class="ml-4">
-            <tbody>
-              <tr>
-                <td class="pr-3 py-0.5 align-top">Nama</td>
-                <td class="pr-3 py-0.5 align-top">:</td>
-                <td class="py-0.5 font-medium">{{ submitted.citizenName }}</td>
-              </tr>
-              <tr>
-                <td class="pr-3 py-0.5 align-top">NIK</td>
-                <td class="pr-3 py-0.5 align-top">:</td>
-                <td class="py-0.5 font-medium">{{ submitted.citizenId }}</td>
-              </tr>
-              <tr>
-                <td class="pr-3 py-0.5 align-top">Alamat</td>
-                <td class="pr-3 py-0.5 align-top">:</td>
-                <td class="py-0.5 font-medium">{{ form.address }}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <p>
-            Adalah benar warga kami dan mengajukan permohonan
-            <span class="font-medium">{{ submitted.purpose }}</span> untuk keperluan yang
-            bersangkutan.
-          </p>
-
-          <p v-if="submitted.notes">Catatan: {{ submitted.notes }}</p>
-
-          <p>
-            Demikian surat keterangan ini dibuat dengan sebenarnya untuk dapat dipergunakan
-            sebagaimana mestinya.
-          </p>
-        </div>
-
-        <div class="flex justify-end mt-10">
-          <div class="text-center text-sm">
-            <p>Ditetapkan di: ______________</p>
-            <p>Pada tanggal: {{ printDate }}</p>
-            <p class="mt-16 font-medium">{{ submitted.signerName }}</p>
-          </div>
-        </div>
-      </div>
-    </div>
+      <BundleWizard
+        v-else-if="view === 'register' && registerBundle"
+        :key="`register-${wizardKey}`"
+        :bundle="registerBundle"
+        @back="backFromWizard"
+        @restart="restartWizard"
+      />
+    </template>
   </div>
 </template>
-
-<style>
-/* Saat print, sembunyikan seluruh layout admin (sidebar, navbar, dsb via
-   AdminLayout.vue yang sudah pakai print:hidden) dan hanya tampilkan
-   #print-area, dipaksa ke ukuran halaman penuh tanpa dekorasi kartu. */
-@media print {
-  body * {
-    visibility: hidden;
-  }
-  #print-area,
-  #print-area * {
-    visibility: visible;
-  }
-  #print-area {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-  }
-}
-</style>
