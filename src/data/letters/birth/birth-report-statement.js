@@ -46,7 +46,7 @@ const motherFields = birthMother(PARENT_PARTS, "Data Ibu").fields;
 const fatherFields = birthFather(PARENT_PARTS, "Data Ayah").fields;
 
 const otherFields = (list, role, showIf, labels) =>
-  ["name", "address", "rtRw"]
+  ["name", "address", "rt", "rw"]
     .map((part) => {
       const fld = pick(list, `${role}${cap(part)}`);
       return fld && withShowIf({ ...fld, label: labels[part] }, showIf);
@@ -64,7 +64,8 @@ const signerFields = (role, showIf) => {
     f.text(`${role}Age`, "Umur (tahun)", { placeholder: "Contoh: 30" }),
     f.select(`${role}Occupation`, "Pekerjaan", OPT.occupation, { from: `${from}:occupation`, editable: true }),
     f.area(`${role}Address`, "Alamat", { from: `${from}:address`, span: 2 }),
-    f.text(`${role}RtRw`, "RT / RW", { placeholder: "Contoh: RT 003 / RW 005" }),
+    f.text(`${role}Rt`, "RT", { placeholder: "Contoh: 003" }),
+    f.text(`${role}Rw`, "RW", { placeholder: "Contoh: 005" }),
   ].map((fld) => withShowIf(fld, showIf));
 };
 
@@ -104,8 +105,8 @@ export const sections = [
     title: "Data Orang Tua",
     hint: "Isi data orang tua yang tidak bertanda tangan. Data penanda tangan sudah diisi pada blok di atas.",
     fields: [
-      ...otherFields(motherFields, "mother", bukanIbuTtd, { name: "Dari Ibu (Nama Lengkap)", address: "Alamat Ibu", rtRw: "RT / RW (Ibu)" }),
-      ...otherFields(fatherFields, "father", bukanAyahTtd, { name: "Suami Dari (Nama Lengkap)", address: "Alamat Ayah", rtRw: "RT / RW (Ayah)" }),
+      ...otherFields(motherFields, "mother", bukanIbuTtd, { name: "Dari Ibu (Nama Lengkap)", address: "Alamat Ibu", rt: "RT (Ibu)", rw: "RW (Ibu)" }),
+      ...otherFields(fatherFields, "father", bukanAyahTtd, { name: "Suami Dari (Nama Lengkap)", address: "Alamat Ayah", rt: "RT (Ayah)", rw: "RW (Ayah)" }),
     ],
   },
   withBirthDateParts(birthChild(BIRTH_CHILD_STATEMENT, "Data Bayi/Anak & Keterangan Persalinan")),
