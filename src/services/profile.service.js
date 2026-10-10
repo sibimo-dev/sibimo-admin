@@ -39,8 +39,8 @@ export function saveHistory({ id, payload, files = [] }) {
   formData.append('points', JSON.stringify(payload.points ?? []))
   formData.append('photos_data', JSON.stringify(payload.photos ?? []))
 
-  files.forEach(({ token, file }) => {
-    if (token && file) formData.append(`photos[${token}]`, file)
+  files.forEach(({ token, file, type }) => {
+    if (token && file) formData.append(`${type === 'signature' ? 'signatures' : 'photos'}[${token}]`, file)
   })
 
   if (id) {
