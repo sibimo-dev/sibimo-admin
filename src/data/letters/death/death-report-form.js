@@ -6,14 +6,15 @@
 // Template PDF: letters/death/death-report-form.blade.php
 // 1 file = 1 surat. Isi `sections` (langkah 1) dan `documents` (langkah 2).
 // Langkah 3 (cek ulang, ceklis dokumen asli, kirim, pop-up hasil) sudah ditangani LetterWizard.
-import { DEATH_JENAZAH_FORM, dokJenazah, deathDeceased, deathParent, deathWitness, keluarga } from "@/data/letterFields";
+import { DEATH_JENAZAH_FORM, PELAPOR_FULL, dokJenazah, deathDeceased, deathParent, deathWitness, keluarga, pelapor } from "@/data/letterFields";
 
-// Langkah 1: No KK, Nama KK, Jenazah, Ibu, Ayah, Saksi I & II (Pelapor diisi petugas)
+// Langkah 1: No KK, Nama KK, Jenazah, Ibu, Ayah, Pelapor, Saksi I & II (Pelapor diisi petugas/admin kalurahan, khusus admin)
 export const sections = [
   keluarga(),
   deathDeceased(DEATH_JENAZAH_FORM),
   deathParent("mother", "Data Ibu", ["nik", "name", "birthPlace", "birthDate", "occupation", "addressKtp", "nationality"]),
   deathParent("father", "Data Ayah", ["nik", "name", "birthPlace", "birthDate", "occupation", "address", "nationality"]),
+  pelapor(PELAPOR_FULL),
   deathWitness(1),
   deathWitness(2),
 ];

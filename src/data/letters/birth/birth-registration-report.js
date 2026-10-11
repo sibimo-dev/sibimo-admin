@@ -8,7 +8,7 @@
 // Langkah 3 (cek ulang, ceklis dokumen asli, kirim, pop-up hasil) sudah ditangani LetterWizard.
 import { arrange, birthRegistrationSections, dokBayi } from "@/data/letterFields";
 
-// Langkah 1: isian sesuai surat yang diajukan. PELAPOR tidak ada di sini: diisi petugas/admin kalurahan.
+// Langkah 1: isian sesuai surat yang diajukan. Blok "Data Pelapor" diisi petugas/admin kalurahan (khusus admin, tidak ada di form public).
 export const sections = arrange(
   birthRegistrationSections(),
   {
@@ -18,6 +18,7 @@ export const sections = arrange(
       "Data Bayi/Anak",
       "Data Ibu Kandung",
       "Data Ayah Kandung",
+      "Data Pelapor",
       "Data Saksi 1",
       "Data Saksi 2",
     ],
@@ -50,7 +51,8 @@ export const sections = arrange(
         "motherAge",                  // Umur (tahun)
         "motherOccupation",           // Pekerjaan
         "motherAddress",              // Alamat
-        "motherRtRw",                 // RT / RW
+        "motherRt",                 // RT
+        "motherRw",                 // RW
         "motherNationality",          // Kewarganegaraan
         "motherEthnicity",            // Kebangsaan / Suku
         "marriageRecordPlace",        // Kawin Sah di (KUA/Gereja)
@@ -65,9 +67,19 @@ export const sections = arrange(
         "fatherAge",          // Umur (tahun)
         "fatherOccupation",   // Pekerjaan
         "fatherAddress",      // Alamat
-        "fatherRtRw",         // RT / RW
+        "fatherRt",         // RT
+        "fatherRw",         // RW
         "fatherNationality",  // Kewarganegaraan
         "fatherEthnicity",    // Kebangsaan / Suku
+      ],
+      "Data Pelapor": [
+        "reporterNik",            // NIK
+        "reporterName",           // Nama Lengkap
+        "reporterBirthPlace",     // Tempat Lahir
+        "reporterBirthDate",      // Tanggal Lahir
+        "reporterAge",            // Umur (tahun)
+        "reporterOccupation",     // Pekerjaan
+        "reporterAddress",        // Alamat
       ],
       "Data Saksi 1": [
         "witness1Nik",      // NIK

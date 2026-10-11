@@ -271,7 +271,7 @@ export const DOC_PBB = opt("Fotokopi SPPT PBB");
    $birth['family_card_number']            → familyCardNumber
    $birth['head_of_family_name']           → headOfFamilyName
    $birth['child']['birth_place']          → childBirthPlace          (child.*     → child…)
-   $birth['mother']['rt_rw']               → motherRtRw               (mother.*    → mother…)
+   $birth['mother']['rt'] / ['rw']         → motherRt / motherRw      (mother.*    → mother…; RT dan RW dipisah)
    $birth['father']['occupation']          → fatherOccupation         (father.*    → father…)
    $birth['marriage']['record_date']       → marriageRecordDate       (marriage.*  → marriage…)
    $birth['reporter']['report_date']       → reporterReportDate       (reporter.*  → reporter…)
@@ -286,9 +286,10 @@ export const DOC_PBB = opt("Fotokopi SPPT PBB");
    (hari lahir dihitung dari childBirthDate).
 
    PELAPOR ($birth['reporter'] → reporterNik, reporterName, reporterBirthPlace/Date, reporterAge, reporterOccupation,
-   reporterAddress, reporterReportDate, reporterApplicationDate, reporterPhone) JUGA TIDAK menjadi field warga:
-   diisi petugas/admin kalurahan SETELAH pengajuan masuk. Pelapor = perangkat/petugas yang melaporkan ke Dukcapil,
-   BUKAN otomatis ayah/ibu si anak. Jangan beri `from:` / alias ke key reporter* di form warga.
+   reporterAddress, reporterReportDate, reporterApplicationDate, reporterPhone) di ADMIN menjadi blok "Data Pelapor"
+   (helper `pelapor()` di bawah), diisi petugas/admin kalurahan. Blok ini TIDAK ada di form public (warga).
+   Pelapor = orang yang melaporkan ke Dukcapil, BUKAN otomatis ayah/ibu si anak. Jangan beri `from:` / alias ke key
+   reporter* (diketik manual oleh petugas).
 
    Data warga yang terverifikasi (NIK) otomatis mengisi blok AYAH atau IBU, tergantung jenis kelamin NIK tersebut
    (lihat `from: "asFather:…" / "asMother:…"` dan makeResidentLookup di views/services/layout/formLogic.js).
@@ -333,7 +334,7 @@ const BIRTH_PARENT = {
   age: (p) => f.text(`${p}Age`, "Umur (tahun)", { placeholder: "Contoh: 30" }),
   occupation: (p) => f.select(`${p}Occupation`, "Pekerjaan", OPT.occupation, { from: `${roleKey(p)}:occupation`, editable: true }),
   address: (p) => f.area(`${p}Address`, "Alamat", { from: `${roleKey(p)}:address`, span: 2 }),
-  rtRw: (p) => f.text(`${p}RtRw`, "RT / RW", { placeholder: "Contoh: RT 003 / RW 005" }),
+  rtRw: (p) => [f.text(`${p}Rt`, "RT", { placeholder: "Contoh: 3" }), f.text(`${p}Rw`, "RW", { placeholder: "Contoh: 5" })], // 2 isian terpisah: ${p}Rt dan ${p}Rw
   nationality: (p) => f.text(`${p}Nationality`, "Kewarganegaraan", { default: "WNI" }),
   ethnicity: (p) => f.text(`${p}Ethnicity`, "Kebangsaan / Suku", { placeholder: "Contoh: Jawa" }),
 };
@@ -343,12 +344,13 @@ export const BIRTH_PARENT_REGISTRATION = ["nik", "name", "birthPlace", "birthDat
 export const BIRTH_PARENT_BRIEF = ["nik", "name", "address", "rtRw"]; // birth-certificate-application-form
 export const BIRTH_PARENT_STATEMENT = ["nik", "name", "birthPlace", "birthDate", "occupation", "address", "rtRw"]; // birth-report-statement (penandatangan = ayah/ibu, umur dihitung dari tanggal lahir)
 /* marriageParts: data perkawinan yang di kertas termasuk bagian IBU (formulir pelaporan, surat keterangan kelahiran, luar domisili, pencatatan). */
+const parentFields = (parts, p) => parts.flatMap((x) => [].concat(BIRTH_PARENT[x](p))); // bagian "rtRw" menghasilkan 2 isian (RT dan RW)
 export const birthMother = (parts = BIRTH_PARENT_FULL, title = "Data Ibu Kandung", marriageParts = []) => ({
   title,
   hint: PARENT_HINT.mother,
-  fields: [...parts.map((x) => BIRTH_PARENT[x]("mother")), ...marriageParts.map((x) => BIRTH_MARRIAGE[x]())],
+  fields: [...parentFields(parts, "mother"), ...marriageParts.map((x) => BIRTH_MARRIAGE[x]())],
 });
-export const birthFather = (parts = BIRTH_PARENT_FULL, title = "Data Ayah Kandung") => ({ title, hint: PARENT_HINT.father, fields: parts.map((x) => BIRTH_PARENT[x]("father")) });
+export const birthFather = (parts = BIRTH_PARENT_FULL, title = "Data Ayah Kandung") => ({ title, hint: PARENT_HINT.father, fields: parentFields(parts, "father") });
 
 /* Laporan Kelahiran (birth-report-statement): yang bertanda tangan = ayah/ibu kandung → hubungan terisi dari jenis kelamin NIK. */
 export const birthSigner = () => ({
@@ -369,10 +371,36 @@ export const BIRTH_MARRIAGE_RECORD = ["recordPlace", "recordDate"]; // formulir/
 export const BIRTH_MARRIAGE_REGISTRATION = ["certificateNumber", "recordPlace", "recordDate"]; // birth-registration-report
 export const birthParentsMarriage = (parts = BIRTH_MARRIAGE_RECORD) => ({ title: "Data Perkawinan Orang Tua", fields: parts.map((p) => BIRTH_MARRIAGE[p]()) });
 
-/* ---------- Pelapor  ($birth['reporter']) — DIISI PETUGAS/ADMIN KALURAHAN, bukan warga ----------
-   Sengaja tidak ada field untuk pelapor di form warga (lihat catatan di atas). Antarmuka admin yang mengisi:
-   reporterNik, reporterName, reporterBirthPlace, reporterBirthDate, reporterAge, reporterOccupation,
-   reporterAddress, reporterReportDate, reporterApplicationDate, reporterPhone. */
+/* ---------- Pelapor  ($birth['reporter'] / pelapor kematian) — DIISI PETUGAS/ADMIN KALURAHAN ----------
+   Dipakai surat kelahiran DAN kematian yang di kertasnya memuat blok PELAPOR (sumber: xlsx Form Identifikasi Layanan).
+   Key sama di semua surat (reporterNik, reporterName, …) → di dalam satu paket cukup diisi sekali, surat lain ikut terisi.
+   parts: nik name birthPlace birthDate age occupation address addressKtp phone reportDate applicationDate
+   "Tanda Tangan" di xlsx tidak jadi field (area tanda tangan dicetak di kertas). */
+const REPORTER = {
+  nik: () => f.nik("reporterNik", "NIK"),
+  name: () => f.text("reporterName", "Nama Lengkap"),
+  birthPlace: () => f.text("reporterBirthPlace", "Tempat Lahir"),
+  birthDate: () => f.date("reporterBirthDate", "Tanggal Lahir"),
+  age: () => f.text("reporterAge", "Umur (tahun)", { placeholder: "Contoh: 35" }),
+  occupation: () => f.select("reporterOccupation", "Pekerjaan", OPT.occupation, { editable: true }),
+  address: () => f.area("reporterAddress", "Alamat", { span: 2 }),
+  addressKtp: () => f.area("reporterAddress", "Alamat (sesuai KTP)", { span: 2 }),
+  phone: () => f.text("reporterPhone", "No HP / Telepon / Email Aktif", { optional: true }),
+  reportDate: () => f.date("reporterReportDate", "Tanggal Lapor"),
+  applicationDate: () => f.date("reporterApplicationDate", "Tanggal Permohonan"),
+};
+export const PELAPOR_FULL = ["nik", "name", "birthPlace", "birthDate", "age", "occupation", "address", "reportDate"]; // formulir pelaporan, surat keterangan kelahiran, luar domisili, formulir pelaporan kematian
+export const PELAPOR_SKK = ["nik", "name", "birthPlace", "birthDate", "age", "occupation", "addressKtp", "reportDate"]; // surat keterangan kematian (alamat sesuai KTP)
+export const PELAPOR_APPLICATION = ["nik", "name", "address", "phone", "applicationDate"]; // permohonan akta kelahiran / kematian
+export const PELAPOR_REGISTRATION_BIRTH = ["nik", "name", "birthPlace", "birthDate", "age", "occupation", "address"]; // pelaporan pencatatan kelahiran
+export const PELAPOR_REGISTRATION_DEATH = ["nik", "name", "birthPlace", "birthDate", "address"]; // pelaporan pencatatan kematian
+export const PELAPOR_DECREE = ["name", "reportDate"]; // keputusan pencatatan kelahiran terlambat
+export const PELAPOR_ATTORNEY = ["name", "occupation", "address"]; // penerima kuasa = pelapor (surat kuasa kelahiran)
+export const pelapor = (parts = PELAPOR_FULL, title = "Data Pelapor", hint = "Data orang yang melaporkan ke Dukcapil (orang tua, keluarga, atau pihak lain yang melapor). Isi sesuai KTP pelapor.") => ({
+  title,
+  hint,
+  fields: parts.map((p) => REPORTER[p]()),
+});
 
 /* ---------- Saksi  ($birth['witnesses'][0] = Saksi I, [1] = Saksi II) ---------- */
 export const birthWitness = (n) => ({
@@ -394,12 +422,12 @@ export const birthHamlet = () => ({
 /* ---------- Susunan form yang SAMA PERSIS di beberapa blade ---------- */
 /* birth-report-form, birth-attestation-letter, out-of-domicile-birth-report */
 export const birthReportSections = () => [
-  keluarga(), birthChild(BIRTH_CHILD_FULL), birthMother(BIRTH_PARENT_FULL, "Data Ibu Kandung", BIRTH_MARRIAGE_RECORD), birthFather(), birthWitness(1), birthWitness(2),
+  keluarga(), birthChild(BIRTH_CHILD_FULL), birthMother(BIRTH_PARENT_FULL, "Data Ibu Kandung", BIRTH_MARRIAGE_RECORD), birthFather(), pelapor(PELAPOR_FULL), birthWitness(1), birthWitness(2),
 ];
 /* birth-registration-report (ada umur & kebangsaan orang tua, nomor akta nikah) */
 export const birthRegistrationSections = () => [
   keluarga(), birthChild(BIRTH_CHILD_FULL), birthMother(BIRTH_PARENT_REGISTRATION, "Data Ibu Kandung", BIRTH_MARRIAGE_REGISTRATION), birthFather(BIRTH_PARENT_REGISTRATION),
-  birthWitness(1), birthWitness(2),
+  pelapor(PELAPOR_REGISTRATION_BIRTH), birthWitness(1), birthWitness(2),
 ];
 
 /* ---------- Pemohon surat pernyataan pasangan suami istri  ($applicant) ---------- */
@@ -457,8 +485,9 @@ export const birthDocumentsChecklist = () => ({
    Sumber isian: xlsx "Form Identifikasi Layanan" (baris 44–60). Tiap surat memilih bagian (parts) sesuai urutan di xlsx.
    Key: awalan deceased = jenazah, mother / father = ibu / ayah, witnessN = saksi.
 
-   PELAPOR (NIK, nama, TTL, umur, pekerjaan, alamat, no HP, tanggal lapor, tanda tangan) TIDAK menjadi field warga:
-   diisi petugas/admin kalurahan, sama seperti kelahiran (lihat ALIAS_MATI di letterBundles.js).
+   PELAPOR (NIK, nama, TTL, umur, pekerjaan, alamat, no HP, tanggal lapor) di ADMIN menjadi blok "Data Pelapor"
+   (helper `pelapor()` di atas, key reporter*), diisi petugas/admin kalurahan seperti kelahiran. Tidak ada di form public
+   dan tidak disambungkan ke data warga (lihat ALIAS_MATI di letterBundles.js).
    "Yang Bertanda Tangan" (Laporan Kematian, SPTJM, Surat Kuasa) = pemohon, terisi otomatis dari data warga.
    Umur penandatangan dihitung dari tanggal lahir, jadi bukan field.
    "Perhitungan Selamatan" (3 hari s.d. 1000 hari) dihitung sistem dari deathDate, bukan field.
