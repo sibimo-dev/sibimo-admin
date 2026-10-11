@@ -39,7 +39,12 @@ export const newsService = {
   },
   remove: (id) => unwrap(api.delete(`/news/${id}`)),
 }
-export const newsCategoryService = { list: () => unwrap(api.get('/news-categories')) }
+export const newsCategoryService = {
+  list: () => unwrap(api.get('/news-categories')),
+  create: (payload) => unwrap(api.post('/news-categories', payload)),
+  update: (id, payload) => unwrap(api.put(`/news-categories/${id}`, payload)),
+  remove: (id) => unwrap(api.delete(`/news-categories/${id}`)),
+}
 export const agendaService = crud('/agendas')
 export const potentialService = {
   list: () => unwrap(api.get('/village-potentials')),

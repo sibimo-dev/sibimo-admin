@@ -43,14 +43,14 @@ const publishDate = ref(new Date())
 const authorOptions = ref([])
 const author = ref(null)
 
-const categoryOptions = ref([
-  { id: 'pengumuman', label: 'Pengumuman', checked: false },
-  { id: 'pemerintahan', label: 'Pemerintahan', checked: false },
-  { id: 'pembangunan', label: 'Pembangunan', checked: false },
-  { id: 'kegiatan-warga', label: 'Kegiatan Warga', checked: false },
-  { id: 'kesehatan', label: 'Kesehatan', checked: false },
-])
+const categoryOptions = ref([])
 const newsCategories = ref([])
+const newCategoryName = ref('')
+const addingCategory = ref(false)
+const categoryError = ref('')
+const editingCategoryId = ref(null)
+const editingCategoryName = ref('')
+const savingCategoryEdit = ref(false)
 
 const tags = ref(['Sosial', 'Keuangan'])
 const tagInput = ref('')
@@ -69,6 +69,12 @@ const visibilityLabel = computed(() => (
 
 onMounted(async () => {
   newsCategories.value = await newsCategoryService.list()
+  categoryOptions.value = newsCategories.value.map(item => ({
+    categoryId: item.category_id,
+    id: item.slug,
+    label: item.category_name,
+    checked: false,
+  }))
   if (authStore.user) {
     authorOptions.value = [{ label: authStore.user.full_name, value: authStore.user.user_id }]
     author.value = authStore.user.user_id
@@ -95,6 +101,91 @@ function handleImageSelect(event) {
     imagePreview.value = reader.result
   }
   reader.readAsDataURL(file)
+}
+
+function categoryErrorMessage(error) {
+  const errors = error?.response?.data?.errors
+  if (errors) {
+    const first = Object.values(errors).flat()?.[0]
+    if (first) return first
+  }
+  return error?.response?.data?.message ?? 'Kategori gagal ditambahkan.'
+}
+
+async function addCategory() {
+  const categoryName = newCategoryName.value.trim()
+  if (!categoryName || addingCategory.value) return
+
+  addingCategory.value = true
+  categoryError.value = ''
+  try {
+    const created = await newsCategoryService.create({ category_name: categoryName })
+    newsCategories.value = [...newsCategories.value, created]
+    categoryOptions.value = [
+      ...categoryOptions.value,
+      { categoryId: created.category_id, id: created.slug, label: created.category_name, checked: true },
+    ]
+    categoryOptions.value.forEach((option) => {
+      if (option.id !== created.slug) option.checked = false
+    })
+    newCategoryName.value = ''
+  } catch (error) {
+    categoryError.value = categoryErrorMessage(error)
+  } finally {
+    addingCategory.value = false
+  }
+}
+
+function startEditCategory(option) {
+  editingCategoryId.value = option.categoryId
+  editingCategoryName.value = option.label
+  categoryError.value = ''
+}
+
+function cancelEditCategory() {
+  editingCategoryId.value = null
+  editingCategoryName.value = ''
+}
+
+async function saveCategoryEdit(option) {
+  const categoryName = editingCategoryName.value.trim()
+  if (!categoryName || savingCategoryEdit.value) return
+
+  savingCategoryEdit.value = true
+  categoryError.value = ''
+  try {
+    const updated = await newsCategoryService.update(option.categoryId, { category_name: categoryName })
+    const categoryIndex = newsCategories.value.findIndex(item => item.category_id === option.categoryId)
+    if (categoryIndex >= 0) newsCategories.value[categoryIndex] = updated
+    option.id = updated.slug
+    option.label = updated.category_name
+    cancelEditCategory()
+  } catch (error) {
+    categoryError.value = categoryErrorMessage(error)
+  } finally {
+    savingCategoryEdit.value = false
+  }
+}
+
+function removeCategory(option) {
+  confirm.require({
+    message: `Hapus kategori "${option.label}"? Kategori yang sudah dipakai berita tidak dapat dihapus.`,
+    header: 'Hapus Kategori',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      categoryError.value = ''
+      try {
+        await newsCategoryService.remove(option.categoryId)
+        newsCategories.value = newsCategories.value.filter(item => item.category_id !== option.categoryId)
+        categoryOptions.value = categoryOptions.value.filter(item => item.categoryId !== option.categoryId)
+      } catch (error) {
+        categoryError.value = categoryErrorMessage(error)
+      }
+    },
+  })
 }
 
 function handleImageValidationError(event) {
@@ -419,15 +510,51 @@ function moveToTrash() {
                 Kategori
               </label>
 
+              <div class="flex gap-2">
+                <InputText
+                  v-model="newCategoryName"
+                  placeholder="Tambah kategori baru"
+                  class="min-w-0 flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-[13px]"
+                  @keyup.enter="addCategory"
+                />
+                <Button
+                  icon="pi pi-plus"
+                  label="Tambah"
+                  :loading="addingCategory"
+                  :disabled="!newCategoryName.trim() || addingCategory"
+                  class="shrink-0 rounded-lg border border-primary-700 bg-primary-700 px-3 py-2 text-[12px] text-white"
+                  @click="addCategory"
+                />
+              </div>
+              <small v-if="categoryError" class="text-xs text-red-600">{{ categoryError }}</small>
+
               <div class="flex flex-col gap-2">
-                <label
+                <div
                   v-for="option in categoryOptions"
-                  :key="option.id"
-                  class="flex cursor-pointer items-center gap-2 text-[13px] text-neutral-700"
+                  :key="option.categoryId"
+                  class="flex items-center justify-between gap-2 text-[13px] text-neutral-700"
                 >
-                  <Checkbox v-model="option.checked" binary class="accent-primary-700" />
-                  {{ option.label }}
-                </label>
+                  <div v-if="editingCategoryId !== option.categoryId" class="flex min-w-0 flex-1 items-center gap-2">
+                    <Checkbox v-model="option.checked" binary class="accent-primary-700" />
+                    <span class="truncate">{{ option.label }}</span>
+                  </div>
+                  <InputText
+                    v-else
+                    v-model="editingCategoryName"
+                    class="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-[12px]"
+                    @keyup.enter="saveCategoryEdit(option)"
+                  />
+                  <div class="flex shrink-0 items-center gap-1">
+                    <template v-if="editingCategoryId === option.categoryId">
+                      <Button icon="pi pi-check" text rounded size="small" :loading="savingCategoryEdit" aria-label="Simpan kategori" @click="saveCategoryEdit(option)" />
+                      <Button icon="pi pi-times" text rounded size="small" severity="secondary" aria-label="Batal edit kategori" @click="cancelEditCategory" />
+                    </template>
+                    <template v-else>
+                      <Button icon="pi pi-pencil" text rounded size="small" severity="secondary" aria-label="Edit kategori" @click="startEditCategory(option)" />
+                      <Button icon="pi pi-trash" text rounded size="small" severity="danger" aria-label="Hapus kategori" @click="removeCategory(option)" />
+                    </template>
+                  </div>
+                </div>
               </div>
             </div>
           </template>
