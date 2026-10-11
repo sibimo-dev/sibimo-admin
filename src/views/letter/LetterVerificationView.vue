@@ -19,7 +19,9 @@ const pdfLoading = ref(false)
 const selectedAttachment = ref(null)
 
 const attachments = computed(() => record.value?.attachments ?? [])
-const activeAttachment = computed(() => selectedAttachment.value ?? attachments.value[0] ?? null)
+// Jangan langsung mengunduh gambar lampiran pertama saat halaman dibuka.
+// Lampiran baru dimuat ketika admin memilih tombol pratinjau.
+const activeAttachment = computed(() => selectedAttachment.value ?? null)
 
 const infoCells = computed(() => {
   if (!record.value) return []
@@ -73,11 +75,21 @@ function openAttachment(item) {
 }
 
 onMounted(async () => {
+  const cached = store.getSuratById(route.params.id)
+  if (cached) {
+    record.value = cached
+    notes.value = cached.notes ?? ''
+    loading.value = false
+  }
+
   try {
-    record.value = await store.fetchById(route.params.id)
+    const freshRecord = await store.fetchById(route.params.id)
+    record.value = freshRecord
     notes.value = record.value?.notes ?? ''
   } catch (error) {
-    toast.add({ severity: 'error', summary: 'Gagal memuat detail surat', life: 3000 })
+    if (!record.value) {
+      toast.add({ severity: 'error', summary: 'Gagal memuat detail surat', life: 3000 })
+    }
   } finally {
     loading.value = false
   }
