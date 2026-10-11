@@ -137,6 +137,9 @@ export const useNotificationStore = defineStore('notification', () => {
 
       loadFailed.value = false
       lastFetchedAt.value = Date.now()
+      if (arrivals.some((item) => item.type === 'letter')) {
+        window.dispatchEvent(new CustomEvent('sibimo:letter-request-updated'))
+      }
       if (arrivals.length > 0 && onNew) onNew(arrivals)
     } catch (error) {
       loadFailed.value = true

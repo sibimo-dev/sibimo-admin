@@ -16,9 +16,46 @@ const notes = ref('')
 const loading = ref(true)
 const saving = ref(false)
 const pdfLoading = ref(false)
+const selectedAttachment = ref(null)
 
 const attachments = computed(() => record.value?.attachments ?? [])
 const activeAttachment = computed(() => selectedAttachment.value ?? attachments.value[0] ?? null)
+
+const infoCells = computed(() => {
+  if (!record.value) return []
+
+  return [
+    { label: 'Nama Pemohon', value: record.value.citizenName },
+    { label: 'NIK', value: record.value.citizenId },
+    { label: 'Nomor Telepon', value: record.value.citizenPhone },
+    { label: 'Jenis Surat', value: record.value.purpose },
+    { label: 'Kategori', value: record.value.category },
+    { label: 'Sumber', value: record.value.source },
+  ]
+})
+
+const extraCells = computed(() => {
+  if (!record.value) return []
+
+  return [
+    { label: 'Request ID', value: record.value.requestId },
+    { label: 'Tanggal Pengajuan', value: record.value.date },
+  ]
+})
+
+const status = computed(() => {
+  const statuses = {
+    submitted: { label: 'Menunggu Verifikasi', class: 'bg-amber-100 text-amber-700' },
+    verified: { label: 'Diverifikasi', class: 'bg-blue-100 text-blue-700' },
+    authorized: { label: 'Disetujui', class: 'bg-emerald-100 text-emerald-700' },
+    completed: { label: 'Selesai', class: 'bg-emerald-100 text-emerald-700' },
+    rejected: { label: 'Ditolak', class: 'bg-red-100 text-red-700' },
+  }
+
+  return statuses[record.value?.backendStatus] ?? { label: record.value?.status ?? '-', class: 'bg-slate-100 text-slate-700' }
+})
+
+const canVerify = computed(() => record.value?.backendStatus === 'submitted')
 
 const isImage = (name) => /\.(png|jpe?g|gif|webp|bmp)$/i.test(name || '')
 const isPdf = (name) => /\.pdf$/i.test(name || '')
@@ -278,61 +315,6 @@ async function previewPdf() {
           </section>
         </div>
       </div>
-<<<<<<< HEAD
-=======
-
-      <section class="bg-white rounded-xl border p-5">
-        <h2 class="font-semibold text-slate-800 mb-4">Data Pemohon</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div><span class="text-slate-500">Nama:</span> {{ record.citizenName }}</div>
-          <div><span class="text-slate-500">NIK:</span> {{ record.citizenId }}</div>
-          <div><span class="text-slate-500">Telepon:</span> {{ record.citizenPhone || '-' }}</div>
-          <div><span class="text-slate-500">Alamat:</span> {{ record.citizenAddress || '-' }}</div>
-          <div><span class="text-slate-500">Kategori:</span> {{ record.category }}</div>
-          <div><span class="text-slate-500">Sumber:</span> {{ record.source }}</div>
-        </div>
-      </section>
-
-      <section class="bg-white rounded-xl border p-5">
-        <h2 class="font-semibold text-slate-800 mb-4">Data Tambahan</h2>
-        <div v-if="formEntries.length" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div v-for="[key, value] in formEntries" :key="key">
-            <span class="text-slate-500">{{ key }}:</span> {{ value || '-' }}
-          </div>
-        </div>
-        <p v-else class="text-sm text-slate-500">Tidak ada data tambahan.</p>
-      </section>
-
-      <section class="bg-white rounded-xl border p-5">
-        <h2 class="font-semibold text-slate-800 mb-4">Lampiran</h2>
-        <div v-if="attachments.length" class="space-y-2">
-          <a v-for="item in attachments" :key="item.attachment_id" :href="item.file_path" target="_blank" rel="noreferrer" class="block border rounded-lg p-3 text-sm text-blue-600 hover:bg-blue-50">
-            {{ item.file_name }} · {{ item.letter_type_document?.document_name || 'Dokumen' }}
-          </a>
-        </div>
-        <p v-else class="text-sm text-slate-500">Belum ada lampiran.</p>
-      </section>
-
-      <section class="bg-white rounded-xl border p-5 flex flex-wrap gap-3">
-        <AppButton
-          label="Preview Surat"
-          icon="pi pi-eye"
-          variant="outline"
-          :disabled="pdfLoading"
-          @click="previewPdf"
-        />
-      </section>
-
-      <section class="bg-white rounded-xl border p-5 space-y-4">
-        <label class="block text-sm text-slate-600">Catatan Verifikasi
-          <textarea v-model="notes" rows="4" class="mt-1 w-full border rounded-lg px-3 py-2" />
-        </label>
-        <div class="flex gap-3">
-          <AppButton label="Tolak" variant="outline" :disabled="saving" @click="verify('rejected')" />
-          <AppButton label="Verifikasi" :disabled="saving" @click="verify('verified')" />
-        </div>
-      </section>
->>>>>>> origin/main
     </div>
   </div>
 </template>

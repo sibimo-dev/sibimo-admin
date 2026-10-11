@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import Tag from 'primevue/tag'
@@ -22,12 +22,15 @@ const { rows, fetchRows, getLetterPdf, openPdfBlob, downloadPdfBlob } = useLette
 const pdfLoadingId = ref(null)
 
 onMounted(async () => {
+  window.addEventListener('sibimo:letter-request-updated', fetchRows)
   try {
     await fetchRows()
   } catch (error) {
     console.error('Gagal memuat pengajuan surat:', error)
   }
 })
+
+onBeforeUnmount(() => window.removeEventListener('sibimo:letter-request-updated', fetchRows))
 
 const columns = [
   { field: 'requestId', header: 'Request ID', sortable: true },
