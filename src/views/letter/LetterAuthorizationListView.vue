@@ -12,12 +12,15 @@ const route = useRoute()
 const { rows, fetchRows } = useLetterStore()
 
 onMounted(async () => {
+  window.addEventListener('sibimo:letter-request-updated', fetchRows)
   try {
     await fetchRows()
   } catch (error) {
     console.error('Gagal memuat antrean otorisasi:', error)
   }
 })
+
+onBeforeUnmount(() => window.removeEventListener('sibimo:letter-request-updated', fetchRows))
 
 const columns = [
   { field: 'requestId', header: 'Request ID', sortable: true },
