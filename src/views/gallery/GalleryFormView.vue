@@ -6,6 +6,7 @@ import { useToast } from 'primevue/usetoast'
 import { useAuthStore } from '@/stores/auth.store'
 import { useGalleryStore } from '@/stores/gallery.store'
 import { getGallery } from '@/services/gallery.service'
+import { mediaUrl } from '@/services/media'
 
 import Card from 'primevue/card'
 import Button from 'primevue/button'
@@ -57,7 +58,7 @@ onMounted(async () => {
       form.category = existing.category ?? 'kegiatan-sosial'
       form.location = existing.location ?? ''
       form.uploaded_at = existing.uploaded_at
-      preview.value = existing.image
+      preview.value = existing.image ? mediaUrl(existing.image) : null
       form.event_date = existing.event_date
         ? new Date(`${existing.event_date.slice(0, 10)}T00:00:00`)
         : new Date()
