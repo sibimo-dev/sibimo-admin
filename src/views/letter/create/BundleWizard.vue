@@ -284,8 +284,8 @@ function confirmAndSubmit() {
 const isSubmitting = ref(false);
 const result = reactive({ open: false, ok: false, codes: [], message: "" });
 
-// Payload per surat = nilai field milik surat itu + file miliknya. Pengiriman masih MOCK
-// (services/letter-create.service.js, TODO(BE)): backend yang membuat kode surat dan men-generate PDF per surat.
+// Payload per surat = nilai field milik surat itu + file miliknya. Backend
+// membuat request_code dan menyimpan setiap surat sebagai request tersendiri.
 function buildPayload() {
   return {
     source: LETTER_SOURCE,
