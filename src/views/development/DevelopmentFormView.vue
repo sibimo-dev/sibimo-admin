@@ -9,6 +9,7 @@ import {
   DEVELOPMENT_VOLUME_UNITS,
 } from '@/stores/development.store'
 import { getDevelopment } from '@/services/development.service'
+import { mediaUrl } from '@/services/media'
 
 import Card from 'primevue/card'
 import Button from 'primevue/button'
@@ -118,13 +119,13 @@ onMounted(async () => {
   form.description = existing.description ?? ''
   form.start_point = toPoint(existing.latitude, existing.longitude)
   form.end_point = toPoint(existing.end_latitude, existing.end_longitude)
-  coverPreview.value = existing.cover_image ?? null
+  coverPreview.value = existing.cover_image ? mediaUrl(existing.cover_image) : null
   form.progress = PROGRESS_PERCENTAGES.map((percentage) => {
     const entry = (existing.progress ?? []).find((item) => Number(item.percentage) === percentage)
     return createProgressItem({
       id: entry?.progress_id,
       percentage,
-      preview: entry?.image,
+      preview: entry?.image ? mediaUrl(entry.image) : null,
     })
   })
 })

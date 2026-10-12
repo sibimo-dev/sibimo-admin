@@ -22,6 +22,7 @@ import {
   getDevelopmentCategoryLabel,
   getDevelopmentStatus,
 } from '@/stores/development.store'
+import { mediaUrl } from '@/services/media'
 
 const router = useRouter()
 const confirm = useConfirm()
@@ -218,7 +219,7 @@ function handleDelete(item) {
                   >
                     <img
                       v-if="data.cover_image"
-                      :src="data.cover_image"
+                      :src="mediaUrl(data.cover_image)"
                       :alt="data.name"
                       class="h-full w-full object-cover"
                     />

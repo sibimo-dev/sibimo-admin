@@ -13,6 +13,7 @@ import InputIcon from 'primevue/inputicon'
 
 import AppPagination from '@/components/common/AppPagination.vue'
 import { useGalleryStore } from '@/stores/gallery.store'
+import { mediaUrl } from '@/services/media'
 
 const router = useRouter()
 const confirm = useConfirm()
@@ -140,7 +141,7 @@ function handleDelete(item) {
               <div class="aspect-[4/3] bg-slate-50 flex items-center justify-center relative overflow-hidden">
                 <img
                   v-if="item.image"
-                  :src="item.image"
+                  :src="mediaUrl(item.image)"
                   :alt="item.title"
                   class="w-full h-full object-cover"
                 />
