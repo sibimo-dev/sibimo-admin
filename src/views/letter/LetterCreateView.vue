@@ -3,7 +3,7 @@
    1) Pengajuan Surat        → katalog surat satuan + paket surat → wizard (1 surat: 3 langkah, paket: 4 langkah)
    2) Pendaftaran Warga Baru → pilih jenis pendaftaran → wizard paket (4 langkah)
    Isian tiap surat dibaca dari data/letters/<kelompok>/<slug>.js (salinan dari public).
-   Pengiriman masih MOCK (services/letter-create.service.js, TODO(BE)): backend lama di halaman ini sengaja dilepas. */
+   Pengiriman dilakukan melalui API backend dari wizard. */
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import Message from "primevue/message";
@@ -78,6 +78,7 @@ async function openService(service) {
     if (!path) throw new Error(`Berkas surat ${service.slug}.js tidak ditemukan`);
     const mod = await letterModules[path]();
     letter.value = {
+      slug: service.slug,
       title: mod.meta?.title ?? service.title,
       code: mod.meta?.code ?? service.shortCode,
       sections: mod.sections,
@@ -187,6 +188,7 @@ const restartWizard = backFromWizard;
         v-else-if="view === 'letter' && letter"
         :key="`letter-${wizardKey}`"
         :title="letter.title"
+        :slug="letter.slug"
         :code="letter.code"
         :sections="letter.sections"
         :documents="letter.documents"

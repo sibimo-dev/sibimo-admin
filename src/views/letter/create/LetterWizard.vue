@@ -2,7 +2,7 @@
 /* Wizard tambah 1 surat (admin). Langkah & isian sama dengan public (LetterWizard.vue di layanan mandiri):
    1) Isian surat   2) Dokumen pendukung   3) Cek ulang + pernyataan dokumen asli + kirim
    Setelah kirim muncul pop-up berhasil (kode surat) atau gagal.
-   Pengiriman masih MOCK: lihat services/letter-create.service.js (TODO(BE)). */
+   Pengiriman memakai API backend dan kode request resmi dari server. */
 import { computed, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import Button from "primevue/button";
@@ -21,6 +21,7 @@ import { LETTER_SOURCE, submitSingleLetter } from "@/services/letter-create.serv
 
 const props = defineProps({
   title: { type: String, required: true },
+  slug: { type: String, default: "" },
   code: { type: String, default: "SRT" }, // awalan kode surat, contoh: SKTM
   sections: { type: Array, required: true }, // lihat data/letterFields.js
   documents: { type: Array, default: () => [] }, // "Nama dokumen" atau { label, optional }
@@ -110,6 +111,7 @@ const result = reactive({ open: false, ok: false, code: "", message: "" });
 function buildPayload() {
   return {
     source: LETTER_SOURCE,
+    slug: props.slug,
     code: props.code,
     title: props.title,
     fields: Object.fromEntries(allSections.value.flatMap((s) => s.fields).map((f) => [f.key, form[f.key]])),
