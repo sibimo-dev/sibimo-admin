@@ -17,6 +17,7 @@ import citizenRoutes from './modules/citizen.routes'
 import villageProfileRoutes from './modules/village-profile.routes'
 import userManagementRoutes from './modules/user-management.routes'
 import permissionRoutes from './modules/permission.routes'
+import footerRoutes from './modules/footer.routes'
 
 
 const protectedRoutes = {
@@ -37,6 +38,7 @@ const protectedRoutes = {
     ...villagePotentialRoutes,
     ...citizenRoutes,
     ...villageProfileRoutes,
+    ...footerRoutes,
     ...userManagementRoutes,
     ...permissionRoutes,
     // ...tambahkan modul baru di sini juga, dengan pola yang sama
