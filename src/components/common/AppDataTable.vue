@@ -1,36 +1,10 @@
 <script setup>
-/**
- * AppDataTable - wrapper di atas PrimeVue DataTable untuk semua
- * halaman *-list (surat, aduan, berita, pengguna, dst).
- *
- * Kenapa dibungkus: supaya loading state, empty state, dan pagination
- * tampil SERAGAM di semua modul, dan kalau nanti mau ganti dari
- * client-side ke server-side pagination, cukup ubah di 1 file ini.
- *
- * Contoh pakai:
- *   <AppDataTable
- *     :columns="[
- *       { field: 'nomor_surat', header: 'Nomor Surat' },
- *       { field: 'nama_pemohon', header: 'Pemohon' },
- *       { field: 'status', header: 'Status' },
- *     ]"
- *     :rows="daftarSurat"
- *     :loading="isLoading"
- *   >
- *     <template #status="{ data }">
- *       <Tag :value="data.status" />
- *     </template>
- *     <template #actions="{ data }">
- *       <AppButton icon="pi pi-pencil" variant="ghost" @click="edit(data)" />
- *     </template>
- *   </AppDataTable>
- */
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 
-defineProps({
+const props = defineProps({
   columns: {
-    type: Array, // [{ field, header, sortable? }]
+    type: Array,
     required: true,
   },
   rows: {
@@ -41,11 +15,17 @@ defineProps({
   rowsPerPage: { type: Number, default: 10 },
   emptyMessage: { type: String, default: 'Belum ada data' },
   hasActions: { type: Boolean, default: true },
-  // Nama field primary key tiap baris. Default 'id' supaya modul yang
-  // sudah ada tetap jalan tanpa perubahan; modul dengan PK berbeda
-  // (mis. tabel `books` pakai `book_id`) tinggal set prop ini.
   dataKey: { type: String, default: 'id' },
+  // --- Highlight row (dipakai untuk animasi "surat yang ditunjukkan") ---
+  highlightField: { type: String, default: null }, // field yg dicocokkan, mis. 'requestId'
+  highlightValue: { type: [String, Number], default: null }, // nilai yg dicari
+  first: { type: Number, default: 0 }, // index awal paginator, biar bisa lompat ke halaman yg ada row-nya
 })
+
+function rowClass(data) {
+  if (!props.highlightField || props.highlightValue == null) return ''
+  return data[props.highlightField] === props.highlightValue ? 'row-highlight' : ''
+}
 </script>
 
 <template>
@@ -57,8 +37,11 @@ defineProps({
       :rows="rowsPerPage"
       :rowsPerPageOptions="[10, 25, 50]"
       :dataKey="dataKey"
+      :first="first"
+      :rowClass="rowClass"
       stripedRows
       responsiveLayout="scroll"
+      class="text-xs md:text-sm"
     >
       <template #empty>
         <div class="text-center text-neutral-400 py-8 text-sm">
@@ -72,17 +55,23 @@ defineProps({
         :field="col.field"
         :header="col.header"
         :sortable="col.sortable ?? false"
+        headerClass="text-xs md:text-sm"
+        bodyClass="text-xs md:text-sm py-2 md:py-3"
       >
-        <!-- Kalau parent kasih slot custom sesuai nama field, pakai itu.
-             Kalau tidak, tampilkan value apa adanya. -->
         <template v-if="$slots[col.field]" #body="slotProps">
           <slot :name="col.field" v-bind="slotProps" />
         </template>
       </Column>
 
-      <Column v-if="hasActions" header="Aksi" style="width: 140px">
+      <Column
+        v-if="hasActions"
+        header="Aksi"
+        style="width: 100px"
+        headerClass="text-xs md:text-sm"
+        bodyClass="py-2 md:py-3"
+      >
         <template #body="slotProps">
-          <div class="flex gap-2">
+          <div class="flex gap-1 md:gap-2">
             <slot name="actions" v-bind="slotProps" />
           </div>
         </template>
@@ -90,3 +79,48 @@ defineProps({
     </DataTable>
   </div>
 </template>
+
+<style scoped>
+/* Animasi kedip untuk baris yang ditunjukkan (mis. dari klik "Verifikasi"/
+   "Otorisasi" di halaman Pengelolaan Surat). Berjalan otomatis 5 detik lalu
+   parent akan melepas prop highlightValue sehingga class ini ikut hilang. */
+:deep(.p-datatable-tbody > tr.row-highlight) {
+  animation: row-blink 1s ease-in-out 4;
+}
+
+@keyframes row-blink {
+  0%,
+  100% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: #fef08a; /* kuning lembut, cukup kontras di atas stripedRows */
+  }
+}
+
+/* ===== Mobile: kecilkan cell padding & paginator ===== */
+@media (max-width: 767px) {
+  :deep(.p-datatable-thead > tr > th) {
+    padding: 0.5rem 0.6rem;
+  }
+  :deep(.p-datatable-tbody > tr > td) {
+    padding: 0.5rem 0.6rem;
+  }
+  :deep(.p-paginator) {
+    font-size: 0.75rem;
+    padding: 0.4rem;
+  }
+  :deep(.p-paginator .p-paginator-page),
+  :deep(.p-paginator .p-paginator-next),
+  :deep(.p-paginator .p-paginator-prev),
+  :deep(.p-paginator .p-paginator-first),
+  :deep(.p-paginator .p-paginator-last) {
+    min-width: 1.75rem;
+    height: 1.75rem;
+  }
+  :deep(.p-paginator .p-dropdown) {
+    height: 1.75rem;
+    font-size: 0.75rem;
+  }
+}
+</style>

@@ -10,24 +10,57 @@ import * as authService from '@/services/auth.service'
  */
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('sibimo_token') || null)
-  const user = ref(JSON.parse(localStorage.getItem('sibimo_user') || 'null'))
+
+  const storedUser = localStorage.getItem('sibimo_user')
+  
+  const user = ref(
+    storedUser && storedUser !== 'undefined'
+      ? JSON.parse(storedUser)
+      : null
+  )
 
   const isAuthenticated = computed(() => !!token.value)
-
+  
   async function login(credentials) {
     const { data } = await authService.login(credentials)
-    token.value = data.token
-    user.value = data.user
-    localStorage.setItem('sibimo_token', data.token)
-    localStorage.setItem('sibimo_user', JSON.stringify(data.user))
+  
+    token.value = data.data.token
+    user.value = data.data.user
+  
+    localStorage.setItem('sibimo_token', data.data.token)
+    localStorage.setItem('sibimo_user', JSON.stringify(data.data.user))
   }
 
-  function logout() {
-    token.value = null
-    user.value = null
-    localStorage.removeItem('sibimo_token')
-    localStorage.removeItem('sibimo_user')
+  async function fetchCurrentUser() {
+    if (!token.value) return null
+
+    try {
+      const { data } = await authService.getCurrentUser()
+      user.value = data.data.user
+      localStorage.setItem('sibimo_user', JSON.stringify(user.value))
+      return user.value
+    } catch (error) {
+      await logout()
+      throw error
+    }
   }
 
-  return { token, user, isAuthenticated, login, logout }
+  async function logout() {
+    try {
+      if (token.value) {
+        await authService.logout()
+      }
+    } catch (error) {
+      // Logout lokal tetap dijalankan agar user tidak tertahan di sesi lama
+      // ketika backend sedang tidak tersedia atau token sudah kedaluwarsa.
+      console.warn('Logout backend gagal:', error)
+    } finally {
+      token.value = null
+      user.value = null
+      localStorage.removeItem('sibimo_token')
+      localStorage.removeItem('sibimo_user')
+    }
+  }
+
+  return { token, user, isAuthenticated, login, fetchCurrentUser, logout }
 })

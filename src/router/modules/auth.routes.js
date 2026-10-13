@@ -1,19 +1,14 @@
 import AuthLayout from '@/layouts/AuthLayout.vue'
 
 export default {
-  path: '/',
+  path: '/login',
   component: AuthLayout,
   meta: { requiresAuth: false },
   children: [
     {
-      path: 'login',
+      path: '',
       name: 'login',
       component: () => import('@/views/auth/LoginView.vue'),
-    },
-    {
-      path: 'register',
-      name: 'register',
-      component: () => import('@/views/auth/RegisterView.vue'),
     },
   ],
 }

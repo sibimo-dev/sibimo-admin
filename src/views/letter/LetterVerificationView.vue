@@ -1,252 +1,330 @@
 <script setup>
-/**
- * Halaman Verifikasi Surat.
- * Ganti dummyData dengan data asli dari surat.service.js (detail per requestId) begitu backend siap.
- */
-import { ref, computed } from 'vue'
-import { useRoute } from 'vue-router'
-import Tag from 'primevue/tag'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useToast } from 'primevue/usetoast'
 import AppButton from '@/components/common/AppButton.vue'
+import { useLetterStore } from '@/stores/useLetterStore'
+import { mediaUrl } from '@/services/media'
 
 const route = useRoute()
+const router = useRouter()
+const toast = useToast()
+const store = useLetterStore()
 
-// requestId diambil dari route param, fallback ke dummy kalau diakses langsung
-const requestId = computed(() => route.params.id || 'REQ-20231015-001')
+const record = ref(null)
+const notes = ref('')
+const loading = ref(true)
+const saving = ref(false)
+const pdfLoading = ref(false)
+const selectedAttachment = ref(null)
 
-// Dummy data -- ganti dengan hasil fetch detail permohonan dari backend
-const pemohon = ref({
-  jenisSurat: 'Surat Permohonan',
-  jenisLayanan: 'Surat Keterangan Usaha',
-  kodeTipeSurat: '581/',
-  tanggalPengajuan: '10 Oktober 2023',
-  namaLengkap: 'Ghiska',
-  nik: '3201011205900001',
-  noTelepon: '08xxxxxxx',
-  alamatLengkap: 'Jl. Merdeka No. 45, RT 02/RW 03, Desa Makmur, Kec. Sejahtera, Kab. Maju',
+const attachments = computed(() => record.value?.attachments ?? [])
+// Jangan langsung mengunduh gambar lampiran pertama saat halaman dibuka.
+// Lampiran baru dimuat ketika admin memilih tombol pratinjau.
+const activeAttachment = computed(() => selectedAttachment.value ?? null)
+
+const infoCells = computed(() => {
+  if (!record.value) return []
+
+  return [
+    { label: 'Nama Pemohon', value: record.value.citizenName },
+    { label: 'NIK', value: record.value.citizenId },
+    { label: 'Nomor Telepon', value: record.value.citizenPhone },
+    { label: 'Jenis Surat', value: record.value.purpose },
+    { label: 'Kategori', value: record.value.category },
+    { label: 'Sumber', value: record.value.source },
+  ]
 })
 
-const dokumen = ref([
-  { id: 1, nama: 'KTP_Ghiska.jpg', ukuran: '245 KB', tanggal: '12 Okt 2023', icon: 'pi pi-id-card' },
-  { id: 2, nama: 'KK_Ghiska.pdf', ukuran: '1.2 MB', tanggal: '12 Okt 2023', icon: 'pi pi-file-pdf' },
-  { id: 3, nama: 'Foto_Tempat_Usaha.jpg', ukuran: '3.5 MB', tanggal: '12 Okt 2023', icon: 'pi pi-image' },
-])
+const extraCells = computed(() => {
+  if (!record.value) return []
 
-const activePreview = ref(dokumen.value[0])
+  return [
+    { label: 'Request ID', value: record.value.requestId },
+    { label: 'Tanggal Pengajuan', value: record.value.date },
+  ]
+})
 
-function previewDokumen(doc) {
-  activePreview.value = doc
+const status = computed(() => {
+  const statuses = {
+    submitted: { label: 'Menunggu Verifikasi', class: 'bg-amber-100 text-amber-700' },
+    verified: { label: 'Diverifikasi', class: 'bg-blue-100 text-blue-700' },
+    authorized: { label: 'Disetujui', class: 'bg-emerald-100 text-emerald-700' },
+    completed: { label: 'Selesai', class: 'bg-emerald-100 text-emerald-700' },
+    rejected: { label: 'Ditolak', class: 'bg-red-100 text-red-700' },
+  }
+
+  return statuses[record.value?.backendStatus] ?? { label: record.value?.status ?? '-', class: 'bg-slate-100 text-slate-700' }
+})
+
+const canVerify = computed(() => record.value?.backendStatus === 'submitted')
+
+const isImage = (name) => /\.(png|jpe?g|gif|webp|bmp)$/i.test(name || '')
+const isPdf = (name) => /\.pdf$/i.test(name || '')
+const documentName = (item) => item?.letter_type_document?.document_name || 'Dokumen'
+
+function attachmentIcon(item) {
+  if (isPdf(item.file_name)) return 'pi pi-file-pdf'
+  if (/ktp/i.test(documentName(item)) || /ktp/i.test(item.file_name || '')) return 'pi pi-id-card'
+  if (isImage(item.file_name)) return 'pi pi-image'
+  return 'pi pi-file'
 }
 
-// Catatan verifikator
-const catatan = ref('')
-
-// Status permohonan saat ini
-const statusSaatIni = ref('Menunggu Verifikasi')
-const diverifikasiOleh = ref('Admin Desa')
-
-const statusColor = {
-  'Menunggu Verifikasi': 'warn',
-  Diverifikasi: 'info',
-  Disetujui: 'success',
-  Ditolak: 'danger',
+function openAttachment(item) {
+  if (item?.file_path) window.open(mediaUrl(item.file_path), '_blank', 'noopener,noreferrer')
 }
 
-const loading = ref(false)
+onMounted(async () => {
+  const cached = store.getSuratById(route.params.id)
+  if (cached) {
+    record.value = cached
+    notes.value = cached.notes ?? ''
+    loading.value = false
+  }
 
-async function setujuiPermohonan() {
-  loading.value = true
   try {
-    // TODO: panggil surat.service.js -> approveSurat(requestId.value, { catatan: catatan.value })
-    console.log('Setujui permohonan', requestId.value, catatan.value)
+    const freshRecord = await store.fetchById(route.params.id)
+    record.value = freshRecord
+    notes.value = record.value?.notes ?? ''
+  } catch (error) {
+    if (!record.value) {
+      toast.add({ severity: 'error', summary: 'Gagal memuat detail surat', life: 3000 })
+    }
   } finally {
     loading.value = false
   }
+})
+
+async function verify(newStatus) {
+  if (!record.value) return
+  if (newStatus === 'rejected' && !notes.value.trim()) {
+    toast.add({ severity: 'warn', summary: 'Isi catatan alasan penolakan terlebih dahulu', life: 2500 })
+    return
+  }
+  saving.value = true
+  try {
+    const updated = await store.verifySurat(record.value.id, newStatus, notes.value.trim() || null)
+    record.value = updated
+    toast.add({
+      severity: 'success',
+      summary: newStatus === 'verified' ? 'Surat berhasil diverifikasi' : 'Surat berhasil ditolak',
+      life: 2200,
+    })
+    if (newStatus === 'verified') {
+      router.push({ name: 'letter-authorization', query: { highlight: updated.requestId } })
+    } else {
+      router.push({ name: 'letter-list', query: { highlight: updated.requestId } })
+    }
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Perubahan status gagal',
+      detail: error.response?.data?.message ?? 'Periksa status request.',
+      life: 3000,
+    })
+  } finally {
+    saving.value = false
+  }
 }
 
-async function tolakPermohonan() {
-  loading.value = true
+async function previewPdf() {
+  if (!record.value) return
+  pdfLoading.value = true
   try {
-    // TODO: panggil surat.service.js -> rejectSurat(requestId.value, { catatan: catatan.value })
-    console.log('Tolak permohonan', requestId.value, catatan.value)
+    const blob = await store.getLetterPdf(record.value.id)
+    store.openPdfBlob(blob)
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Preview PDF gagal',
+      detail: error.response?.data?.message ?? 'Template surat belum tersedia.',
+      life: 3000,
+    })
   } finally {
-    loading.value = false
+    pdfLoading.value = false
   }
 }
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50">
-    <h1 class="text-2xl font-semibold text-slate-800 mb-5">Verifikasi Dokumen #{{ requestId }}</h1>
+  <div>
+    <div v-if="loading" class="p-6 text-sm text-slate-500">Memuat detail...</div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <!-- Kolom kiri: info pemohon + dokumen + preview -->
-      <div class="lg:col-span-2 flex flex-col gap-4">
-        <!-- Informasi Pemohon -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <h2 class="font-semibold text-slate-800 mb-3 text-sm">Informasi Pemohon</h2>
+    <div v-else-if="!record" class="max-w-md mx-auto text-center py-20">
+      <p class="text-slate-500 text-sm mb-4">Data surat tidak ditemukan.</p>
+      <AppButton label="Kembali ke Daftar Verifikasi" @click="router.push('/letter/verification')" />
+    </div>
 
-          <div class="grid grid-cols-2 gap-4">
-            <div class="flex flex-col gap-0.5">
-              <p class="text-xs font-semibold text-slate-500">Jenis Surat</p>
-              <p class="text-sm text-slate-800">{{ pemohon.jenisSurat }}</p>
-            </div>
-            <div class="flex flex-col gap-0.5">
-              <p class="text-xs font-semibold text-slate-500">Jenis Layanan</p>
-              <p class="text-sm text-slate-800">{{ pemohon.jenisLayanan }}</p>
-            </div>
+    <div v-else>
+      <h1 class="text-2xl font-bold text-slate-800 mb-5">
+        Verifikasi Dokumen #{{ record.requestId }}
+      </h1>
 
-            <div class="flex flex-col gap-0.5">
-              <p class="text-xs font-semibold text-slate-500">Kode Tipe Surat</p>
-              <p class="text-sm text-slate-800">{{ pemohon.kodeTipeSurat }}</p>
-            </div>
-            <div class="flex flex-col gap-0.5">
-              <p class="text-xs font-semibold text-slate-500">Tanggal Pengajuan</p>
-              <p class="text-sm text-slate-800">{{ pemohon.tanggalPengajuan }}</p>
-            </div>
-
-            <div class="flex flex-col gap-0.5">
-              <p class="text-xs font-semibold text-slate-500">Nama Lengkap</p>
-              <p class="text-sm text-slate-800">{{ pemohon.namaLengkap }}</p>
-            </div>
-            <div class="flex flex-col gap-0.5">
-              <p class="text-xs font-semibold text-slate-500">NIK</p>
-              <p class="text-sm text-slate-800">{{ pemohon.nik }}</p>
-            </div>
-
-            <div class="flex flex-col gap-0.5">
-              <p class="text-xs font-semibold text-slate-500">No Telepon</p>
-              <p class="text-sm text-slate-800">{{ pemohon.noTelepon }}</p>
-            </div>
-            <div></div>
-
-            <div class="flex flex-col gap-0.5 col-span-2">
-              <p class="text-xs font-semibold text-slate-500">Alamat Lengkap</p>
-              <p class="text-sm text-slate-800">{{ pemohon.alamatLengkap }}</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Dokumen Terlampir -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <h2 class="font-semibold text-slate-800 mb-3 text-sm">Dokumen Terlampir</h2>
-
-          <div class="flex flex-col divide-y divide-slate-100">
-            <div
-              v-for="doc in dokumen"
-              :key="doc.id"
-              class="flex items-center justify-between py-3"
-            >
-              <div class="flex items-center gap-3">
-                <div class="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
-                  <i :class="doc.icon"></i>
-                </div>
-                <div>
-                  <p class="text-sm font-medium text-slate-800">{{ doc.nama }}</p>
-                  <p class="text-xs text-slate-500">
-                    {{ doc.ukuran }} • Ditambahkan {{ doc.tanggal }}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                class="text-slate-400 hover:text-blue-600 transition-colors"
-                @click="previewDokumen(doc)"
-                title="Pratinjau"
+      <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
+        <!-- Kolom kiri -->
+        <div class="flex flex-col gap-4 min-w-0">
+          <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <h2 class="font-semibold text-slate-800 mb-3 text-sm">Informasi Pemohon</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div
+                v-for="cell in infoCells"
+                :key="cell.label"
+                class="border border-slate-200 rounded-lg px-3 py-2.5 flex flex-col gap-0.5"
               >
-                <i class="pi pi-eye"></i>
-              </button>
+                <p class="text-xs font-semibold text-slate-800">{{ cell.label }}</p>
+                <p class="text-xs text-slate-500 break-words">{{ cell.value || '-' }}</p>
+              </div>
+              <div
+                v-for="cell in extraCells"
+                :key="'extra-' + cell.label"
+                class="border border-slate-200 rounded-lg px-3 py-2.5 flex flex-col gap-0.5"
+              >
+                <p class="text-xs font-semibold text-slate-800">{{ cell.label }}</p>
+                <p class="text-xs text-slate-500 break-words">{{ cell.value || '-' }}</p>
+              </div>
+              <div
+                class="sm:col-span-2 border border-slate-200 rounded-lg px-3 py-2.5 flex flex-col gap-0.5"
+              >
+                <p class="text-xs font-semibold text-slate-800">Alamat Lengkap</p>
+                <p class="text-xs text-slate-500">{{ record.citizenAddress || '-' }}</p>
+              </div>
             </div>
-          </div>
+          </section>
+
+          <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <h2 class="font-semibold text-slate-800 mb-3 text-sm">Dokumen Terlampir</h2>
+            <div v-if="attachments.length" class="flex flex-col gap-2">
+              <div
+                v-for="item in attachments"
+                :key="item.attachment_id"
+                class="flex items-center justify-between border rounded-lg px-3 py-2.5 transition-colors"
+                :class="
+                  activeAttachment?.attachment_id === item.attachment_id
+                    ? 'border-slate-400 bg-slate-50'
+                    : 'border-slate-200'
+                "
+              >
+                <div class="flex items-center gap-3 min-w-0">
+                  <div
+                    class="w-9 h-9 shrink-0 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600"
+                  >
+                    <i :class="attachmentIcon(item)" />
+                  </div>
+                  <div class="min-w-0">
+                    <p class="text-sm font-medium text-slate-800 truncate">{{ item.file_name }}</p>
+                    <p class="text-xs text-slate-500 truncate">{{ documentName(item) }}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                  title="Pratinjau"
+                  @click="selectedAttachment = item"
+                >
+                  <i class="pi pi-eye" />
+                </button>
+              </div>
+            </div>
+            <p v-else class="text-sm text-slate-500">Belum ada lampiran.</p>
+          </section>
+
+          <section
+            class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 relative"
+          >
+            <div
+              class="min-h-[260px] rounded-lg bg-slate-100 flex items-center justify-center overflow-hidden"
+            >
+              <span v-if="!activeAttachment" class="text-slate-400 text-sm">
+                Pilih dokumen untuk pratinjau
+              </span>
+              <img
+                v-else-if="isImage(activeAttachment.file_name)"
+                :src="mediaUrl(activeAttachment.file_path)"
+                :alt="activeAttachment.file_name"
+                class="max-w-full max-h-[420px] object-contain"
+              />
+              <span v-else class="text-slate-400 text-sm px-4 text-center">
+                Pratinjau tidak tersedia untuk tipe file ini. Gunakan tombol di kanan atas untuk
+                membukanya.
+              </span>
+            </div>
+            <div v-if="activeAttachment" class="absolute top-6 right-6">
+              <AppButton
+                :label="`Pratinjau ${documentName(activeAttachment)}`"
+                icon="pi pi-search"
+                variant="light"
+                size="small"
+                class="!bg-white shadow-sm"
+                @click="openAttachment(activeAttachment)"
+              />
+            </div>
+          </section>
         </div>
 
-        <!-- Preview dokumen -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative">
-          <div class="min-h-[220px] bg-slate-100 flex items-center justify-center">
-            <span v-if="!activePreview" class="text-slate-400 text-sm">
-              Pilih dokumen untuk pratinjau
+        <!-- Kolom kanan -->
+        <div class="flex flex-col gap-4">
+          <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <h2 class="font-semibold text-slate-800 mb-2 text-sm">Catatan Verifikator</h2>
+            <label class="text-xs font-semibold text-slate-500 mb-1 block">
+              Tambahkan catatan untuk pemohon (wajib diisi jika menolak)
+            </label>
+            <textarea
+              v-model="notes"
+              rows="4"
+              :disabled="!canVerify"
+              placeholder="Tuliskan alasan penolakan atau catatan tambahan di sini..."
+              class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-y outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500 transition-colors disabled:bg-slate-50 disabled:text-slate-500"
+            />
+          </section>
+
+          <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <h2 class="font-semibold text-slate-800 mb-2 text-sm">Tindakan</h2>
+            <p class="text-sm text-slate-500 mb-4">
+              Pastikan semua dokumen telah diperiksa dengan seksama sebelum mengambil keputusan.
+            </p>
+            <div v-if="canVerify" class="flex flex-col gap-2">
+              <AppButton
+                label="Setujui Permohonan"
+                icon="pi pi-check-circle"
+                variant="dark"
+                class="w-full"
+                :loading="saving"
+                @click="verify('verified')"
+              />
+              <AppButton
+                label="Tolak Permohonan"
+                icon="pi pi-times-circle"
+                variant="outline"
+                class="w-full"
+                :disabled="saving"
+                @click="verify('rejected')"
+              />
+            </div>
+            <div v-else class="text-sm text-slate-500 bg-slate-50 rounded-lg p-3">
+              Permohonan ini sudah ditindak sebelumnya dengan status
+              <span class="font-medium text-slate-700">{{ status.label }}</span
+              >.
+            </div>
+          </section>
+
+          <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <h2 class="font-semibold text-slate-800 text-xs mb-2">Status Saat Ini</h2>
+            <span
+              class="inline-block text-[10px] font-semibold tracking-wide uppercase rounded px-2 py-0.5"
+              :class="status.class"
+            >
+              {{ status.label }}
             </span>
-            <img
-              v-else-if="activePreview.icon !== 'pi pi-file-pdf'"
-              :src="`/dummy-preview/${activePreview.nama}`"
-              :alt="activePreview.nama"
-              class="max-w-full max-h-80 object-contain"
-              @error="$event.target.style.display = 'none'"
-            />
-            <span v-else class="text-slate-400 text-sm">Preview PDF tidak tersedia</span>
-          </div>
-
-          <div v-if="activePreview" class="absolute top-3 right-3">
-  <AppButton
-    :label="`Pratinjau ${activePreview.nama.split('_')[0]}`"
-    icon="pi pi-search"
-    variant="light"
-    size="small"
-  />
-</div>
-        </div>
-      </div>
-
-      <!-- Kolom kanan: catatan, tindakan, status -->
-      <div class="flex flex-col gap-4">
-        <!-- Catatan Verifikator -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <h2 class="font-semibold text-slate-800 mb-2 text-sm">Catatan Verifikator</h2>
-          <label class="text-xs font-semibold text-slate-500 mb-1 block">
-            Tambahkan catatan untuk pemohon (opsional)
-          </label>
-          <textarea
-            v-model="catatan"
-            rows="4"
-            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-y outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-            placeholder="Tuliskan alasan penolakan atau catatan tambahan di sini..."
-          ></textarea>
-        </div>
-
-        <!-- Tindakan -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <h2 class="font-semibold text-slate-800 mb-2 text-sm">Tindakan</h2>
-          <p class="text-sm text-slate-500 mb-4">
-            Pastikan semua dokumen telah diperiksa dengan seksama sebelum mengambil keputusan.
-          </p>
-
-          <div class="flex flex-col gap-2">
-            <AppButton
-              label="Setujui Permohonan"
-              icon="pi pi-check-circle"
-              variant="primary"
-              class="w-full"
-              :loading="loading"
-              @click="setujuiPermohonan"
-            />
-            <AppButton
-              label="Tolak Permohonan"
-              icon="pi pi-times-circle"
-              variant="outline"
-              class="w-full"
-              :loading="loading"
-              @click="tolakPermohonan"
-            />
-          </div>
-        </div>
-
-        <!-- Status Saat Ini -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <div class="flex items-center justify-between mb-3">
-            <h2 class="font-semibold text-slate-800 text-sm">Status Saat Ini</h2>
-            <button class="text-slate-400 hover:text-blue-600 transition-colors">
-              <i class="pi pi-ellipsis-h"></i>
-            </button>
-          </div>
-
-          <Tag :value="statusSaatIni.toUpperCase()" :severity="statusColor[statusSaatIni]" />
-
-          <p class="text-xs font-semibold text-slate-500 mt-4 mb-1">Diverifikasi Oleh</p>
-          <div class="flex items-center gap-2">
-            <div class="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-              <i class="pi pi-user text-xs"></i>
+            <p class="text-xs font-semibold text-slate-800 mt-4 mb-1">Diverifikasi Oleh</p>
+            <div class="flex items-center gap-2">
+              <div
+                class="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-slate-600"
+              >
+                <i class="pi pi-user text-[10px]" />
+              </div>
+              <span class="text-sm text-slate-700">{{ record.verifiedBy }}</span>
             </div>
-            <span class="text-sm text-slate-700">{{ diverifikasiOleh }}</span>
-          </div>
+          </section>
         </div>
       </div>
     </div>

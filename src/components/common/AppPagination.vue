@@ -1,17 +1,5 @@
 <script setup>
-/**
- * AppPagination - dipakai untuk halaman list yang TIDAK pakai AppDataTable,
- * misal grid galeri foto (kartu, bukan tabel). Kalau halamanmu pakai
- * AppDataTable, kamu tidak perlu komponen ini -- paginator sudah built-in.
- *
- * Contoh pakai:
- *   <AppPagination
- *     :total="totalItem"
- *     :rows="itemPerHalaman"
- *     :first="offsetSaatIni"
- *     @page="({ first, rows }) => fetchData(first, rows)"
- *   />
- */
+
 import Paginator from 'primevue/paginator'
 
 defineProps({
@@ -28,6 +16,23 @@ defineEmits(['page'])
     :totalRecords="total"
     :rows="rows"
     :first="first"
+    class="text-xs md:text-sm"
     @page="(e) => $emit('page', e)"
   />
 </template>
+
+<style scoped>
+@media (max-width: 767px) {
+  :deep(.p-paginator) {
+    padding: 0.4rem;
+  }
+  :deep(.p-paginator .p-paginator-page),
+  :deep(.p-paginator .p-paginator-next),
+  :deep(.p-paginator .p-paginator-prev),
+  :deep(.p-paginator .p-paginator-first),
+  :deep(.p-paginator .p-paginator-last) {
+    min-width: 1.75rem;
+    height: 1.75rem;
+  }
+}
+</style>

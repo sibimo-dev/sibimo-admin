@@ -1,9 +1,11 @@
 <script setup>
 
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { FilterMatchMode } from '@primevue/core/api'
+import { useConfirm } from 'primevue/useconfirm'
 
+import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import InputText from 'primevue/inputtext'
@@ -11,84 +13,164 @@ import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
+import { newsService } from '@/services/content.service'
+import { getListCache, setListCache } from '@/services/list-cache'
+import { mediaUrl } from '@/services/media'
 
 const router = useRouter()
+const confirm = useConfirm()
+const cachedNews = getListCache('news')
+const loading = ref(!cachedNews)
+const loadError = ref('')
+const news = ref((cachedNews ?? []).map(mapNewsItem))
 
-const news = ref([
+function mapNewsItem(item) {
+  return {
+    id: item.news_id,
+    title: item.title,
+    author: item.author?.full_name ?? item.author?.name ?? '-',
+      image: mediaUrl(item.thumbnail),
+    date: item.published_at
+      ? new Date(item.published_at).toLocaleDateString('id-ID', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        })
+      : '-',
+    category: item.category?.category_name ?? item.category?.name ?? '-',
+    status: item.status?.toUpperCase() ?? '-',
+  }
+}
+
+async function loadNews({ background = false } = {}) {
+  if (!background) loading.value = true
+  try {
+    const data = await newsService.list()
+    const normalized = Array.isArray(data) ? data : []
+    setListCache('news', normalized)
+    news.value = normalized.map(mapNewsItem)
+    loadError.value = ''
+  } catch (error) {
+    loadError.value = 'Data berita belum dapat dimuat.'
+    if (!background) news.value = []
+    console.error('Gagal memuat berita:', error)
+  } finally {
+    if (!background) loading.value = false
+  }
+}
+onMounted(() => loadNews({ background: Boolean(cachedNews) }))
+
+/* const newsDummy = [
   {
     id: 1,
-    title: 'Judul berita',
-    author: 'User Name',
+    title: 'Musyawarah Perencanaan Desa Tetapkan Prioritas Pembangunan 2027',
+    author: 'Admin Desa',
     image: null,
-    date: '3/18/2026',
-    category: 'Kategori',
+    date: '18/03/2026',
+    category: 'Infrastruktur',
     status: 'PUBLISHED',
   },
   {
     id: 2,
-    title: 'Judul berita',
-    author: 'User Name',
+    title: 'Posyandu Melati Catat Peningkatan Kunjungan Balita Bulan Ini',
+    author: 'Siti Rahayu',
     image: null,
     date: '27/07/2026',
-    category: 'Kategori',
+    category: 'Kesehatan',
     status: 'PUBLISHED',
   },
   {
     id: 3,
-    title: 'Judul berita',
-    author: 'User Name',
+    title: 'Rencana Perbaikan Jalan Penghubung Dusun Sukamaju Segera Dimulai',
+    author: 'Budi Santoso',
     image: null,
     date: '25/07/2026',
-    category: 'Kategori',
+    category: 'Infrastruktur',
     status: 'DRAFT',
   },
   {
     id: 4,
-    title: 'Judul berita',
-    author: 'User Name',
+    title: 'Penyuluhan Pertanian Organik Diikuti Puluhan Petani Lokal',
+    author: 'Agus Setiawan',
     image: null,
     date: '13/07/2026',
-    category: 'Kategori',
+    category: 'Pertanian',
     status: 'PUBLISHED',
   },
   {
     id: 5,
-    title: 'Judul berita',
-    author: 'User Name',
+    title: 'BUMDes Salurkan Bantuan Modal Usaha untuk 20 Pelaku UMKM',
+    author: 'Dewi Lestari',
     image: null,
     date: '10/07/2026',
-    category: 'Kategori',
+    category: 'Keuangan',
     status: 'PUBLISHED',
   },
   {
     id: 6,
-    title: 'Judul berita',
-    author: 'User Name',
+    title: 'Pelatihan Digitalisasi Administrasi Desa Bersama Dinas Kominfo',
+    author: 'Rudi Hartono',
     image: null,
-    date: '7/07/2026',
-    category: 'Kategori',
+    date: '07/07/2026',
+    category: 'Teknologi',
     status: 'DRAFT',
   },
   {
     id: 7,
-    title: 'Judul berita',
-    author: 'User Name',
+    title: 'Kerja Bakti Serentak Bersihkan Saluran Irigasi Menjelang Musim Hujan',
+    author: 'Admin Desa',
     image: null,
-    date: '4/07/2026',
-    category: 'Kategori',
+    date: '04/07/2026',
+    category: 'Sosial',
     status: 'PUBLISHED',
   },
   {
     id: 8,
-    title: 'Judul berita',
-    author: 'User Name',
+    title: 'Vaksinasi Massal Hewan Ternak Cegah Penyebaran Penyakit Mulut dan Kuku',
+    author: 'Ani Wulandari',
     image: null,
     date: '28/06/2026',
-    category: 'Kategori',
+    category: 'Kesehatan',
     status: 'PUBLISHED',
   },
-])
-
+  {
+    id: 9,
+    title: 'Pembangunan Jembatan Gantung Dusun Kenanga Capai 70 Persen',
+    author: 'Budi Santoso',
+    image: null,
+    date: '22/06/2026',
+    category: 'Infrastruktur',
+    status: 'PUBLISHED',
+  },
+  {
+    id: 10,
+    title: 'Sosialisasi Bantuan Sosial Tahap III Digelar di Balai Desa',
+    author: 'Siti Rahayu',
+    image: null,
+    date: '15/06/2026',
+    category: 'Sosial',
+    status: 'PUBLISHED',
+  },
+  {
+    id: 11,
+    title: 'Panen Raya Jagung Hibrida Naikkan Pendapatan Petani Desa',
+    author: 'Agus Setiawan',
+    image: null,
+    date: '09/06/2026',
+    category: 'Pertanian',
+    status: 'DRAFT',
+  },
+  {
+    id: 12,
+    title: 'Pelatihan Kerajinan Anyaman Bambu Buka Peluang Usaha Baru',
+    author: 'Dewi Lestari',
+    image: null,
+    date: '02/06/2026',
+    category: 'Sosial',
+    status: 'PUBLISHED',
+  },
+]
+*/
 const selectedNews = ref([])
 const rowsPerPage = ref(10)
 
@@ -108,15 +190,46 @@ function editNews(id) {
   router.push({ name: 'news-edit', params: { id } })
 }
 
-function deleteNews(id) {
-  news.value = news.value.filter(newsItem => newsItem.id !== id)
-  selectedNews.value = selectedNews.value.filter(newsItem => newsItem.id !== id)
+function deleteNews(data) {
+  confirm.require({
+    message: `Hapus berita "${data.title}"?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      try {
+        await newsService.remove(data.id)
+        await loadNews()
+        selectedNews.value = selectedNews.value.filter(newsItem => newsItem.id !== data.id)
+      } catch (error) {
+        window.alert(error.response?.data?.message ?? 'Gagal menghapus berita.')
+      }
+    },
+  })
 }
 
 function deleteSelected() {
-  const idsToDelete = new Set(selectedNews.value.map(newsItem => newsItem.id))
-  news.value = news.value.filter(newsItem => !idsToDelete.has(newsItem.id))
-  selectedNews.value = []
+  confirm.require({
+    message: `Hapus ${selectedNews.value.length} berita terpilih?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      const idsToDelete = new Set(selectedNews.value.map(newsItem => newsItem.id))
+      try {
+        await Promise.all([...idsToDelete].map(id => newsService.remove(id)))
+        await loadNews()
+        selectedNews.value = []
+      } catch (error) {
+        window.alert(error.response?.data?.message ?? 'Gagal menghapus sebagian berita.')
+        await loadNews()
+      }
+    },
+  })
 }
 
 function exportData() {
@@ -160,74 +273,70 @@ function exportData() {
 </script>
 
 <template>
-  <div class="min-h-full px-6 py-6 text-neutral-800 lg:px-8">
+  <div>
 
-    <h1 class="m-0 mb-1 text-[22px] font-bold text-primary-900">
-      Berita Desa
-    </h1>
+    <div class="mb-6">
+      <h1 class="m-0 text-2xl font-bold text-primary-900">
+        Berita Desa
+      </h1>
 
-    <p class="mb-5 text-sm text-neutral-500">
-      Kelola daftar berita yang dimiliki desa.
-    </p>
+      <p class="m-0 mt-1 text-sm text-neutral-500">
+        Kelola daftar berita yang dimiliki desa.
+      </p>
+    </div>
 
-    <div class="rounded-xl border border-neutral-200 bg-white shadow-sm">
+    <Card>
+      <template #content>
 
-      <div class="border-b border-neutral-100 px-6 py-4">
-        <h2 class="m-0 text-base font-semibold text-primary-900">
-          Kelola Berita Desa
-        </h2>
-      </div>
+        <div class="mb-4 flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
+          <div class="flex items-center gap-2">
 
-      <div class="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
-
-        <div class="flex items-center gap-2">
-
-          <Button
-            label="Baru"
-            icon="pi pi-plus"
-            class="rounded-lg border border-primary-700 bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
-            @click="addNew"
-          />
-
-          <Button
-            label="Hapus"
-            icon="pi pi-trash"
-            severity="secondary"
-            outlined
-            :disabled="selectedNews.length === 0"
-            class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
-            @click="deleteSelected"
-          />
-
-        </div>
-
-        <div class="flex items-center gap-2">
-
-          <IconField>
-            <InputIcon class="pi pi-search text-neutral-400" />
-            <InputText
-              v-model="filters.global.value"
-              placeholder="Cari judul, penulis, kategori"
-              class="w-[220px] rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
+            <Button
+              label="Baru"
+              icon="pi pi-plus"
+              class="rounded-lg border border-primary-700 bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
+              @click="addNew"
             />
-          </IconField>
 
-          <Button
-            label="Export"
-            icon="pi pi-download"
-            severity="secondary"
-            outlined
-            class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
-            @click="exportData"
-          />
+            <Button
+              label="Hapus"
+              icon="pi pi-trash"
+              severity="secondary"
+              outlined
+              :disabled="selectedNews.length === 0"
+              class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
+              @click="deleteSelected"
+            />
 
+          </div>
+
+          <div class="flex items-center gap-2">
+
+            <IconField>
+              <InputIcon class="pi pi-search text-neutral-400" />
+              <InputText
+                v-model="filters.global.value"
+                placeholder="Cari judul, penulis, kategori"
+                class="w-[220px] rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
+              />
+            </IconField>
+
+            <Button
+              label="Export"
+              icon="pi pi-download"
+              severity="secondary"
+              outlined
+              class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
+              @click="exportData"
+            />
+
+          </div>
         </div>
-      </div>
 
-      <div class="px-6 pb-4">
         <DataTable
           v-model:selection="selectedNews"
           :value="news"
+          :loading="loading"
           :filters="filters"
           :paginator="true"
           :rows="rowsPerPage"
@@ -249,7 +358,7 @@ function exportData() {
         >
           <template #empty>
             <div class="px-3 py-8 text-center text-neutral-400">
-              Tidak ada berita yang cocok dengan pencarian.
+              {{ loadError || 'Tidak ada berita yang cocok dengan pencarian.' }}
             </div>
           </template>
 
@@ -259,8 +368,15 @@ function exportData() {
           <Column field="author" header="Penulis" sortable />
 
           <Column header="Gambar" headerStyle="width: 4rem">
-            <template #body>
-              <div class="h-7 w-10 rounded bg-neutral-200" />
+            <template #body="{ data }">
+              <div class="flex h-7 w-10 items-center justify-center overflow-hidden rounded bg-neutral-200">
+                <img
+                  v-if="data.image"
+                  :src="data.image"
+                  :alt="data.title"
+                  class="h-full w-full object-cover"
+                />
+              </div>
             </template>
           </Column>
 
@@ -296,14 +412,14 @@ function exportData() {
                   severity="danger"
                   class="h-8 w-8 text-neutral-500 hover:bg-danger-50 hover:text-danger-600"
                   title="Hapus"
-                  @click="deleteNews(data.id)"
+                  @click="deleteNews(data)"
                 />
               </div>
             </template>
           </Column>
         </DataTable>
-      </div>
 
-    </div>
+      </template>
+    </Card>
   </div>
 </template>

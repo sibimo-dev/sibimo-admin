@@ -1,102 +1,98 @@
 @import "tailwindcss";
-/*
- * Tailwind v4: warna custom didaftarkan lewat @theme (bukan tailwind.config.js
- * lagi). Semua token ini otomatis jadi class Tailwind biasa:
- * bg-primary-500, text-secondary-700, border-accent-300, text-neutral-900, dst.
- *
- * Ramp ini diturunkan dari Color Palette Sleman yang sudah dibuat sebelumnya:
- * - primary  = Biru utama  (#1F6FA6) -> brand/CTA utama
- * - secondary= Hijau utama (#2E7D53) -> brand sekunder
- * - accent   = Teal, jembatan antara primary & secondary, dipakai untuk highlight
- * - neutral  = skala dari Off-white (#F6F9F8) ke Teks gelap (#20302E)
- * Stop 500 pada primary & secondary sengaja dibuat SAMA PERSIS dengan hex asli
- * di palet, supaya warna brand yang dipakai di halaman lain tetap konsisten.
- */
+
 @theme {
-  --color-primary-50: #f2f6fa;
-  --color-primary-100: #dbe8f1;
-  --color-primary-200: #aecbdf;
-  --color-primary-300: #82aecd;
-  --color-primary-400: #508fba;
-  --color-primary-500: #1f6fa6;
-  --color-primary-600: #1c618e;
-  --color-primary-700: #195074;
-  --color-primary-800: #164059;
-  --color-primary-900: #133241;
+  /* Primary: biru langit -> biru tua gunung (warna utama logo Sleman) */
+  --color-primary-50: #eaf6fd;
+  --color-primary-100: #cdebfa;
+  --color-primary-200: #9ad9f5;
+  --color-primary-300: #5fc4ee;
+  --color-primary-400: #2fa6de;
+  --color-primary-500: #1483c7;
+  --color-primary-600: #136aa3;
+  --color-primary-700: #175380;
+  --color-primary-800: #1c3f61;
+  --color-primary-900: #22314f;
+  --color-primary-950: #141f33;
 
-  --color-secondary-50: #f2f7f5;
-  --color-secondary-100: #deeae3;
-  --color-secondary-200: #b4d0c1;
-  --color-secondary-300: #8ab69f;
-  --color-secondary-400: #5c9a79;
-  --color-secondary-500: #2e7d53;
-  --color-secondary-600: #296c49;
-  --color-secondary-700: #235a3d;
-  --color-secondary-800: #1d4731;
-  --color-secondary-900: #183627;
+  /* Secondary: emas / padi (aksen bintang & border logo) */
+  --color-secondary-50: #fdf8ea;
+  --color-secondary-100: #faedc4;
+  --color-secondary-200: #f3da89;
+  --color-secondary-300: #ecc44e;
+  --color-secondary-400: #e0af2f;
+  --color-secondary-500: #c9a227;
+  --color-secondary-600: #a3831f;
+  --color-secondary-700: #7d651a;
+  --color-secondary-800: #5c4a15;
+  --color-secondary-900: #3f3310;
 
-  --color-accent-50: #f3f8f8;
-  --color-accent-100: #e0edec;
-  --color-accent-200: #b9d6d5;
-  --color-accent-300: #92bfbd;
-  --color-accent-400: #67a5a4;
-  --color-accent-500: #3c8c8a;
-  --color-accent-600: #347977;
-  --color-accent-700: #2c6461;
-  --color-accent-800: #244e4c;
-  --color-accent-900: #1c3b38;
+  /* Accent: coklat/tan pita nama - dipakai untuk aksen tersier */
+  --color-accent-50: #f9f6f0;
+  --color-accent-100: #f0e8d6;
+  --color-accent-200: #ddccab;
+  --color-accent-300: #c9b080;
+  --color-accent-400: #b6975c;
+  --color-accent-500: #a3813f;
+  --color-accent-600: #866a34;
+  --color-accent-700: #68522a;
+  --color-accent-800: #4c3c1f;
+  --color-accent-900: #362b17;
 
-  --color-neutral-50: #f6f9f8;
-  --color-neutral-100: #e1e5e4;
-  --color-neutral-200: #c3c9c8;
-  --color-neutral-300: #a5adab;
-  --color-neutral-400: #87908f;
-  --color-neutral-500: #6d7877;
-  --color-neutral-600: #566260;
-  --color-neutral-700: #404e4c;
-  --color-neutral-800: #2f3e3c;
-  --color-neutral-900: #20302e;
+  /* Neutral tetap netral untuk keterbacaan, sedikit dihangatkan ke arah biru-abu */
+  --color-neutral-50: #f6f8f9;
+  --color-neutral-100: #e2e6e8;
+  --color-neutral-200: #c4cbcf;
+  --color-neutral-300: #a7b0b5;
+  --color-neutral-400: #89959a;
+  --color-neutral-500: #707d81;
+  --color-neutral-600: #596568;
+  --color-neutral-700: #434c4f;
+  --color-neutral-800: #313739;
+  --color-neutral-900: #212525;
 
-  /* Status: hijau (kemakmuran) = success, kuning (keluhuran) = warning, merah (keberanian) = danger */
-  --color-success-50: #eef4f0;
-  --color-success-100: #d6e6da;
-  --color-success-200: #aeceb6;
-  --color-success-300: #85b591;
-  --color-success-400: #5f9c6e;
-  --color-success-500: #488250;
-  --color-success-600: #3a6941;
-  --color-success-700: #2e5233;
-  --color-success-800: #233d27;
-  --color-success-900: #182a1b;
+  /* Status: hijau daun kapas = success, kuning/emas = warning, merah gapura = danger */
+  --color-success-50: #eaf6ef;
+  --color-success-100: #cbe9d6;
+  --color-success-200: #98d3ae;
+  --color-success-300: #63bb85;
+  --color-success-400: #3aa367;
+  --color-success-500: #1e7a46;
+  --color-success-600: #19643a;
+  --color-success-700: #144e2e;
+  --color-success-800: #0f3a23;
+  --color-success-900: #0a2818;
 
-  --color-warning-50: #fbf7e6;
-  --color-warning-100: #f5ecc0;
-  --color-warning-200: #ebdd8c;
-  --color-warning-300: #dcc95c;
-  --color-warning-400: #c7b23e;
-  --color-warning-500: #ab982f;
-  --color-warning-600: #8b7b26;
-  --color-warning-700: #6e621e;
-  --color-warning-800: #524917;
-  --color-warning-900: #383210;
+  --color-warning-50: #fdf6e8;
+  --color-warning-100: #f9e6bd;
+  --color-warning-200: #f1cd7e;
+  --color-warning-300: #e6b348;
+  --color-warning-400: #d69f2c;
+  --color-warning-500: #b8861f;
+  --color-warning-600: #946c19;
+  --color-warning-700: #715214;
+  --color-warning-800: #523c0f;
+  --color-warning-900: #38290a;
 
-  --color-danger-50: #fdf1f1;
-  --color-danger-100: #f8dddd;
-  --color-danger-200: #efb8b8;
-  --color-danger-300: #e29494;
-  --color-danger-400: #d07575;
-  --color-danger-500: #b85c5c;
-  --color-danger-600: #9c4a4a;
-  --color-danger-700: #7d3b3b;
-  --color-danger-800: #5e2c2c;
-  --color-danger-900: #421f1f;
+  --color-danger-50: #fdecea;
+  --color-danger-100: #f9cdc8;
+  --color-danger-200: #f0958a;
+  --color-danger-300: #e65f4f;
+  --color-danger-400: #dd3a26;
+  --color-danger-500: #d42e24;
+  --color-danger-600: #ac251d;
+  --color-danger-700: #851d17;
+  --color-danger-800: #611512;
+  --color-danger-900: #420f0c;
 }
+
 :root {
   --sibimo-sidebar-width: 260px;
 }
+
 body {
   @apply bg-neutral-50 text-neutral-900;
 }
+
 /* Kelas utility kecil yang dipakai berulang di banyak halaman modul */
 .page-title {
   @apply text-xl font-semibold text-neutral-900 mb-1;
@@ -106,4 +102,68 @@ body {
 }
 .card {
   @apply bg-white rounded-xl border border-neutral-200 shadow-sm p-5;
+}
+
+/* ============================================
+   Button styling - biar tidak monoton/flat default
+   ============================================ */
+
+/* PENTING: :not(.p-button-link) ditambahkan di sini. Tanpa ini, tombol
+   variant="link" (AppButton.vue) ikut ketangkap selector dan dipaksa
+   dapat background gradient solid -- padahal link seharusnya transparan.
+   Ini akar masalah tombol "Verifikasi"/"Otorisasi"/dst yang jadi kotak
+   biru gelap dengan teks nyaris tak terbaca. */
+.p-button:not(.p-button-text):not(.p-button-outlined):not(.p-button-link) {
+  background: linear-gradient(135deg, var(--p-primary-400), var(--p-primary-700));
+  border: none;
+  box-shadow: 0 2px 8px rgba(23, 83, 128, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  border-radius: 10px;
+}
+
+.p-button:not(.p-button-text):not(.p-button-outlined):not(.p-button-link):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(23, 83, 128, 0.4);
+}
+
+.p-button:not(.p-button-text):not(.p-button-outlined):not(.p-button-link):active {
+  transform: translateY(0);
+}
+
+.p-button-outlined {
+  border-width: 1.5px;
+  border-radius: 10px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.p-button-outlined:hover {
+  background: var(--color-primary-50);
+}
+
+.p-button-danger:not(.p-button-text):not(.p-button-outlined):not(.p-button-link) {
+  background: linear-gradient(135deg, var(--p-danger-400), var(--p-danger-600));
+  box-shadow: 0 2px 8px rgba(212, 46, 36, 0.3);
+}
+
+.p-button-secondary:not(.p-button-text):not(.p-button-outlined):not(.p-button-link) {
+  background: linear-gradient(135deg, var(--p-secondary-400), var(--p-secondary-700));
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(23, 83, 128, 0.3);
+}
+
+.p-button {
+  border-radius: 10px;
+}
+
+.p-button-text {
+  border-radius: 8px;
+  transition: background-color 0.15s ease;
+}
+
+.p-button-link {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding-left: 0;
+  padding-right: 0;
 }

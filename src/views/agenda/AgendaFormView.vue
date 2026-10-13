@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useConfirm } from 'primevue/useconfirm'
+import { useToast } from 'primevue/usetoast'
 
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
@@ -10,9 +12,13 @@ import Button from 'primevue/button'
 import FileUpload from 'primevue/fileupload'
 import RadioButton from 'primevue/radiobutton'
 import Card from 'primevue/card'
+import { agendaService } from '@/services/content.service'
+import { updateListCache } from '@/services/list-cache'
 
 const route = useRoute()
 const router = useRouter()
+const confirm = useConfirm()
+const toast = useToast()
 
 const agendaId = computed(() => route.params.id ?? null)
 const isEditMode = computed(() => agendaId.value !== null)
@@ -43,6 +49,7 @@ const endTime = ref(new Date())
 const attachmentPreview = ref(null)
 const attachmentName = ref(null)
 const attachmentFile = ref(null)
+const saving = ref(false)
 
 const status = ref('Draft')
 const statusOpen = ref(true)
@@ -63,23 +70,39 @@ const statusDisplay = computed(() => (
   statusOptions.find(item => item.value === status.value)?.label ?? status.value
 ))
 
-onMounted(() => {
+onMounted(async () => {
   if (!isEditMode.value) return
 
-  eventName.value = 'Pelatihan UMKM Kerajinan'
-  letterOrigin.value = 'Dinas UMKM'
-  place.value = 'Aula Balai Desa Bimomartani'
-  attendees.value = 'Pelaku Usaha Lokal'
-  eventDate.value = new Date('2026-08-04')
-  startTime.value = createTime('09:00')
-  endTime.value = createTime('09:00')
-  status.value = 'Published'
+  try {
+    const existing = await agendaService.get(agendaId.value)
+    eventName.value = existing.title ?? ''
+    attendees.value = existing.attendee ?? ''
+    place.value = existing.location ?? ''
+    eventDate.value = parseDateValue(existing.event_date)
+    startTime.value = createTime(existing.start_time)
+    endTime.value = createTime(existing.end_time)
+    status.value = existing.status ?? 'Published'
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal memuat agenda',
+      detail: error.response?.data?.message ?? 'Periksa koneksi backend.',
+      life: 4000,
+    })
+  }
 })
 
+function parseDateValue(value) {
+  if (!value) return new Date()
+  const rawDate = String(value).slice(0, 10)
+  const date = new Date(`${rawDate}T00:00:00`)
+  return Number.isNaN(date.getTime()) ? new Date() : date
+}
+
 function createTime(value) {
-  const [hours, minutes] = value.split(':').map(Number)
+  const [hours, minutes] = String(value ?? '00:00').split(':').map(Number)
   const date = new Date()
-  date.setHours(hours, minutes, 0, 0)
+  date.setHours(Number.isNaN(hours) ? 0 : hours, Number.isNaN(minutes) ? 0 : minutes, 0, 0)
   return date
 }
 
@@ -120,25 +143,77 @@ function saveDraft() {
   router.push({ name: 'agenda-list' })
 }
 
-function saveMain() {
+async function saveMain() {
+  if (saving.value) return
   status.value = 'Published'
-  router.push({ name: 'agenda-list' })
+  const payload = {
+    title: eventName.value,
+    attendee : attendees.value,
+    event_date: eventDate.value.toISOString().slice(0, 10),
+    start_time: startTime.value.toTimeString().slice(0, 5),
+    end_time: endTime.value.toTimeString().slice(0, 5),
+    location: place.value,
+  }
+
+  saving.value = true
+  try {
+    const saved = agendaId.value
+      ? await agendaService.update(agendaId.value, payload)
+      : await agendaService.create(payload)
+
+    updateListCache('agendas', items => {
+      const cachedItem = { ...saved, status: saved?.status ?? 'Published' }
+
+      if (agendaId.value) {
+        return items.map(item => item.agenda_id === Number(agendaId.value)
+          ? { ...item, ...cachedItem }
+          : item)
+      }
+
+      return [cachedItem, ...items]
+    })
+    router.push({ name: 'agenda-list' })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: agendaId.value ? 'Gagal memperbarui agenda' : 'Gagal menerbitkan agenda',
+      detail: error.response?.data?.message ?? 'Periksa data dan koneksi backend.',
+      life: 4000,
+    })
+  } finally {
+    saving.value = false
+  }
 }
 
 function moveToTrash() {
-  router.push({ name: 'agenda-list' })
+  confirm.require({
+    message: `Pindahkan agenda "${eventName.value || 'ini'}" ke sampah?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: () => {
+      router.push({ name: 'agenda-list' })
+    },
+  })
 }
 </script>
 
 <template>
-  <div class="min-h-full px-6 py-6 text-slate-800 lg:px-8">
-    <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-      <h1 class="m-0 text-[22px] font-bold text-slate-900">
-        {{ pageTitle }}
-      </h1>
+  <div>
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h1 class="m-0 text-2xl font-bold text-gray-800">
+          {{ pageTitle }}
+        </h1>
+        <p class="m-0 mt-1 text-sm text-gray-500">
+          Lengkapi detail agenda kegiatan desa.
+        </p>
+      </div>
 
       <div class="flex flex-wrap items-center gap-2">
-        <label for="month" class="text-[13px] font-medium text-slate-600">
+        <label for="month" class="text-[13px] font-medium text-gray-600">
           Bulan
         </label>
 
@@ -157,6 +232,7 @@ function moveToTrash() {
           chooseIcon="pi pi-upload"
           :auto="false"
           :customUpload="true"
+          class="[&_input[type='file']]:hidden"
           @select="handleAttachmentSelect"
         />
       </div>
@@ -167,7 +243,7 @@ function moveToTrash() {
         <template #content>
           <div class="flex flex-col gap-5">
             <div class="flex flex-col gap-2">
-              <label for="eventName" class="text-[13px] font-semibold text-slate-700">
+              <label for="eventName" class="text-[13px] font-semibold text-gray-700">
                 Nama Acara
               </label>
               <InputText
@@ -179,7 +255,7 @@ function moveToTrash() {
             </div>
 
             <div class="flex flex-col gap-2">
-              <label for="letterOrigin" class="text-[13px] font-semibold text-slate-700">
+              <label for="letterOrigin" class="text-[13px] font-semibold text-gray-700">
                 Asal Surat
               </label>
               <InputText
@@ -191,7 +267,7 @@ function moveToTrash() {
             </div>
 
             <div class="flex flex-col gap-2">
-              <label for="place" class="text-[13px] font-semibold text-slate-700">
+              <label for="place" class="text-[13px] font-semibold text-gray-700">
                 Tempat
               </label>
               <InputText
@@ -203,7 +279,7 @@ function moveToTrash() {
             </div>
 
             <div class="flex flex-col gap-2">
-              <label for="attendees" class="text-[13px] font-semibold text-slate-700">
+              <label for="attendees" class="text-[13px] font-semibold text-gray-700">
                 Yang Menghadiri/Keterangan
               </label>
               <InputText
@@ -216,7 +292,7 @@ function moveToTrash() {
 
             <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
               <div class="flex flex-col gap-2">
-                <label for="eventDate" class="text-[13px] font-semibold text-slate-700">
+                <label for="eventDate" class="text-[13px] font-semibold text-gray-700">
                   Tanggal
                 </label>
                 <DatePicker
@@ -230,7 +306,7 @@ function moveToTrash() {
               </div>
 
               <div class="flex flex-col gap-2">
-                <span class="text-[13px] font-semibold text-slate-700">
+                <span class="text-[13px] font-semibold text-gray-700">
                   Waktu
                 </span>
 
@@ -241,7 +317,7 @@ function moveToTrash() {
                     hourFormat="24"
                     fluid
                   />
-                  <span class="text-[13px] text-slate-500">s/d</span>
+                  <span class="text-[13px] text-gray-500">s/d</span>
                   <DatePicker
                     v-model="endTime"
                     timeOnly
@@ -253,11 +329,11 @@ function moveToTrash() {
             </div>
 
             <div class="flex flex-col gap-2">
-              <span class="text-[13px] font-semibold text-slate-700">
+              <span class="text-[13px] font-semibold text-gray-700">
                 Gambar/Lampiran
               </span>
 
-              <div class="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
+              <div class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4">
                 <div
                   v-if="attachmentPreview"
                   class="relative overflow-hidden rounded-lg"
@@ -284,8 +360,8 @@ function moveToTrash() {
                   class="flex items-center justify-between gap-3 rounded-lg bg-white p-4"
                 >
                   <div class="flex min-w-0 items-center gap-3">
-                    <i class="pi pi-file text-xl text-slate-500" />
-                    <span class="truncate text-[13px] text-slate-700">
+                    <i class="pi pi-file text-xl text-gray-500" />
+                    <span class="truncate text-[13px] text-gray-700">
                       {{ attachmentName }}
                     </span>
                   </div>
@@ -301,8 +377,8 @@ function moveToTrash() {
                 </div>
 
                 <div v-else class="flex flex-col items-center gap-3 py-5 text-center">
-                  <i class="pi pi-cloud-upload text-3xl text-slate-400" />
-                  <span class="text-[13px] text-slate-400">
+                  <i class="pi pi-cloud-upload text-3xl text-gray-400" />
+                  <span class="text-[13px] text-gray-400">
                     Pilih gambar atau lampiran untuk agenda
                   </span>
 
@@ -314,6 +390,7 @@ function moveToTrash() {
                     chooseIcon="pi pi-upload"
                     :auto="false"
                     :customUpload="true"
+                    class="[&_input[type='file']]:hidden"
                     @select="handleAttachmentSelect"
                   />
                 </div>
@@ -323,7 +400,7 @@ function moveToTrash() {
         </template>
       </Card>
 
-      <aside class="flex flex-col gap-3.5">
+      <aside class="flex flex-col gap-5">
         <Card>
           <template #content>
             <div class="flex gap-2.5">
@@ -331,12 +408,15 @@ function moveToTrash() {
                 label="Simpan Draft"
                 severity="secondary"
                 outlined
+                :disabled="saving"
                 class="flex-1"
                 @click="saveDraft"
               />
 
               <Button
                 :label="mainButtonLabel"
+                :loading="saving"
+                :disabled="saving"
                 class="flex-1"
                 @click="saveMain"
               />
@@ -346,7 +426,7 @@ function moveToTrash() {
 
         <Card>
           <template #content>
-            <div class="flex items-center justify-between text-[13px] text-slate-700">
+            <div class="flex items-center justify-between text-[13px] text-gray-700">
               <span>Terbit</span>
 
               <Button
@@ -361,10 +441,10 @@ function moveToTrash() {
 
         <Card>
           <template #content>
-            <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-2.5">
               <button
                 type="button"
-                class="flex items-center justify-between text-left text-[13px] text-slate-700"
+                class="flex items-center justify-between text-left text-[13px] text-gray-700"
                 @click="statusOpen = !statusOpen"
               >
                 <span>
@@ -373,7 +453,7 @@ function moveToTrash() {
                 </span>
 
                 <i
-                  class="pi pi-chevron-down text-xs text-slate-400 transition-transform"
+                  class="pi pi-chevron-down text-xs text-gray-400 transition-transform"
                   :class="{ 'rotate-180': statusOpen }"
                 />
               </button>
@@ -392,15 +472,15 @@ function moveToTrash() {
 
         <Card>
           <template #content>
-            <div class="flex flex-col gap-3">
-              <span class="text-[13px] text-slate-700">
+            <div class="flex flex-col gap-2.5">
+              <span class="text-[13px] text-gray-700">
                 Keterlihatan:
                 <strong>
                   {{ visibilityOptions.find(item => item.value === visibility)?.label }}
                 </strong>
               </span>
 
-              <div class="flex flex-col gap-3">
+              <div class="flex flex-col gap-2">
                 <div
                   v-for="option in visibilityOptions"
                   :key="option.value"
@@ -414,7 +494,7 @@ function moveToTrash() {
                   />
                   <label
                     :for="`visibility-${option.value}`"
-                    class="cursor-pointer text-[13px] text-slate-700"
+                    class="cursor-pointer text-[13px] text-gray-700"
                   >
                     {{ option.label }}
                   </label>

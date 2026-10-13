@@ -1,8 +1,10 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { FilterMatchMode } from '@primevue/core/api'
+import { useConfirm } from 'primevue/useconfirm'
 
+import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import InputText from 'primevue/inputtext'
@@ -10,10 +12,60 @@ import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
+import { potentialService } from '@/services/content.service'
+import { getListCache, setListCache } from '@/services/list-cache'
+import { mediaUrl } from '@/services/media'
 
 const router = useRouter()
+const confirm = useConfirm()
+const cachedPotentials = getListCache('village-potentials')
+const loading = ref(!cachedPotentials)
+const loadError = ref('')
 
-const potentials = ref([
+function formatDate(value) {
+  if (!value) return '-'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? '-'
+    : date.toLocaleDateString('id-ID', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+}
+
+const potentials = ref((cachedPotentials ?? []).map(mapPotentialItem))
+
+function mapPotentialItem(item) {
+  return {
+    id: item.potential_id,
+    title: item.title,
+    image: mediaUrl(item.image),
+    date: formatDate(item.created_at ?? item.updated_at),
+    category: item.category ?? '-',
+    status: item.status?.toUpperCase() ?? 'PUBLISHED',
+  }
+}
+
+async function loadPotentials({ background = false } = {}) {
+  if (!background) loading.value = true
+  try {
+    const data = await potentialService.list()
+    const normalized = Array.isArray(data) ? data : []
+    setListCache('village-potentials', normalized)
+    potentials.value = normalized.map(mapPotentialItem)
+    loadError.value = ''
+  } catch (error) {
+    loadError.value = 'Data potensi belum dapat dimuat.'
+    if (!background) potentials.value = []
+    console.error('Gagal memuat potensi:', error)
+  } finally {
+    if (!background) loading.value = false
+  }
+}
+onMounted(() => loadPotentials({ background: Boolean(cachedPotentials) }))
+
+/* const potentialsDummy = [
   { id: 1, title: 'Sentra Kerajinan Anyaman Bambu Desa Sukamaju', image: null, date: '9/08/2026', category: 'UMKM', status: 'PUBLISHED' },
   { id: 2, title: 'Budidaya Ikan Nila Air Tawar Desa Mekarsari', image: null, date: '7/08/2026', category: 'Perikanan', status: 'PUBLISHED' },
   { id: 3, title: 'Pengembangan Lahan Pertanian Jagung Unggul', image: null, date: '5/08/2026', category: 'Pertanian', status: 'DRAFT' },
@@ -34,8 +86,8 @@ const potentials = ref([
   { id: 18, title: 'Lahan Produktif Padi Organik Desa Makmur', image: null, date: '4/07/2026', category: 'Pertanian', status: 'PUBLISHED' },
   { id: 19, title: 'BUMDes Harapan Jaya Unit Pengelolaan Sampah', image: null, date: '2/07/2026', category: 'Bumdes', status: 'PUBLISHED' },
   { id: 20, title: 'Wisata Sungai dan Susur Alam Desa Lestari', image: null, date: '30/06/2026', category: 'Pariwisata', status: 'PUBLISHED' },
-])
-
+]
+*/
 const selectedPotentials = ref([])
 const rowsPerPage = ref(10)
 
@@ -55,15 +107,47 @@ function editPotential(id) {
   router.push({ name: 'village-potential-edit', params: { id } })
 }
 
-function deletePotential(id) {
-  potentials.value = potentials.value.filter(potential => potential.id !== id)
-  selectedPotentials.value = selectedPotentials.value.filter(potential => potential.id !== id)
+function deletePotential(data) {
+  confirm.require({
+    message: `Hapus potensi "${data.title}"?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      try {
+        await potentialService.remove(data.id)
+        await loadPotentials()
+        selectedPotentials.value = selectedPotentials.value.filter(potential => potential.id !== data.id)
+      } catch (error) {
+        window.alert(error.response?.data?.message ?? 'Gagal menghapus potensi.')
+      }
+    },
+  })
 }
 
 function deleteSelected() {
-  const idsToDelete = new Set(selectedPotentials.value.map(potential => potential.id))
-  potentials.value = potentials.value.filter(potential => !idsToDelete.has(potential.id))
-  selectedPotentials.value = []
+  confirm.require({
+    message: `Hapus ${selectedPotentials.value.length} potensi terpilih?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      const idsToDelete = new Set(selectedPotentials.value.map(potential => potential.id))
+
+      try {
+        await Promise.all([...idsToDelete].map(id => potentialService.remove(id)))
+        await loadPotentials()
+        selectedPotentials.value = []
+      } catch (error) {
+        window.alert(error.response?.data?.message ?? 'Gagal menghapus sebagian potensi.')
+        await loadPotentials()
+      }
+    },
+  })
 }
 
 function exportData() {
@@ -106,74 +190,70 @@ function exportData() {
 </script>
 
 <template>
-  <div class="min-h-full px-6 py-6 text-neutral-800 lg:px-8">
+  <div>
 
-    <h1 class="m-0 mb-1 text-[22px] font-bold text-primary-900">
-      Potensi Desa
-    </h1>
+    <div class="mb-6">
+      <h1 class="m-0 text-2xl font-bold text-primary-900">
+        Potensi Desa
+      </h1>
 
-    <p class="m-0 mb-5 text-sm text-neutral-500">
-      Kelola daftar potensi yang dimiliki desa.
-    </p>
+      <p class="m-0 mt-1 text-sm text-neutral-500">
+        Kelola daftar potensi yang dimiliki desa.
+      </p>
+    </div>
 
-    <div class="rounded-xl border border-neutral-200 bg-white shadow-sm">
+    <Card>
+      <template #content>
 
-      <div class="border-b border-neutral-100 px-6 py-4">
-        <h2 class="m-0 text-base font-semibold text-primary-900">
-          Kelola Potensi Desa
-        </h2>
-      </div>
+        <div class="mb-4 flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
+          <div class="flex items-center gap-2">
 
-      <div class="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
-
-        <div class="flex items-center gap-2">
-
-          <Button
-            label="Baru"
-            icon="pi pi-plus"
-            class="rounded-lg border border-transparent bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
-            @click="addNew"
-          />
-
-          <Button
-            label="Hapus"
-            icon="pi pi-trash"
-            severity="secondary"
-            outlined
-            :disabled="selectedPotentials.length === 0"
-            class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
-            @click="deleteSelected"
-          />
-
-        </div>
-
-        <div class="flex items-center gap-2">
-
-          <IconField>
-            <InputIcon class="pi pi-search text-neutral-400" />
-            <InputText
-              v-model="filters.global.value"
-              placeholder="Cari judul atau kategori"
-              class="w-[220px] rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
+            <Button
+              label="Baru"
+              icon="pi pi-plus"
+              class="rounded-lg border border-transparent bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
+              @click="addNew"
             />
-          </IconField>
 
-          <Button
-            label="Export"
-            icon="pi pi-download"
-            severity="secondary"
-            outlined
-            class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
-            @click="exportData"
-          />
+            <Button
+              label="Hapus"
+              icon="pi pi-trash"
+              severity="secondary"
+              outlined
+              :disabled="selectedPotentials.length === 0"
+              class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
+              @click="deleteSelected"
+            />
 
+          </div>
+
+          <div class="flex items-center gap-2">
+
+            <IconField>
+              <InputIcon class="pi pi-search text-neutral-400" />
+              <InputText
+                v-model="filters.global.value"
+                placeholder="Cari judul atau kategori"
+                class="w-[220px] rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
+              />
+            </IconField>
+
+            <Button
+              label="Export"
+              icon="pi pi-download"
+              severity="secondary"
+              outlined
+              class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
+              @click="exportData"
+            />
+
+          </div>
         </div>
-      </div>
 
-      <div class="px-6 pb-4">
         <DataTable
           v-model:selection="selectedPotentials"
           :value="potentials"
+          :loading="loading"
           :filters="filters"
           :paginator="true"
           :rows="rowsPerPage"
@@ -195,7 +275,7 @@ function exportData() {
         >
           <template #empty>
             <div class="px-3 py-8 text-center text-neutral-400">
-              Tidak ada potensi yang cocok dengan pencarian.
+              {{ loadError || 'Tidak ada potensi yang cocok dengan pencarian.' }}
             </div>
           </template>
 
@@ -204,8 +284,15 @@ function exportData() {
           <Column field="title" header="Judul" sortable />
 
           <Column header="Gambar" headerStyle="width: 4rem">
-            <template #body>
-              <div class="h-7 w-10 rounded bg-neutral-200" />
+            <template #body="{ data }">
+              <div class="flex h-7 w-10 items-center justify-center overflow-hidden rounded bg-neutral-200">
+                <img
+                  v-if="data.image"
+                  :src="data.image"
+                  :alt="data.title"
+                  class="h-full w-full object-cover"
+                />
+              </div>
             </template>
           </Column>
 
@@ -241,14 +328,14 @@ function exportData() {
                   severity="danger"
                   class="h-8 w-8 text-neutral-500 hover:bg-danger-50 hover:text-danger-600"
                   title="Hapus"
-                  @click="deletePotential(data.id)"
+                  @click="deletePotential(data)"
                 />
               </div>
             </template>
           </Column>
         </DataTable>
-      </div>
 
-    </div>
+      </template>
+    </Card>
   </div>
 </template>

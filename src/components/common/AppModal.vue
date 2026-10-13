@@ -1,13 +1,5 @@
 <script setup>
-/**
- * AppModal - wrapper di atas PrimeVue Dialog untuk form tambah/edit
- * (dipakai di hampir semua CRUD: tipe surat, berita, potensi, galeri, dst).
- *
- * Contoh pakai:
- *   <AppModal v-model="showModal" title="Tambah Berita" @save="handleSave">
- *     <AppInput v-model="form.judul" label="Judul" />
- *   </AppModal>
- */
+
 import Dialog from 'primevue/dialog'
 import AppButton from './AppButton.vue'
 
@@ -34,6 +26,7 @@ function close() {
     modal
     :header="title"
     :style="{ width }"
+    class="mx-3 md:mx-0"
     @update:visible="(val) => emit('update:modelValue', val)"
   >
     <div class="flex flex-col gap-4 py-2">
@@ -46,3 +39,23 @@ function close() {
     </template>
   </Dialog>
 </template>
+
+<style scoped>
+/* ===== Mobile: dialog tidak mepet ke tepi layar & header/font lebih ringkas ===== */
+@media (max-width: 767px) {
+  :deep(.p-dialog) {
+    width: calc(100vw - 1.5rem) !important;
+    max-width: 100%;
+  }
+  :deep(.p-dialog-header) {
+    padding: 0.9rem 1rem;
+    font-size: 0.95rem;
+  }
+  :deep(.p-dialog-content) {
+    padding: 0.75rem 1rem;
+  }
+  :deep(.p-dialog-footer) {
+    padding: 0.75rem 1rem;
+  }
+}
+</style>

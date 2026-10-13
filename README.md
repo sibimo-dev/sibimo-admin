@@ -78,6 +78,20 @@ Aplikasi ini berkomunikasi dengan **SIBIMO Backend** menggunakan REST API.
 
 Seluruh proses autentikasi, manajemen data, dan layanan surat dilakukan melalui API sehingga dashboard hanya berfokus pada penyajian antarmuka pengguna.
 
+### Notifikasi realtime (Pusher)
+
+Notifikasi admin menggunakan Pusher Channels pada private channel. Tambahkan
+variable berikut ke file `.env` lokal tanpa memasukkan secret ke repository:
+
+```env
+VITE_PUSHER_APP_KEY=
+VITE_PUSHER_APP_CLUSTER=ap1
+VITE_PUSHER_AUTH_ENDPOINT=http://localhost:8000/api/broadcasting/auth
+```
+
+Jika variable Pusher belum diisi, notifikasi tetap berjalan menggunakan polling
+sebagai fallback.
+
 ---
 
 ## License
