@@ -148,6 +148,8 @@ function seedPeople(existingLevels = []) {
       desc: person.desc ?? '',
       photo: person.photo ?? null,
       photoFile: null,
+      signature: person.signature ?? null,
+      signatureFile: null,
     }))
   ))
 }
@@ -192,7 +194,15 @@ const personDialogVisible = ref(false)
 const editingPersonId = ref(null)
 const personDialogTitle = computed(() => (editingPersonId.value ? 'Edit Pamong' : 'Tambah Pamong'))
 
-const emptyPersonForm = () => ({ jabatan: null, nama: '', desc: '', photo: null, photoFile: null })
+const emptyPersonForm = () => ({
+  jabatan: null,
+  nama: '',
+  desc: '',
+  photo: null,
+  photoFile: null,
+  signature: null,
+  signatureFile: null,
+})
 const personForm = reactive(emptyPersonForm())
 
 function openNewPerson() {
@@ -209,6 +219,8 @@ function openEditPerson(person) {
     desc: person.desc,
     photo: person.photo,
     photoFile: null,
+    signature: person.signature,
+    signatureFile: null,
   })
   personDialogVisible.value = true
 }
@@ -251,6 +263,7 @@ function buildLevels() {
       title: person.jabatan,
       desc: person.desc?.trim() ?? '',
       photo: person.photoFile ? `upload:${person.id}` : person.photo,
+      signature: person.signatureFile ? `upload-signature:${person.id}` : person.signature,
     })
   })
 
@@ -267,8 +280,10 @@ async function persistStructure() {
   saving.value = true
   try {
     const files = form.people
-      .filter((person) => person.photoFile)
-      .map((person) => ({ token: person.id, file: person.photoFile }))
+      .flatMap((person) => [
+        person.photoFile ? { token: person.id, file: person.photoFile } : null,
+        person.signatureFile ? { token: person.id, file: person.signatureFile, type: 'signature' } : null,
+      ].filter(Boolean))
 
     const saved = await saveOrganizationalStructure({
       id: form.organizational_structure_id,
@@ -312,6 +327,8 @@ async function savePersonDialog() {
             desc: personForm.desc.trim(),
             photo: personForm.photoFile ? personForm.photo : p.photo,
             photoFile: personForm.photoFile ?? p.photoFile,
+            signature: personForm.signature,
+            signatureFile: personForm.signatureFile,
           }
         : p
     )
@@ -325,6 +342,8 @@ async function savePersonDialog() {
         desc: personForm.desc.trim(),
         photo: personForm.photo,
         photoFile: personForm.photoFile,
+        signature: personForm.signature,
+        signatureFile: personForm.signatureFile,
       },
     ]
   }
@@ -398,6 +417,67 @@ function onPersonPhotoChange(event) {
     personForm.photoFile = file
   }
   reader.readAsDataURL(file)
+}
+
+const personSignatureInput = ref(null)
+
+function triggerPersonSignatureUpload() {
+  personSignatureInput.value?.click()
+}
+
+function removePersonSignature() {
+  personForm.signature = null
+  personForm.signatureFile = null
+}
+
+function compressSignature(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    const reader = new FileReader()
+    reader.onload = () => {
+      image.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = 600
+        canvas.height = 220
+        const context = canvas.getContext('2d')
+        context.clearRect(0, 0, canvas.width, canvas.height)
+        const scale = Math.min((canvas.width - 40) / image.width, (canvas.height - 40) / image.height)
+        const width = image.width * scale
+        const height = image.height * scale
+        context.drawImage(image, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height)
+        canvas.toBlob((blob) => {
+          if (!blob) return reject(new Error('Gagal mengompres tanda tangan.'))
+          resolve(new File([blob], 'signature.png', { type: 'image/png' }))
+        }, 'image/png')
+      }
+      image.onerror = reject
+      image.src = reader.result
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+async function onPersonSignatureChange(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    toast.add({ severity: 'error', summary: 'File tanda tangan harus berupa gambar', life: 2500 })
+    return
+  }
+
+  try {
+    const compressed = await compressSignature(file)
+    const reader = new FileReader()
+    reader.onload = () => {
+      personForm.signature = reader.result
+      personForm.signatureFile = compressed
+    }
+    reader.readAsDataURL(compressed)
+  } catch {
+    toast.add({ severity: 'error', summary: 'Gagal memproses tanda tangan', life: 2500 })
+  }
 }
 </script>
 
@@ -533,6 +613,7 @@ function onPersonPhotoChange(event) {
       @hide="closePersonDialog"
     >
       <input ref="personPhotoInput" type="file" accept="image/*" class="hidden" @change="onPersonPhotoChange" />
+      <input ref="personSignatureInput" type="file" accept="image/*" class="hidden" @change="onPersonSignatureChange" />
 
       <div class="flex flex-col gap-4">
         <!-- Upload foto: selebar field lain, preview jelas terlihat -->
@@ -558,6 +639,21 @@ function onPersonPhotoChange(event) {
               <i class="pi pi-camera text-sm" />
             </button>
           </div>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[13px] font-semibold text-slate-700">Tanda Tangan Digital</label>
+          <div class="flex items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
+            <div class="flex h-20 flex-1 items-center justify-center overflow-hidden rounded bg-white">
+              <img v-if="personForm.signature" :src="personForm.signature" alt="Tanda tangan digital" class="h-full w-full object-contain" />
+              <span v-else class="text-xs text-slate-400">Belum ada tanda tangan</span>
+            </div>
+            <div class="flex shrink-0 flex-col gap-1.5">
+              <Button label="Upload" icon="pi pi-upload" size="small" outlined @click="triggerPersonSignatureUpload" />
+              <Button v-if="personForm.signature" label="Hapus" icon="pi pi-trash" size="small" text severity="danger" @click="removePersonSignature" />
+            </div>
+          </div>
+          <small class="text-xs text-slate-400">Otomatis dinormalisasi ke PNG transparan 600 × 220 px.</small>
         </div>
 
         <!-- Jabatan (dropdown) -->

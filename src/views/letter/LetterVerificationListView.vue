@@ -12,12 +12,15 @@ const route = useRoute()
 const { rows, fetchRows } = useLetterStore()
 
 onMounted(async () => {
+  window.addEventListener('sibimo:letter-request-updated', fetchRows)
   try {
     await fetchRows()
   } catch (error) {
     console.error('Gagal memuat antrean verifikasi:', error)
   }
 })
+
+onBeforeUnmount(() => window.removeEventListener('sibimo:letter-request-updated', fetchRows))
 
 // sortable: true -> header kolom bisa diklik untuk sort, konsisten dengan
 // tabel Pengelolaan Surat & Berita. Sumber dibiarkan tanpa sort.

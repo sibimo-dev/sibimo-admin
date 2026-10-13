@@ -32,15 +32,26 @@ const bellLabel = computed(() =>
 
 function relativeTime(iso) {
   if (!iso) return ''
-  // lastFetchedAt dibaca supaya teks "x menit lalu" ikut segar setiap polling
   const now = store.lastFetchedAt ?? Date.now()
-  const diffSec = Math.round((new Date(iso).getTime() - now) / 1000)
+  const target = new Date(iso).getTime()
+  if (Number.isNaN(target)) return ''
+
+  const diffSec = Math.round((target - now) / 1000)
   const abs = Math.abs(diffSec)
-  const rtf = new Intl.RelativeTimeFormat('id', { numeric: 'auto' })
+
   if (abs < 60) return 'Baru saja'
-  if (abs < 3600) return rtf.format(Math.round(diffSec / 60), 'minute')
-  if (abs < 86400) return rtf.format(Math.round(diffSec / 3600), 'hour')
-  return rtf.format(Math.round(diffSec / 86400), 'day')
+  if (abs < 3600) return `${Math.floor(abs / 60)} menit lalu`
+  if (abs < 86400) return `${Math.floor(abs / 3600)} jam lalu`
+
+  const days = Math.floor(abs / 86400)
+  if (days === 1) return 'Kemarin'
+  if (days < 7) return `${days} hari lalu`
+
+  return new Date(iso).toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
 }
 
 function toggle(event) {

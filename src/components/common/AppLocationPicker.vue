@@ -20,7 +20,7 @@ const props = defineProps({
 const emit = defineEmits(['update:start', 'update:end'])
 
 // Fallback center when no point has been chosen yet. Adjust to your village.
-const DEFAULT_CENTER = [-7.7075, 110.429]
+const DEFAULT_CENTER = [-7.7012, 110.463]
 const DEFAULT_ZOOM = 15
 
 const mapEl = ref(null)
@@ -167,7 +167,7 @@ onMounted(() => {
     { maxZoom: 19, attribution: 'Tiles &copy; Esri' },
   )
 
-  satellite.addTo(map)
+  street.addTo(map)
   L.control.layers({ Satelit: satellite, Peta: street }, null, { position: 'topright' }).addTo(map)
 
   map.on('click', handleMapClick)

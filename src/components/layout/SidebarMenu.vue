@@ -51,8 +51,9 @@ const menuGroups = [
       { label: 'Berita & Pengumuman', icon: 'pi pi-megaphone', route: '/news', permission: 'berita' },
       { label: 'Agenda', icon: 'pi pi-calendar', route: '/agenda', permission: 'agenda' },
       { label: 'Galeri', icon: 'pi pi-images', route: '/gallery', permission: 'gallery' },
-      { label: 'Pembangunan', icon: 'pi pi-building', route: '/development' },
-      { label: 'Produk Hukum', icon: 'pi pi-file-pdf', route: '/legal-product' },
+      { label: 'Pembangunan', icon: 'pi pi-building', route: '/development', permission: 'pembangunan' },
+      { label: 'Produk Hukum', icon: 'pi pi-file-pdf', route: '/legal-product', permission: 'produk-hukum' },
+      { label: 'Pengaturan Footer', icon: 'pi pi-window-maximize', route: '/footer', permission: 'footer' },
     ],
   },
   {
