@@ -16,6 +16,7 @@ import {
   getOrganizationalStructures,
   saveOrganizationalStructure,
 } from '@/services/profile.service'
+import { mediaUrl } from '@/services/media'
 
 const toast = useToast()
 const confirm = useConfirm()
@@ -60,6 +61,14 @@ function initials(name) {
     .slice(0, 2)
     .map((w) => w.charAt(0).toUpperCase())
     .join('') || '?'
+}
+
+// Foto lama berasal dari storage backend, sedangkan foto baru di modal masih
+// berupa data URL. Keduanya harus bisa dipakai sebagai src di admin.
+function photoSrc(value) {
+  if (!value) return ''
+  if (/^(data|blob):/i.test(String(value))) return value
+  return mediaUrl(value)
 }
 
 /* Jabatan kustom yang pernah ditambahkan admin (di luar JABATAN_OPTIONS). */
@@ -567,6 +576,8 @@ async function onPersonSignatureChange(event) {
           <Column header="Foto" headerStyle="width: 4rem">
             <template #body="{ data }">
               <Avatar
+                :image="photoSrc(data.photo) || undefined"
+                :label="!photoSrc(data.photo) ? initials(data.nama) : undefined"
                 :image="data.photo || undefined"
                 :label="!data.photo ? initials(data.nama) : undefined"
                 shape="circle"
@@ -624,6 +635,7 @@ async function onPersonSignatureChange(event) {
               class="flex h-44 w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 hover:border-blue-400"
               @click="triggerPersonPhotoUpload"
             >
+              <img v-if="personForm.photo" :src="photoSrc(personForm.photo)" alt="Foto pamong" class="h-full w-full object-contain" />
               <img v-if="personForm.photo" :src="personForm.photo" alt="Foto pamong" class="h-full w-full object-contain" />
               <div v-else class="flex flex-col items-center gap-1.5 text-slate-400">
                 <i class="pi pi-camera text-2xl" />
@@ -645,6 +657,7 @@ async function onPersonSignatureChange(event) {
           <label class="text-[13px] font-semibold text-slate-700">Tanda Tangan Digital</label>
           <div class="flex items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
             <div class="flex h-20 flex-1 items-center justify-center overflow-hidden rounded bg-white">
+              <img v-if="personForm.signature" :src="photoSrc(personForm.signature)" alt="Tanda tangan digital" class="h-full w-full object-contain" />
               <img v-if="personForm.signature" :src="personForm.signature" alt="Tanda tangan digital" class="h-full w-full object-contain" />
               <span v-else class="text-xs text-slate-400">Belum ada tanda tangan</span>
             </div>
