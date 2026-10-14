@@ -1,6 +1,10 @@
 /**
  * Route module untuk modul Persuratan (Letter Requests).
  * Mengikuti tabel `letter_requests` di ERD backend.
+ *
+ * Verifikasi, otorisasi, dan preview surat kini digabung di satu halaman
+ * detail (LetterDetailView). Route lama dialihkan supaya link lama
+ * (mis. dari notifikasi) tidak rusak.
  */
 export default [
   {
@@ -10,33 +14,36 @@ export default [
     meta: { breadcrumb: ['Persuratan', 'Pengelolaan Surat'] },
   },
   {
+    // Harus di atas 'letter/:id' supaya "create" tidak dibaca sebagai :id.
     path: 'letter/create',
     name: 'letter-create',
     component: () => import('@/views/letter/LetterCreateView.vue'),
     meta: { breadcrumb: ['Persuratan', 'Pengelolaan Surat', 'Tambah Surat'] },
   },
   {
+    path: 'letter/:id',
+    name: 'letter-detail',
+    component: () => import('@/views/letter/LetterDetailView.vue'),
+    meta: { breadcrumb: ['Persuratan', 'Pengelolaan Surat', 'Detail'] },
+  },
+
+  /* ---- Pengalihan route lama ---- */
+  {
     path: 'letter/verification',
-    name: 'letter-verification',
-    component: () => import('@/views/letter/LetterVerificationListView.vue'),
-    meta: { breadcrumb: ['Persuratan', 'Verifikasi Surat'] },
+    redirect: { name: 'letter-list' },
+  },
+  {
+    path: 'letter/authorization',
+    redirect: { name: 'letter-list' },
   },
   {
     path: 'letter/verification/:id',
     name: 'letter-verification-detail',
-    component: () => import('@/views/letter/LetterVerificationView.vue'),
-    meta: { breadcrumb: ['Persuratan', 'Verifikasi Surat', 'Detail'] },
-  },
-  {
-    path: 'letter/authorization',
-    name: 'letter-authorization',
-    component: () => import('@/views/letter/LetterAuthorizationListView.vue'),
-    meta: { breadcrumb: ['Persuratan', 'Otorisasi Surat'] },
+    redirect: (to) => ({ name: 'letter-detail', params: { id: to.params.id } }),
   },
   {
     path: 'letter/authorization/:id',
     name: 'letter-authorization-detail',
-    component: () => import('@/views/letter/LetterAuthorizationView.vue'),
-    meta: { breadcrumb: ['Persuratan', 'Otorisasi Surat', 'Detail'] },
+    redirect: (to) => ({ name: 'letter-detail', params: { id: to.params.id } }),
   },
 ]

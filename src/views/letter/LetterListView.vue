@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { useToast } from 'primevue/usetoast'
 import Tag from 'primevue/tag'
 import Dialog from 'primevue/dialog'
 import SelectButton from 'primevue/selectbutton'
@@ -17,9 +16,7 @@ import AppInput from '@/components/common/AppInput.vue'
 import { useLetterStore } from '@/stores/useLetterStore'
 
 const router = useRouter()
-const toast = useToast()
-const { rows, fetchRows, getLetterPdf, openPdfBlob, downloadPdfBlob } = useLetterStore()
-const pdfLoadingId = ref(null)
+const { rows, fetchRows } = useLetterStore()
 
 onMounted(async () => {
   window.addEventListener('sibimo:letter-request-updated', fetchRows)
@@ -44,7 +41,7 @@ const columns = [
   { field: 'source', header: 'Sumber' },
 ]
 
-const statusFilters = ['Semua Status', 'Pending', 'Diverifikasi', 'Disetujui', 'Ditolak']
+const statusFilters = ['Semua Status', 'Pending', 'Selesai', 'Ditolak']
 const activeFilter = ref('Semua Status')
 
 const searchQuery = ref('')
@@ -67,7 +64,7 @@ function sortValue(row, field) {
 }
 
 const filteredRows = computed(() => {
-  let result = [...rows.value]
+  let result = rows.value.map((r) => ({ ...r, status: toDisplayStatus(r) }))
 
   if (activeFilter.value !== 'Semua Status') {
     result = result.filter((r) => r.status === activeFilter.value)
@@ -95,66 +92,29 @@ const filteredRows = computed(() => {
   return result
 })
 
+// Status backend disederhanakan jadi 3 label untuk tampilan.
+const displayStatusByBackend = {
+  submitted: 'Pending', // menunggu verifikasi
+  verified: 'Pending', // menunggu otorisasi
+  authorized: 'Selesai',
+  completed: 'Selesai',
+  rejected: 'Ditolak',
+}
+
+function toDisplayStatus(row) {
+  return displayStatusByBackend[row.backendStatus] ?? row.status
+}
+
 const statusColor = {
   Pending: 'warn',
-  Diverifikasi: 'info',
-  Disetujui: 'success',
+  Selesai: 'success',
   Ditolak: 'danger',
 }
 
-const actionLabel = {
-  Pending: 'Verifikasi',
-  Diverifikasi: 'Otorisasi',
+// Verifikasi, otorisasi, cetak, dan unduh PDF kini ada di halaman detail.
+function goToDetail(data) {
+  router.push({ path: `/letter/${data.id}`, query: { highlight: data.requestId } })
 }
-
-const actionRoute = {
-  Pending: { name: 'letter-verification' },
-  Diverifikasi: { name: 'letter-authorization' },
-}
-
-function handleAction(data) {
-  const target = actionRoute[data.status]
-  if (!target) return
-  router.push({
-    ...target,
-    query: { highlight: data.requestId },
-  })
-}
-
-async function previewPdf(data) {
-  pdfLoadingId.value = data.id
-  try {
-    const blob = await getLetterPdf(data.id)
-    openPdfBlob(blob)
-  } catch (error) {
-    toast.add({
-      severity: 'error',
-      summary: 'Preview PDF gagal',
-      detail: error.response?.data?.message ?? 'Template surat belum tersedia.',
-      life: 3000,
-    })
-  } finally {
-    pdfLoadingId.value = null
-  }
-}
-
-async function downloadLetterPdf(data) {
-  pdfLoadingId.value = data.id
-  try {
-    const blob = await getLetterPdf(data.id, true)
-    downloadPdfBlob(blob, `${data.requestId || 'surat'}.pdf`)
-  } catch (error) {
-    toast.add({
-      severity: 'error',
-      summary: 'Download PDF gagal',
-      detail: error.response?.data?.message ?? 'Template surat belum tersedia.',
-      life: 3000,
-    })
-  } finally {
-    pdfLoadingId.value = null
-  }
-}
-
 
 function goToTambahSurat() {
   router.push('/letter/create')
@@ -531,32 +491,19 @@ function downloadExcel() {
           @sort="handleSort"
         >
           <template #status="{ data }">
-            <Tag :value="data.status" :severity="statusColor[data.status]" />
+            <Tag
+              :value="data.status"
+              :severity="statusColor[data.status]"
+              class="!whitespace-nowrap"
+            />
           </template>
           <template #actions="{ data }">
             <AppButton
-              label="Preview"
-              variant="outline"
-              size="small"
-              :disabled="pdfLoadingId === data.id"
-              @click="previewPdf(data)"
-            />
-            <AppButton
-              v-if="data.backendStatus === 'authorized'"
-              label="PDF"
-              variant="outline"
-              size="small"
-              :disabled="pdfLoadingId === data.id"
-              @click="downloadLetterPdf(data)"
-            />
-            <AppButton
-              v-if="actionLabel[data.status]"
-              :label="actionLabel[data.status]"
+              label="Detail"
               variant="primary"
               size="small"
-              @click="handleAction(data)"
+              @click="goToDetail(data)"
             />
-            <span v-else class="text-slate-300 text-sm">—</span>
           </template>
         </AppDataTable>
       </div>
