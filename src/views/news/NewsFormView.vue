@@ -112,9 +112,24 @@ function categoryErrorMessage(error) {
   return error?.response?.data?.message ?? 'Kategori gagal ditambahkan.'
 }
 
+// Berita hanya punya satu kategori: mencentang satu kategori otomatis melepas yang lain.
+function selectOnlyCategory(option) {
+  categoryOptions.value.forEach((item) => {
+    if (item !== option) item.checked = false
+  })
+}
+
 async function addCategory() {
   const categoryName = newCategoryName.value.trim()
   if (!categoryName || addingCategory.value) return
+
+  const duplicate = categoryOptions.value.some(
+    option => option.label.trim().toLowerCase() === categoryName.toLowerCase(),
+  )
+  if (duplicate) {
+    categoryError.value = `Kategori "${categoryName}" sudah ada.`
+    return
+  }
 
   addingCategory.value = true
   categoryError.value = ''
@@ -129,6 +144,12 @@ async function addCategory() {
       if (option.id !== created.slug) option.checked = false
     })
     newCategoryName.value = ''
+    toast.add({
+      severity: 'success',
+      summary: `Kategori "${created.category_name}" ditambahkan`,
+      detail: 'Kategori tampil di halaman publik setelah ada berita terbit di dalamnya.',
+      life: 3500,
+    })
   } catch (error) {
     categoryError.value = categoryErrorMessage(error)
   } finally {
@@ -528,14 +549,20 @@ function moveToTrash() {
               </div>
               <small v-if="categoryError" class="text-xs text-red-600">{{ categoryError }}</small>
 
-              <div class="flex flex-col gap-2">
+              <!-- Daftar kategori bisa di-scroll agar sidebar tidak memanjang bila kategori makin banyak -->
+              <div class="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1">
                 <div
                   v-for="option in categoryOptions"
                   :key="option.categoryId"
                   class="flex items-center justify-between gap-2 text-[13px] text-neutral-700"
                 >
                   <div v-if="editingCategoryId !== option.categoryId" class="flex min-w-0 flex-1 items-center gap-2">
-                    <Checkbox v-model="option.checked" binary class="accent-primary-700" />
+                    <Checkbox
+                      v-model="option.checked"
+                      binary
+                      class="accent-primary-700"
+                      @update:modelValue="(value) => value && selectOnlyCategory(option)"
+                    />
                     <span class="truncate">{{ option.label }}</span>
                   </div>
                   <InputText
