@@ -1,29 +1,4 @@
 <script setup>
-/**
- * Dashboard - halaman utama admin SIBIMO.
- *
- * Statistik di halaman ini TIDAK lagi bergantung ke satu endpoint ringkasan
- * (/dashboard/summary) yang datanya sering tidak lengkap (mis. field jenis
- * layanan tidak pernah dikirim). Sebagai gantinya, setiap kartu statistik
- * konek LANGSUNG ke sumber data modul masing-masing:
- *   - Persuratan   -> useLetterStore (store yang sama dipakai halaman Surat)
- *   - Data Warga   -> citizen.service (getCitizens)
- *   - Pengaduan    -> complaint.service (getComplaints)
- *   - Perpustakaan -> library.service (getLoans)
- *   - Agenda       -> content.service (agendaService)
- *
- * Dengan begitu statistik selalu sinkron dengan data asli tiap layanan dan
- * otomatis berubah ketika ada aktivitas di halaman lain (mis. surat baru
- * diverifikasi, atau warga baru ditambahkan).
- *
- * Catatan: dropdown "Periode" dan tombol "Filter" pada tabel surat SUDAH
- * DIHAPUS. Semua angka statistik di sini adalah TOTAL keseluruhan data,
- * bukan angka yang dipotong per periode -- karena widget "Aduan Terbaru"
- * dan "Agenda Terdekat" pun dari awal memang hanya menampilkan item
- * ter-baru/ter-dekat (di-sort lalu diambil beberapa teratas), tidak pernah
- * benar-benar berubah walau ada filter periode. Supaya tidak membingungkan
- * dan tidak ada state yang tidak nyambung, filter periode dihapus total.
- */
 import { ref, computed, onMounted, watch } from 'vue'
 import Tag from 'primevue/tag'
 import DataTable from 'primevue/datatable'
@@ -47,7 +22,6 @@ const authStore = useAuthStore()
 const loading = ref(false)
 const loadError = ref('')
 
-// === Angka berjalan (count-up) supaya perpindahan angka terasa hidup ===
 function useAnimatedNumber(source) {
   const display = ref(0)
   let raf = null
@@ -71,7 +45,6 @@ function useAnimatedNumber(source) {
   return display
 }
 
-// === Tema warna per kartu (kelas Tailwind ditulis literal agar ke-detect JIT) ===
 const THEME = {
   primary: {
     bar: 'bg-gradient-to-r from-primary-400 via-primary-500 to-primary-600',
@@ -109,14 +82,12 @@ const TONE = {
   info: 'bg-primary-50 text-primary-700',
 }
 
-// === Sumber data mentah tiap layanan ===
 const { rows: letterRows, fetchRows: fetchLetterRows } = useLetterStore()
 const citizens = ref([])
 const complaints = ref([])
 const loans = ref([])
 const agendas = ref([])
 
-// --- Statistik per layanan: TOTAL keseluruhan data, tidak dipotong periode ---
 const letterStats = computed(() => ({
   total: letterRows.value.length,
   pending: letterRows.value.filter((r) => r.status === 'Pending').length,
@@ -146,8 +117,6 @@ const citizenDisplay = useAnimatedNumber(computed(() => citizenStats.value.total
 const complaintDisplay = useAnimatedNumber(computed(() => complaintStats.value.total))
 const loanDisplay = useAnimatedNumber(computed(() => loanStats.value.active))
 
-// Persuratan cukup 1 kartu (rincian status ditampilkan sebagai badge kecil di
-// dalamnya) -- sebelumnya ada 4 kartu terpisah khusus persuratan saja.
 const statCards = computed(() => [
   {
     key: 'letters',
@@ -201,8 +170,6 @@ const statCards = computed(() => [
   },
 ])
 
-// === Tabel pengajuan surat terbaru -- diambil langsung dari useLetterStore ===
-// Tidak ada lagi filter periode; hanya tab status + kolom cari.
 const statusTabs = [
   { label: 'Semua', value: 'semua' },
   { label: 'Menunggu', value: 'Pending' },
@@ -264,9 +231,6 @@ function formatRelativeTime(isoString) {
   return `${days} hari lalu`
 }
 
-// === Widget: Aduan terbaru -- selalu 4 aduan TERBARU dari seluruh data
-// (bukan hasil filter periode apa pun, sesuai perilaku yang memang sudah
-// berjalan sebelumnya). ===
 const complaintStatusLabel = { Submitted: 'Baru', 'In Progress': 'Diproses', Resolved: 'Selesai', Rejected: 'Ditolak' }
 const complaintBadge = {
   Baru: 'bg-white text-primary-700',
@@ -287,8 +251,6 @@ const recentComplaints = computed(() =>
     })),
 )
 
-// === Widget: Agenda terdekat -- selalu 4 agenda TERDEKAT ke depan dari
-// seluruh data (bukan hasil filter periode apa pun). ===
 function formatAgendaDate(dateString) {
   const date = new Date(`${String(dateString ?? '').slice(0, 10)}T00:00:00`)
   if (Number.isNaN(date.getTime())) return '-'
@@ -321,13 +283,10 @@ const upcomingAgenda = computed(() => {
     }))
 })
 
-// === Muat semua sumber data layanan secara paralel ===
 async function loadDashboard() {
   loading.value = true
   loadError.value = ''
 
-  // Muat surat secara paralel, tetapi jangan menahan seluruh dashboard jika
-  // endpoint persuratan lebih lambat dari widget lainnya.
   void fetchLetterRows().catch((error) => {
     console.error('Gagal memuat pengajuan surat untuk dashboard:', error)
   })
@@ -353,7 +312,6 @@ onMounted(loadDashboard)
 
 <template>
   <div class="flex flex-col gap-5">
-    <!-- Header: dropdown "Periode" sudah dihapus, statistik selalu total keseluruhan -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div>
         <h1 class="text-2xl font-bold text-neutral-900">
@@ -380,8 +338,7 @@ onMounted(loadDashboard)
       {{ loadError }}
     </p>
 
-    <!-- Stat cards: masing-masing konek langsung ke data asli modul terkait -->
-    <TransitionGroup
+\    <TransitionGroup
       tag="div"
       appear
       enter-active-class="transition duration-500 ease-out motion-reduce:transition-none"
@@ -397,25 +354,22 @@ onMounted(loadDashboard)
         :class="THEME[card.theme].ringHover"
         :style="{ transitionDelay: `${idx * 90}ms` }"
       >
-        <!-- garis aksen warna di atas kartu (outline berwarna) -->
         <span class="absolute inset-x-0 top-0 h-1.5 rounded-t-2xl" :class="THEME[card.theme].bar" />
-        <!-- blob dekoratif -->
         <span
           class="pointer-events-none absolute -right-6 -top-6 w-28 h-28 rounded-full opacity-10 blur-2xl transition-opacity duration-300 group-hover:opacity-20"
           :class="THEME[card.theme].blob"
         />
 
         <div class="relative flex items-start justify-between mb-3">
-          <div>
-            <p class="text-sm text-neutral-500 font-medium">{{ card.label }}</p>
-            <p class="text-[11px] text-neutral-400 mt-0.5">{{ card.hint }}</p>
+          <div class="min-w-0 pr-2">
+            <p class="text-base lg:text-lg font-bold leading-tight tracking-tight text-neutral-800">{{ card.label }}</p>
+            <p class="text-xs font-semibold text-neutral-500 mt-1">{{ card.hint }}</p>
           </div>
           <div
             class="relative w-11 h-11 rounded-xl flex items-center justify-center shrink-0 text-white shadow-md transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3"
             :class="THEME[card.theme].iconBg"
           >
             <i :class="card.icon" class="text-lg" />
-            <!-- Live dot: pakai animate-ping bawaan Tailwind, bukan keyframes custom -->
             <span class="absolute -top-1 -right-1 flex h-2.5 w-2.5">
               <span class="absolute inline-flex h-full w-full rounded-full bg-success-400 opacity-75 animate-ping motion-reduce:animate-none" />
               <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-success-500 border-2 border-white" />
@@ -443,19 +397,11 @@ onMounted(loadDashboard)
       </router-link>
     </TransitionGroup>
 
-    <!-- Tabel + widget samping.
-         Dipakai grid 4-kolom yang SAMA persis dengan grid stat card di atas
-         (lg:grid-cols-4), lalu list surat mengambil 3 kolom dan widget
-         kanan mengambil 1 kolom -- jadi lebar & posisi widget kanan otomatis
-         sejajar/pas dengan kartu "Peminjaman Buku Aktif" di atasnya. -->
     <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 items-start">
-      <!-- Pengajuan surat -->
       <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden min-w-0 lg:col-span-3">
         <div class="p-5 pb-4">
           <p class="text-base font-semibold text-neutral-900 mb-3">Pengajuan Surat Terbaru</p>
 
-          <!-- Tidak ada lagi tombol Filter/periode: cuma tab status (kiri,
-               boleh scroll sendiri) + kolom cari (kanan, shrink-0). -->
           <div class="flex flex-nowrap items-center justify-between gap-2">
             <div class="min-w-0 overflow-x-auto">
               <Tabs v-model:value="activeTab" unstyled :pt="{ root: { class: 'w-fit' } }">
@@ -559,11 +505,7 @@ onMounted(loadDashboard)
         </DataTable>
       </div>
 
-      <!-- Widget kanan: col-span-1 dari grid 4-kolom yang sama dengan stat
-           card di atas, jadi lebarnya otomatis identik dan sejajar dengan
-           kolom "Peminjaman Buku Aktif" persis di atasnya. -->
       <div class="flex flex-col gap-3 min-w-0 lg:col-span-1">
-        <!-- Aduan terbaru -->
         <div class="bg-primary-600 rounded-xl p-4 text-white shadow-md flex flex-col">
           <p class="text-sm font-semibold flex items-center gap-2 mb-3">
             <i class="pi pi-megaphone text-base" />
@@ -594,7 +536,6 @@ onMounted(loadDashboard)
           </router-link>
         </div>
 
-        <!-- Agenda terdekat -->
         <div class="bg-gradient-to-br from-primary-700 to-primary-950 rounded-xl p-4 text-white shadow-md flex flex-col">
           <p class="text-sm font-semibold flex items-center gap-2 mb-3">
             <i class="pi pi-calendar text-base" />
@@ -602,7 +543,6 @@ onMounted(loadDashboard)
           </p>
           <div v-if="upcomingAgenda.length" class="flex flex-col">
             <div v-for="(item, idx) in upcomingAgenda" :key="item.id" class="flex gap-3">
-              <!-- Dot + garis penghubung -->
               <div class="flex flex-col items-center">
                 <span class="w-2.5 h-2.5 rounded-full bg-white border-2 border-white/40 shrink-0 mt-1" />
                 <span
