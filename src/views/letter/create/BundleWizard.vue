@@ -24,7 +24,7 @@ import { copyText } from "./copyText";
 import WizardStepper from "./WizardStepper.vue";
 import { applyAliases, buildAliasIndex, display, fillForm, filledRows, fmtDate, normalizeDocs, scrollTop, validateDocs, validateFields, MAX_FILE_MB } from "./formLogic";
 import { HUES, SECTION_HUES, hue } from "./pastel";
-import { LETTER_SOURCE, submitLetterBundle } from "@/services/letter-create.service";
+import { LETTER_SOURCE, getLetterRequestError, submitLetterBundle } from "@/services/letter-create.service";
 
 const props = defineProps({
   bundle: { type: Object, required: true }, // lihat data/letterBundles.js
@@ -292,9 +292,13 @@ function buildPayload() {
     bundle: props.bundle.slug,
     letters: selectedLetters.value.map((l) => ({
       id: l.id,
+      // Kode pada paket adalah kode tampilan lama (contoh KHN). Kirim slug
+      // supaya service selalu menerjemahkannya ke kode letter_types backend.
+      slug: l.slug,
       code: l.code,
       title: l.title,
       fields: Object.fromEntries(sectionsOf(l).flatMap((s) => s.fields).map((f) => [f.key, form[f.key]])),
+      fieldDefinitions: sectionsOf(l).flatMap((s) => s.fields.map(({ key, label }) => ({ key, label, section: s.title }))),
       files: docsOf(l).filter((d) => files[d.id]).map((d) => ({ label: d.label, file: files[d.id] })),
     })),
   };
@@ -305,7 +309,7 @@ async function submit() {
     const res = await submitLetterBundle(buildPayload());
     Object.assign(result, { open: true, ok: true, codes: res.codes, message: "" });
   } catch (err) {
-    Object.assign(result, { open: true, ok: false, codes: [], message: err?.message || "Terjadi kesalahan saat mengirim pengajuan." });
+    Object.assign(result, { open: true, ok: false, codes: [], message: getLetterRequestError(err, "Terjadi kesalahan saat mengirim pengajuan.") });
   } finally {
     isSubmitting.value = false;
   }

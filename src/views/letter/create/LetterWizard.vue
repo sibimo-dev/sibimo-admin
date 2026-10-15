@@ -17,7 +17,7 @@ import WizardStepper from "./WizardStepper.vue";
 import { copyText } from "./copyText";
 import { display, fillForm, filledRows, fmtDate, normalizeDocs, scrollTop, validateDocs, validateFields, MAX_FILE_MB } from "./formLogic";
 import { hue as getHue, HUES, SECTION_HUES } from "./pastel";
-import { LETTER_SOURCE, submitSingleLetter } from "@/services/letter-create.service";
+import { LETTER_SOURCE, getLetterRequestError, submitSingleLetter } from "@/services/letter-create.service";
 
 const props = defineProps({
   title: { type: String, required: true },
@@ -115,6 +115,7 @@ function buildPayload() {
     code: props.code,
     title: props.title,
     fields: Object.fromEntries(allSections.value.flatMap((s) => s.fields).map((f) => [f.key, form[f.key]])),
+    fieldDefinitions: allSections.value.flatMap((s) => s.fields.map(({ key, label }) => ({ key, label, section: s.title }))),
     files: docList.value.filter((d) => files[d.id]).map((d) => ({ label: d.label, file: files[d.id] })),
   };
 }
@@ -125,7 +126,7 @@ async function submit() {
     const res = await submitSingleLetter(buildPayload());
     Object.assign(result, { open: true, ok: true, code: res.code, message: "" });
   } catch (err) {
-    Object.assign(result, { open: true, ok: false, code: "", message: err?.message || "Terjadi kesalahan saat mengirim pengajuan." });
+    Object.assign(result, { open: true, ok: false, code: "", message: getLetterRequestError(err, "Terjadi kesalahan saat mengirim pengajuan.") });
   } finally {
     isSubmitting.value = false;
   }
