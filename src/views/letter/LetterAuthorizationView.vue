@@ -43,8 +43,8 @@ const signatureOptions = [
 ]
 const statusOptions = computed(() => {
   const options = [
-    { value: 'verified', label: statusMeta.verified },
     { value: 'authorized', label: statusMeta.authorized },
+    { value: 'rejected',   label: statusMeta.rejected },
   ]
   const current = record.value?.backendStatus
   if (current && !options.some((option) => option.value === current)) {
@@ -179,38 +179,49 @@ async function save() {
   if (!record.value) return
   if (!canAuthorize.value) return
 
-  if (statusValue.value !== 'authorized') {
+  // FIX #3: izinkan 'rejected' dikirim ke backend (sebelumnya early-return
+  // untuk status selain 'authorized', sehingga penolakan tidak pernah terkirim).
+  const targetStatus = statusValue.value
+  if (targetStatus !== 'authorized' && targetStatus !== 'rejected') {
     toast.add({ severity: 'info', summary: 'Tidak ada perubahan status', life: 2000 })
     return
   }
-  if (!selectedSignerId.value) {
-    toast.add({ severity: 'warn', summary: 'Pilih penandatangan terlebih dahulu', life: 2500 })
-    return
-  }
-  if (missingSignatureImage.value) {
-    toast.add({
-      severity: 'warn',
-      summary: 'Penandatangan belum punya gambar TTD digital',
-      detail: 'Unggah gambar TTD-nya dulu atau pilih tanda tangan manual.',
-      life: 3500,
-    })
-    return
+
+  if (targetStatus === 'authorized') {
+    if (!selectedSignerId.value) {
+      toast.add({ severity: 'warn', summary: 'Pilih penandatangan terlebih dahulu', life: 2500 })
+      return
+    }
+    if (missingSignatureImage.value) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Penandatangan belum punya gambar TTD digital',
+        detail: 'Unggah gambar TTD-nya dulu atau pilih tanda tangan manual.',
+        life: 3500,
+      })
+      return
+    }
   }
 
   saving.value = true
   try {
-    record.value = await letterStore.authorizeSurat(record.value.id, {
-      status: 'authorized',
-      authorized_by_signer_id: selectedSignerId.value,
-      signature_type: signatureType.value,
-    })
+    const payload = { status: targetStatus }
+    if (targetStatus === 'authorized') {
+      payload.authorized_by_signer_id = selectedSignerId.value
+      payload.signature_type = signatureType.value
+    }
+    record.value = await letterStore.authorizeSurat(record.value.id, payload)
     statusValue.value = record.value.backendStatus
-    toast.add({ severity: 'success', summary: 'Surat berhasil diotorisasi', life: 2200 })
+    toast.add({
+      severity: 'success',
+      summary: targetStatus === 'authorized' ? 'Surat berhasil diotorisasi' : 'Surat berhasil ditolak',
+      life: 2200,
+    })
     loadPreview()
   } catch (error) {
     toast.add({
       severity: 'error',
-      summary: 'Otorisasi gagal',
+      summary: 'Gagal menyimpan status',
       detail: error.response?.data?.message ?? 'Periksa status request.',
       life: 3000,
     })
