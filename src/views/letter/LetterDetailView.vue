@@ -229,7 +229,10 @@ async function loadPreview() {
   previewLoading.value = true
   previewError.value = ''
   try {
-    const blob = await getLetterPdf(record.value.id, selectedLetterId.value)
+    // FIX #6: jangan pass selectedLetterId sebagai arg ke-2.
+    // getLetterPdf(id, options) — angka akan diinterpretasi sebagai
+    // Boolean(1)=true sehingga mode jadi download, bukan stream preview.
+    const blob = await getLetterPdf(record.value.id)
     if (token !== previewToken) return
     clearPreviewUrl()
     previewUrl.value = URL.createObjectURL(blob)
@@ -398,6 +401,7 @@ async function authorize() {
 
   authorizing.value = true
   try {
+    // FIX #4: notes tidak dikirim saat otorisasi — notes hanya untuk alasan penolakan.
     record.value = await letterStore.authorizeSurat(record.value.id, {
       status: 'authorized',
       authorized_by_signer_id: selectedSignerId.value,
