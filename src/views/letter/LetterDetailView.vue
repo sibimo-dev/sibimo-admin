@@ -537,7 +537,6 @@ function sendNotification() {
           label="Kembali ke Daftar"
           icon="pi pi-arrow-left"
           variant="outline"
-         
           @click="router.push('/letter')"
         />
       </div>
@@ -772,7 +771,6 @@ function sendNotification() {
                 label="Cetak"
                 icon="pi pi-print"
                 variant="light"
-               
                 :disabled="!previewUrl"
                 @click="printPreview"
               />
@@ -780,7 +778,6 @@ function sendNotification() {
                 :label="isAuthorized ? 'Unduh PDF' : 'Unduh Draft'"
                 icon="pi pi-download"
                 variant="light"
-               
                 :loading="downloading"
                 @click="downloadPdf"
               />

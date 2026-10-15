@@ -85,6 +85,17 @@ function loadTypes() {
   typesPromise ??= getLetterTypes().catch((err) => { typesPromise = null; throw err; });
   return typesPromise;
 }
+
+/* Dipakai LetterWizard & BundleWizard untuk menampilkan pesan error dari backend (validasi / message). */
+export function getLetterRequestError(error, fallback = "Pengajuan surat gagal dikirim.") {
+  const response = error?.response?.data;
+  const validationErrors = response?.errors && typeof response.errors === "object"
+    ? Object.values(response.errors).flat().filter(Boolean)
+    : [];
+  const validationMessage = [...new Set(validationErrors)].join(" ");
+  return validationMessage || response?.message || error?.message || fallback;
+}
+
 const norm = (v) => String(v ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "");
 const snake = (v) => String(v ?? "").replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_|_$/g, "").toLowerCase();
 

@@ -26,7 +26,7 @@ import ApplicantLookup from "./ApplicantLookup.vue";
 import { useApplicantLookup } from "./useApplicantLookup";
 import { applicantOf, applyAliases, buildAliasIndex, fillForm, normalizeDocs, reviewLocation, scrollTop, validateDocs, validateFields, MAX_FILE_MB } from "./formLogic";
 import { HUES, SECTION_HUES, hue } from "./pastel";
-import { LETTER_SOURCE, submitLetterBundle } from "@/services/letter-create.service";
+import { LETTER_SOURCE, getLetterRequestError, submitLetterBundle } from "@/services/letter-create.service";
 
 const props = defineProps({
   bundle: { type: Object, required: true }, // lihat data/letterBundles.js
@@ -288,11 +288,14 @@ function buildPayload() {
     bundle: props.bundle.slug,
     letters: selectedLetters.value.map((l) => ({
       id: l.id,
+      // Kode pada paket adalah kode tampilan lama (contoh KHN). Kirim slug
+      // supaya service selalu menerjemahkannya ke kode letter_types backend.
       slug: l.slug,
       code: l.code,
       title: l.title,
       applicant: lookup.withApplicant(applicantOf(sectionsOf(l), form)),
       fields: Object.fromEntries(sectionsOf(l).flatMap((s) => s.fields).map((f) => [f.key, form[f.key]])),
+      fieldDefinitions: sectionsOf(l).flatMap((s) => s.fields.map(({ key, label }) => ({ key, label, section: s.title }))),
       files: docsOf(l).filter((d) => files[d.id]).map((d) => ({ label: d.label, file: files[d.id] })),
     })),
   };
@@ -305,7 +308,7 @@ async function submit() {
     // Langsung ke halaman gabungan Verifikasi + Otorisasi (service menjamin semua `id` terisi atau melempar error).
     router.push(reviewLocation(res.codes.map((c) => c.id)));
   } catch (err) {
-    stepAlert.value = err?.message || "Terjadi kesalahan saat menyimpan pengajuan.";
+    stepAlert.value = getLetterRequestError(err, "Terjadi kesalahan saat menyimpan pengajuan.");
   } finally {
     isSubmitting.value = false;
   }
@@ -454,8 +457,5 @@ async function submit() {
         />
       </div>
     </div>
-
-
-
   </div>
 </template>

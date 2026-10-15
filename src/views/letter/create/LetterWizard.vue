@@ -18,7 +18,7 @@ import ApplicantLookup from "./ApplicantLookup.vue";
 import { useApplicantLookup } from "./useApplicantLookup";
 import { applicantOf, fillForm, normalizeDocs, reviewLocation, scrollTop, validateDocs, validateFields, MAX_FILE_MB } from "./formLogic";
 import { hue as getHue } from "./pastel";
-import { LETTER_SOURCE, submitSingleLetter } from "@/services/letter-create.service";
+import { LETTER_SOURCE, getLetterRequestError, submitSingleLetter } from "@/services/letter-create.service";
 
 const props = defineProps({
   title: { type: String, required: true },
@@ -110,6 +110,7 @@ function buildPayload() {
     title: props.title,
     applicant: lookup.withApplicant(applicantOf(allSections.value, form)),
     fields: Object.fromEntries(allSections.value.flatMap((s) => s.fields).map((f) => [f.key, form[f.key]])),
+    fieldDefinitions: allSections.value.flatMap((s) => s.fields.map(({ key, label }) => ({ key, label, section: s.title }))),
     files: docList.value.filter((d) => files[d.id]).map((d) => ({ label: d.label, file: files[d.id] })),
   };
 }
@@ -122,7 +123,7 @@ async function submit() {
     // Langsung ke halaman gabungan Verifikasi + Otorisasi (service menjamin `id` terisi atau melempar error).
     router.push(reviewLocation([res.id]));
   } catch (err) {
-    submitError.value = err?.message || "Terjadi kesalahan saat menyimpan pengajuan.";
+    submitError.value = getLetterRequestError(err, "Terjadi kesalahan saat menyimpan pengajuan.");
   } finally {
     isSubmitting.value = false;
   }
@@ -185,8 +186,5 @@ async function submit() {
         />
       </div>
     </div>
-
-
-
   </div>
 </template>
