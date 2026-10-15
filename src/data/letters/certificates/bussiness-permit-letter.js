@@ -10,14 +10,15 @@ import { f, DOC } from "@/data/letterFields";
 export const sections = [
   {
     title: "Data Pemohon",
+    hint: "Terisi otomatis dari data warga. Koreksi bila ada yang tidak sesuai.",
     fields: [
-      f.text("name", "Nama"),
-      f.text("birthPlaceDate", "Tempat/Tgl. Lahir", { placeholder: "Contoh: Sleman, 17 Agustus 1990" }),
-      f.text("nik", "NIK"),
-      f.text("gender", "Jenis Kelamin", { placeholder: "Laki-laki / Perempuan" }),
-      f.text("maritalStatus", "Status Perkawinan", { placeholder: "Belum Kawin / Kawin / Cerai Hidup / Cerai Mati" }),
-      f.text("occupation", "Pekerjaan"),
-      f.area("address", "Alamat", { span: 2 }),
+      f.text("name", "Nama", { from: "fullName" }),
+      f.text("birthPlaceDate", "Tempat/Tgl. Lahir", { from: "birthPlaceDate", placeholder: "Contoh: Sleman, 17 Agustus 1990" }),
+      f.nik("nik", "NIK", { from: "nik" }),
+      f.text("gender", "Jenis Kelamin", { from: "gender", placeholder: "Laki-laki / Perempuan" }),
+      f.text("maritalStatus", "Status Perkawinan", { from: "maritalStatus", placeholder: "Belum Kawin / Kawin / Cerai Hidup / Cerai Mati" }),
+      f.text("occupation", "Pekerjaan", { from: "occupation" }),
+      f.area("address", "Alamat", { from: "address", span: 2 }),
     ],
   },
   {
@@ -30,8 +31,7 @@ export const sections = [
   {
     title: "Keperluan",
     fields: [
-      f.text("purpose", "Surat Keterangan ini dipergunakan untuk"),
-      f.text("purposeLocation", "di", { placeholder: "Instansi/tempat tujuan, contoh: Bank BRI" }),
+      f.text("purpose", "Dipergunakan untuk"),
     ],
   },
 ];

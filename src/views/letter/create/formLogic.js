@@ -2,6 +2,8 @@
    Tidak ada tampilan di sini — hanya fungsi murni supaya mudah dites. */
 
 export const MAX_FILE_MB = 5;
+// Admin: SEMUA dokumen pendukung opsional. Pemohon yang datang langsung ke kalurahan bisa menyerahkan berkas fisik (hardfile).
+export const DOCS_OPTIONAL = true;
 export const ACCEPTED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic"];
 
 export const toDate = (v) => (v instanceof Date ? v : v ? new Date(v) : null);
@@ -28,7 +30,7 @@ export const filledRows = (field, form) => form[field.key].filter((r) => Object.
 export function normalizeDocs(documents = [], prefix = "") {
   return documents.map((d, i) => {
     const base = typeof d === "string" ? { label: d, optional: false } : { optional: false, ...d };
-    return { ...base, id: prefix ? `${prefix}::${i}` : i };
+    return { ...base, optional: DOCS_OPTIONAL || !!base.optional, id: prefix ? `${prefix}::${i}` : i };
   });
 }
 
@@ -56,6 +58,79 @@ export function fillForm(form, sections, lookup = () => undefined) {
   }
   return form;
 }
+
+/* ---------- Isian dari data warga (pencarian NIK) ----------
+   `resident` = hasil services/resident-lookup.service.js. Kunci `from` biasa (fullName, nik, address, ...) membaca langsung;
+   `asFather:x` / `asMother:x` hanya terisi bila jenis kelamin warga cocok (laki-laki → blok Ayah, perempuan → blok Ibu).
+   Jenis kelamin dibandingkan secara longgar (huruf besar/kecil, "L"/"P", "Male"/"Female", dst.). */
+const MALE = ["laki-laki", "laki laki", "l", "male", "pria"];
+const FEMALE = ["perempuan", "p", "female", "wanita"];
+
+export function makeResidentLookup(resident) {
+  return (key) => {
+    if (!resident) return undefined;
+    const m = /^as(Father|Mother):(.+)$/.exec(key);
+    if (!m) return resident[key];
+    const g = String(resident.gender ?? "").trim().toLowerCase();
+    const role = MALE.includes(g) ? "Father" : FEMALE.includes(g) ? "Mother" : null;
+    return role === m[1] ? resident[m[2]] : undefined;
+  };
+}
+
+/* Untuk field `select`: samakan nilai dari data warga dengan pilihan di form (tanpa peduli huruf besar/kecil),
+   supaya "ISLAM" cocok dengan opsi "Islam". Bila tidak ada yang cocok, nilai aslinya dipakai apa adanya. */
+const matchOption = (field, raw) =>
+  field.type === "select" && Array.isArray(field.options)
+    ? field.options.find((o) => String(o).toLowerCase() === String(raw).trim().toLowerCase()) ?? raw
+    : raw;
+
+/* Isi semua field yang punya `from` dari data warga. Isian yang sudah diketik manual TIDAK ditimpa; isian yang sebelumnya
+   terisi otomatis (autoFilled) boleh diganti saat NIK diganti. Field `reporter*` (Data Pelapor) sengaja dilewati:
+   pelapor diisi petugas, bukan otomatis dari data pemohon. Mengembalikan daftar kunci yang terisi. */
+export function applyResident(form, sections, resident, autoFilled = {}) {
+  const lookup = makeResidentLookup(resident);
+  const filled = [];
+  const norm = (v) => String(v ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+  const identityAliases = [
+    { from: "fullName", keys: ["name", "applicantName", "fullName", "nama", "namaPemohon", "namaLengkap"], labels: ["nama", "nama pemohon", "nama lengkap", "nama warga"] },
+    { from: "nik", keys: ["nik", "applicantNik", "nationalId", "citizenNik"], labels: ["nik", "nik pemohon", "nomor induk kependudukan"] },
+    { from: "address", keys: ["address", "applicantAddress", "alamat", "alamatPemohon"], labels: ["alamat", "alamat pemohon", "alamat sesuai ktp", "alamat tempat tinggal"] },
+    { from: "birthPlaceDate", keys: ["birthPlaceDate", "tempatTanggalLahir"], labels: ["tempat/tgl lahir", "tempat tanggal lahir", "tempat dan tanggal lahir"] },
+    { from: "birthPlace", keys: ["birthPlace", "tempatLahir"], labels: ["tempat lahir"] },
+    { from: "birthDate", keys: ["birthDate", "tanggalLahir"], labels: ["tanggal lahir"] },
+    { from: "gender", keys: ["gender", "jenisKelamin"], labels: ["jenis kelamin"] },
+    { from: "maritalStatus", keys: ["maritalStatus", "statusPerkawinan"], labels: ["status perkawinan", "status pernikahan"] },
+    { from: "religion", keys: ["religion", "agama"], labels: ["agama"] },
+    { from: "occupation", keys: ["occupation", "pekerjaan"], labels: ["pekerjaan"] },
+    { from: "phoneNumber", keys: ["phoneNumber", "phone", "whatsapp", "nomorTelepon", "noHp"], labels: ["nomor telepon", "telepon", "nomor hp", "whatsapp"] },
+  ];
+  for (const section of sections) {
+    for (const field of section.fields) {
+      if (field.type === "rows" || field.type === "checks" || /^reporter/i.test(field.key)) continue;
+      const alias = identityAliases.find(a => a.keys.includes(field.key) || a.labels.some(l => norm(l) === norm(field.label)));
+      const source = field.from || alias?.from;
+      if (!source) continue;
+      const raw = lookup(source);
+      if (!isFilled(raw)) continue;
+      const current = form[field.key];
+      const manual = isFilled(current) && !autoFilled[field.key] && (field.default === undefined || current !== field.default);
+      if (manual) continue;
+      form[field.key] = field.type === "date" ? toDate(raw) : matchOption(field, raw);
+      autoFilled[field.key] = true;
+      if (!filled.includes(field.key)) filled.push(field.key);
+    }
+  }
+  return filled;
+}
+
+/* Lokasi halaman Verifikasi + Otorisasi setelah surat disimpan: LetterDetailView (route `letter-detail`).
+   Halaman itu membuka satu pengajuan per id; surat pertama yang dibuka. Untuk paket, seluruh id dibawa lewat
+   `?with=<id>,<id>` supaya halaman detail menampilkan dropdown pilihan surat (pratinjau & unduh per surat). */
+export const reviewLocation = (ids) => ({
+  name: "letter-detail",
+  params: { id: ids[0] },
+  ...(ids.length > 1 ? { query: { with: ids.join(",") } } : {}),
+});
 
 /* ---------- Validasi ---------- */
 export function validateFields(sections, form) {
@@ -151,4 +226,29 @@ export function applyAliases(form, sections, index) {
 export function scrollTop() {
   const main = document.querySelector("main.overflow-y-auto");
   (main ?? window).scrollTo({ top: 0, behavior: "smooth" });
+}
+
+/* Data pemohon (NIK, nama, telepon, alamat) diambil dari field yang punya `from` yang sesuai (hasil pencarian NIK).
+   Dipakai saat menyimpan pengajuan ke backend. `sections` = daftar section surat, `values` = isi form.
+   PENTING: surat yang tidak punya field `from: "address"` menghasilkan applicant.address kosong → backend menolak (422). */
+const APPLICANT_FROM = { nik: "nik", name: "fullName", phone: "phoneNumber", address: "address" };
+const APPLICANT_LABELS = {
+  nik: ["nik", "nik pemohon", "nomor induk kependudukan"],
+  name: ["nama", "nama pemohon", "nama lengkap", "nama warga"],
+  phone: ["nomor telepon", "telepon", "nomor hp", "whatsapp"],
+  address: ["alamat", "alamat pemohon", "alamat sesuai ktp", "alamat tempat tinggal"],
+};
+const normalizeApplicantText = (v) => String(v ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+export function applicantOf(sections, values) {
+  const fields = sections.flatMap((s) => s.fields ?? []);
+  const pick = (kind, from) => {
+    let f = fields.find((x) => x.from === from && String(values[x.key] ?? "").trim());
+    if (!f) f = fields.find((x) => (APPLICANT_LABELS[kind] || []).some(label => normalizeApplicantText(label) === normalizeApplicantText(x.label)) && String(values[x.key] ?? "").trim());
+    if (!f) f = fields.find((x) => {
+      const k = normalizeApplicantText(x.key), labels = (APPLICANT_LABELS[kind] || []).map(normalizeApplicantText);
+      return (labels.includes(k) || labels.some(label => normalizeApplicantText(x.label).includes(label))) && String(values[x.key] ?? "").trim();
+    });
+    return f ? String(values[f.key]).trim() : "";
+  };
+  return Object.fromEntries(Object.entries(APPLICANT_FROM).map(([k, from]) => [k, pick(k, from)]));
 }
