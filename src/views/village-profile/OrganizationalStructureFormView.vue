@@ -578,10 +578,6 @@ async function onPersonSignatureChange(event) {
               <Avatar
                 :image="photoSrc(data.photo) || undefined"
                 :label="!photoSrc(data.photo) ? initials(data.nama) : undefined"
-                :image="data.photo || undefined"
-                :label="!data.photo ? initials(data.nama) : undefined"
-                :image="photoSrc(data.photo) || undefined"
-                :label="!photoSrc(data.photo) ? initials(data.nama) : undefined"
                 shape="circle"
                 class="!bg-blue-100 !text-blue-700"
               />

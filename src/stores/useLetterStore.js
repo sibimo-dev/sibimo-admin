@@ -25,6 +25,9 @@ function normalizeRequest(item) {
   const type = item.letter_type ?? {}
   const signer = type.signer ?? {}
   const verifier = item.verifier ?? {}
+  // Laravel serializes belongsTo 'authorizedSigner' as 'authorized_signer' (snake_case).
+  // Keep both: the camelCase key for internal use and re-expose as authorized_signer
+  // so templates that access record.authorized_signer.position still work.
   const authorizedSigner = item.authorized_signer ?? {}
 
   return {
@@ -45,7 +48,11 @@ function normalizeRequest(item) {
     status: statusLabels[item.status] ?? item.status,
     backendStatus: item.status,
     verifiedBy: verifier.full_name ?? '-',
+    // Normalized camelCase accessor
     authorizedBy: authorizedSigner.name ?? '-',
+    // Re-expose the full signer object under authorized_signer so templates
+    // using record.authorized_signer.position work without raw API access.
+    authorized_signer: authorizedSigner,
     signerName: signer.name ?? '-',
     source: item.source ?? '-',
     notes: item.notes ?? '',
