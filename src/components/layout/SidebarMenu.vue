@@ -27,8 +27,6 @@ const menuGroups = [
         icon: 'pi pi-file',
         items: [
           { label: 'Pengelolaan Surat', route: '/letter', permission: 'pengelolaan-surat' },
-          { label: 'Verifikasi Surat', route: '/letter/verification', permission: 'verifikasi-surat' },
-          { label: 'Otorisasi Surat', route: '/letter/authorization', permission: 'otorisasi-surat' },
           { label: 'Tipe Surat', route: '/letter-type', permission: 'tipe-surat' },
         ],
       },
