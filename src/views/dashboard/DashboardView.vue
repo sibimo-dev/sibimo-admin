@@ -337,8 +337,7 @@ onMounted(loadDashboard)
     >
       {{ loadError }}
     </p>
-
-\    <TransitionGroup
+  <TransitionGroup
       tag="div"
       appear
       enter-active-class="transition duration-500 ease-out motion-reduce:transition-none"
