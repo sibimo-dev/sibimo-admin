@@ -15,7 +15,6 @@ const isNew = computed(() => route.params.id === 'new' || !route.params.id)
 const isLoading = ref(false)
 const isSaving = ref(false)
 const requirements = ref([])
-const fields = ref([])
 
 const form = reactive({
   letter_type_id: null,
@@ -37,24 +36,27 @@ const requirementForm = reactive({
   is_required: false,
 })
 
-const fieldForm = reactive({
-  id: null,
-  field_label: '',
-  field_key: '',
-  field_type: 'text',
-  is_required: false,
-  optionsText: '',
-  sort_order: 0,
-})
-
 const categoryOptions = ['Perintah', 'Keterangan', 'Pengantar', 'Permohonan', 'Pernyataan']
-const fieldTypeOptions = ['text', 'textarea', 'number', 'date', 'select']
 const signerOptions = computed(() =>
   store.signers.value.map((signer) => ({
     value: signer.staff_id,
     label: signer.name + ' - ' + signer.position,
   })),
 )
+
+// Mode edit: hanya number_prefix & description yang boleh diubah
+const lockedFields = computed(() => !isNew.value)
+
+const selectClass = [
+  'mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800',
+  'focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500',
+  'disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed',
+].join(' ')
+
+const textareaClass = [
+  'mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800',
+  'focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500',
+].join(' ')
 
 function resetRequirementForm() {
   Object.assign(requirementForm, {
@@ -65,26 +67,12 @@ function resetRequirementForm() {
   })
 }
 
-function resetFieldForm() {
-  Object.assign(fieldForm, {
-    id: null,
-    field_label: '',
-    field_key: '',
-    field_type: 'text',
-    is_required: false,
-    optionsText: '',
-    sort_order: fields.value.length,
-  })
-}
-
 async function loadRelatedData() {
   if (isNew.value) return
   const type = await store.fetchById(route.params.id)
   Object.assign(form, type)
   requirements.value = await store.getDocuments(route.params.id)
-  fields.value = await store.getFields(route.params.id)
   resetRequirementForm()
-  resetFieldForm()
 }
 
 onMounted(async () => {
@@ -179,52 +167,6 @@ function editRequirement(item) {
     is_required: Boolean(item.is_required),
   })
 }
-
-async function saveField() {
-  if (!fieldForm.field_label || !fieldForm.field_key || isNew.value) return
-  try {
-    const options = fieldForm.optionsText
-      .split('\n')
-      .map((value) => value.trim())
-      .filter(Boolean)
-    const payload = {
-      field_label: fieldForm.field_label,
-      field_key: fieldForm.field_key,
-      field_type: fieldForm.field_type,
-      is_required: fieldForm.is_required,
-      options: fieldForm.field_type === 'select' ? options : null,
-      sort_order: Number(fieldForm.sort_order) || 0,
-    }
-    if (fieldForm.id) await store.updateField(fieldForm.id, payload)
-    else await store.createField(form.letter_type_id, payload)
-    fields.value = await store.getFields(form.letter_type_id)
-    resetFieldForm()
-    toast.add({ severity: 'success', summary: 'Field dinamis disimpan', life: 1800 })
-  } catch (error) {
-    toast.add({ severity: 'error', summary: 'Gagal menyimpan field dinamis', life: 2500 })
-  }
-}
-
-async function removeField(item) {
-  try {
-    await store.deleteField(item.field_id)
-    fields.value = await store.getFields(form.letter_type_id)
-  } catch (error) {
-    toast.add({ severity: 'error', summary: 'Gagal menghapus field dinamis', life: 2500 })
-  }
-}
-
-function editField(item) {
-  Object.assign(fieldForm, {
-    id: item.field_id,
-    field_label: item.field_label,
-    field_key: item.field_key,
-    field_type: item.field_type,
-    is_required: Boolean(item.is_required),
-    optionsText: (item.options ?? []).join('\n'),
-    sort_order: item.sort_order ?? 0,
-  })
-}
 </script>
 
 <template>
@@ -240,93 +182,95 @@ function editField(item) {
     <div v-if="isLoading" class="rounded-xl bg-white border p-6 text-sm text-gray-500">Memuat data...</div>
 
     <template v-else>
-      <section class="rounded-xl bg-white border p-6 space-y-4">
-        <h2 class="font-semibold text-gray-800">Informasi Dasar</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AppInput v-model="form.code" label="Kode Tipe Surat" required />
-          <AppInput v-model="form.letter_name" label="Nama Tipe Surat" required />
-          <label class="text-sm text-gray-600">Kategori
-            <select v-model="form.category" class="mt-1 w-full border rounded-lg px-3 py-2">
+      <section class="rounded-xl bg-white border p-6 space-y-5">
+        <div>
+          <h2 class="font-semibold text-gray-800">Informasi Dasar</h2>
+          <p v-if="!isNew" class="text-xs text-gray-500 mt-1">
+            Hanya <span class="font-medium">Prefix Nomor Surat</span> dan
+            <span class="font-medium">Deskripsi</span> yang dapat diubah.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
+          <AppInput v-model="form.code" label="Kode Tipe Surat" required :disabled="lockedFields" />
+          <AppInput v-model="form.letter_name" label="Nama Tipe Surat" required :disabled="lockedFields" />
+
+          <label class="text-sm font-medium text-gray-600">
+            Kategori <span v-if="isNew" class="text-red-500">*</span>
+            <select v-model="form.category" :disabled="lockedFields" :class="selectClass">
               <option value="">Pilih kategori</option>
               <option v-for="item in categoryOptions" :key="item" :value="item">{{ item }}</option>
             </select>
           </label>
-          <AppInput v-model="form.number_prefix" label="Prefix Nomor Surat" />
-          <AppInput v-model="form.processing_time" label="Estimasi Proses" />
-          <label class="text-sm text-gray-600">Metode Tanda Tangan
-            <select v-model="form.signature_method" class="mt-1 w-full border rounded-lg px-3 py-2">
+
+          <AppInput v-model="form.processing_time" label="Estimasi Proses" :disabled="lockedFields" />
+
+          <label class="text-sm font-medium text-gray-600">
+            Metode Tanda Tangan <span v-if="isNew" class="text-red-500">*</span>
+            <select v-model="form.signature_method" :disabled="lockedFields" :class="selectClass">
               <option value="manual">Manual</option>
               <option value="digital">Digital</option>
             </select>
           </label>
-          <label class="text-sm text-gray-600 md:col-span-2">Penandatangan
-            <select v-model="form.signer_id" class="mt-1 w-full border rounded-lg px-3 py-2">
+
+          <label class="text-sm font-medium text-gray-600">
+            Penandatangan
+            <select v-model="form.signer_id" :disabled="lockedFields" :class="selectClass">
               <option :value="null">Pilih penandatangan</option>
               <option v-for="item in signerOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
             </select>
           </label>
-          <label class="text-sm text-gray-600 md:col-span-2">Deskripsi
-            <textarea v-model="form.description" rows="3" class="mt-1 w-full border rounded-lg px-3 py-2" />
+
+          <label
+            class="flex items-center gap-2 text-sm text-gray-600 md:col-span-2"
+            :class="lockedFields ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'"
+          >
+            <input v-model="form.is_active" type="checkbox" :disabled="lockedFields" class="rounded border-gray-300" />
+            Aktif
           </label>
-          <label class="flex items-center gap-2 text-sm text-gray-600">
-            <input v-model="form.is_active" type="checkbox" /> Aktif
+
+          <!-- Field yang bisa diedit -->
+          <div class="md:col-span-2">
+            <AppInput v-model="form.number_prefix" label="Prefix Nomor Surat" />
+          </div>
+
+          <label class="text-sm font-medium text-gray-600 md:col-span-2">
+            Deskripsi
+            <textarea v-model="form.description" rows="3" :class="textareaClass" placeholder="Deskripsi tipe surat" />
           </label>
         </div>
-        <AppButton :label="isSaving ? 'Menyimpan...' : 'Simpan Tipe Surat'" :disabled="isSaving" @click="handleSave" />
+
+        <div class="flex justify-end border-t pt-4">
+          <AppButton :label="isSaving ? 'Menyimpan...' : 'Simpan Tipe Surat'" :disabled="isSaving" @click="handleSave" />
+        </div>
       </section>
 
-      <section v-if="!isNew" class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div class="rounded-xl bg-white border p-6 space-y-4">
-          <h2 class="font-semibold text-gray-800">Dokumen Persyaratan</h2>
-          <div class="space-y-2">
-            <div v-for="item in requirements" :key="item.letter_type_document_id" class="flex items-center justify-between border rounded-lg p-3">
-              <div>
-                <p class="text-sm font-medium">{{ item.document_name }}</p>
-                <p class="text-xs text-gray-500">{{ item.description || 'Tanpa deskripsi' }} · {{ item.is_required ? 'Wajib' : 'Opsional' }}</p>
-              </div>
-              <div class="flex gap-2">
-                <button class="text-xs text-blue-600" @click="editRequirement(item)">Edit</button>
-                <button class="text-xs text-red-600" @click="removeRequirement(item)">Hapus</button>
-              </div>
+      <section v-if="!isNew" class="rounded-xl bg-white border p-6 space-y-4">
+        <h2 class="font-semibold text-gray-800">Dokumen Persyaratan</h2>
+        <div class="space-y-2">
+          <div
+            v-for="item in requirements"
+            :key="item.letter_type_document_id"
+            class="flex items-center justify-between border rounded-lg p-3"
+          >
+            <div>
+              <p class="text-sm font-medium">{{ item.document_name }}</p>
+              <p class="text-xs text-gray-500">
+                {{ item.description || 'Tanpa deskripsi' }} · {{ item.is_required ? 'Wajib' : 'Opsional' }}
+              </p>
             </div>
-          </div>
-          <input v-model="requirementForm.document_name" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Nama dokumen" />
-          <input v-model="requirementForm.description" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Deskripsi" />
-          <label class="flex items-center gap-2 text-sm"><input v-model="requirementForm.is_required" type="checkbox" /> Wajib</label>
-          <div class="flex gap-2">
-            <AppButton label="Simpan Dokumen" size="small" @click="saveRequirement" />
-            <AppButton v-if="requirementForm.id" label="Batal" size="small" variant="outline" @click="resetRequirementForm" />
+            <div class="flex gap-2">
+              <button class="text-xs text-blue-600" @click="editRequirement(item)">Edit</button>
+              <button class="text-xs text-red-600" @click="removeRequirement(item)">Hapus</button>
+            </div>
           </div>
         </div>
-
-        <div class="rounded-xl bg-white border p-6 space-y-4">
-          <h2 class="font-semibold text-gray-800">Field Dinamis</h2>
-          <div class="space-y-2 max-h-96 overflow-auto">
-            <div v-for="item in fields" :key="item.field_id" class="flex items-center justify-between border rounded-lg p-3">
-              <div>
-                <p class="text-sm font-medium">{{ item.field_label }}</p>
-                <p class="text-xs text-gray-500">{{ item.field_key }} · {{ item.field_type }} · {{ item.is_required ? 'Wajib' : 'Opsional' }}</p>
-              </div>
-              <div class="flex gap-2">
-                <button class="text-xs text-blue-600" @click="editField(item)">Edit</button>
-                <button class="text-xs text-red-600" @click="removeField(item)">Hapus</button>
-              </div>
-            </div>
-          </div>
-          <input v-model="fieldForm.field_label" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Label field" />
-          <input v-model="fieldForm.field_key" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="field_key" />
-          <div class="grid grid-cols-2 gap-2">
-            <select v-model="fieldForm.field_type" class="border rounded-lg px-3 py-2 text-sm">
-              <option v-for="item in fieldTypeOptions" :key="item" :value="item">{{ item }}</option>
-            </select>
-            <input v-model.number="fieldForm.sort_order" type="number" class="border rounded-lg px-3 py-2 text-sm" placeholder="Urutan" />
-          </div>
-          <textarea v-if="fieldForm.field_type === 'select'" v-model="fieldForm.optionsText" rows="3" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Satu opsi per baris" />
-          <label class="flex items-center gap-2 text-sm"><input v-model="fieldForm.is_required" type="checkbox" /> Wajib</label>
-          <div class="flex gap-2">
-            <AppButton label="Simpan Field" size="small" @click="saveField" />
-            <AppButton v-if="fieldForm.id" label="Batal" size="small" variant="outline" @click="resetFieldForm" />
-          </div>
+        <input v-model="requirementForm.document_name" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Nama dokumen" />
+        <input v-model="requirementForm.description" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Deskripsi" />
+        <label class="flex items-center gap-2 text-sm"><input v-model="requirementForm.is_required" type="checkbox" /> Wajib</label>
+        <div class="flex gap-2">
+          <AppButton label="Simpan Dokumen" size="small" @click="saveRequirement" />
+          <AppButton v-if="requirementForm.id" label="Batal" size="small" variant="outline" @click="resetRequirementForm" />
         </div>
       </section>
     </template>

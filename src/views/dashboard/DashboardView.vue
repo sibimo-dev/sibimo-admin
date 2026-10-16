@@ -82,18 +82,37 @@ const TONE = {
   info: 'bg-primary-50 text-primary-700',
 }
 
+// Status backend disederhanakan jadi 3 label (sama dengan halaman Layanan Surat).
+const displayStatusByBackend = {
+  submitted: 'Pending', // menunggu verifikasi
+  verified: 'Pending', // menunggu otorisasi
+  authorized: 'Selesai',
+  completed: 'Selesai',
+  rejected: 'Ditolak',
+}
+
+function toDisplayStatus(row) {
+  return displayStatusByBackend[row.backendStatus] ?? row.status
+}
+
+// Jumlah maksimal pengajuan surat yang tampil di tabel "Pengajuan Surat Terbaru".
+const MAX_RECENT_LETTERS = 10
+
 const { rows: letterRows, fetchRows: fetchLetterRows } = useLetterStore()
 const citizens = ref([])
 const complaints = ref([])
 const loans = ref([])
 const agendas = ref([])
 
-const letterStats = computed(() => ({
-  total: letterRows.value.length,
-  pending: letterRows.value.filter((r) => r.status === 'Pending').length,
-  verified: letterRows.value.filter((r) => r.status === 'Diverifikasi' || r.status === 'Disetujui').length,
-  rejected: letterRows.value.filter((r) => r.status === 'Ditolak').length,
-}))
+const letterStats = computed(() => {
+  const statuses = letterRows.value.map((r) => toDisplayStatus(r))
+  return {
+    total: statuses.length,
+    pending: statuses.filter((s) => s === 'Pending').length,
+    done: statuses.filter((s) => s === 'Selesai').length,
+    rejected: statuses.filter((s) => s === 'Ditolak').length,
+  }
+})
 
 const citizenStats = computed(() => ({
   total: citizens.value.length,
@@ -127,8 +146,8 @@ const statCards = computed(() => [
     theme: 'primary',
     to: '/letter',
     badges: [
-      { text: `${letterStats.value.pending} Menunggu`, tone: 'warn' },
-      { text: `${letterStats.value.verified} Terverifikasi`, tone: 'success' },
+      { text: `${letterStats.value.pending} Pending`, tone: 'warn' },
+      { text: `${letterStats.value.done} Selesai`, tone: 'success' },
       { text: `${letterStats.value.rejected} Ditolak`, tone: 'danger' },
     ],
   },
@@ -172,25 +191,28 @@ const statCards = computed(() => [
 
 const statusTabs = [
   { label: 'Semua', value: 'semua' },
-  { label: 'Menunggu', value: 'Pending' },
-  { label: 'Diverifikasi', value: 'Diverifikasi' },
-  { label: 'Disetujui', value: 'Disetujui' },
+  { label: 'Pending', value: 'Pending' },
+  { label: 'Selesai', value: 'Selesai' },
   { label: 'Ditolak', value: 'Ditolak' },
 ]
 const activeTab = ref('semua')
-const statusSeverity = { Pending: 'warn', Diverifikasi: 'info', Disetujui: 'success', Ditolak: 'danger' }
+const statusSeverity = { Pending: 'warn', Selesai: 'success', Ditolak: 'danger' }
 const search = ref('')
 
 const letterSubmissions = computed(() =>
   [...letterRows.value]
-    .sort((a, b) => new Date(b.dateValue) - new Date(a.dateValue))
+    .sort(
+      (a, b) =>
+        new Date(b.dateValue) - new Date(a.dateValue) ||
+        String(b.id).localeCompare(String(a.id), undefined, { numeric: true }),
+    )
     .map((r) => ({
       id: r.id,
       requestId: r.requestId,
       citizenId: r.citizenId,
       serviceType: r.purpose,
       date: r.dateValue,
-      status: r.status,
+      status: toDisplayStatus(r),
     })),
 )
 
@@ -208,7 +230,9 @@ const filteredSubmissions = computed(() => {
         String(r.serviceType ?? '').toLowerCase().includes(q),
     )
   }
-  return rows
+
+  // Hanya 10 pengajuan terbaru (setelah filter tab & pencarian)
+  return rows.slice(0, MAX_RECENT_LETTERS)
 })
 
 function formatLetterDate(dateValue) {
@@ -337,7 +361,8 @@ onMounted(loadDashboard)
     >
       {{ loadError }}
     </p>
-  <TransitionGroup
+
+    <TransitionGroup
       tag="div"
       appear
       enter-active-class="transition duration-500 ease-out motion-reduce:transition-none"
@@ -396,10 +421,15 @@ onMounted(loadDashboard)
       </router-link>
     </TransitionGroup>
 
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 items-start">
-      <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden min-w-0 lg:col-span-3">
+    <!-- items-stretch: kolom kiri (tabel) & kanan (aduan + agenda) selalu setinggi sama,
+         jadi bagian bawah card tabel dan card agenda sejajar berapapun isinya. -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 items-stretch">
+      <div class="bg-white rounded-xl border border-neutral-200 overflow-hidden min-w-0 lg:col-span-3 flex flex-col">
         <div class="p-5 pb-4">
-          <p class="text-base font-semibold text-neutral-900 mb-3">Pengajuan Surat Terbaru</p>
+          <p class="text-base font-semibold text-neutral-900 mb-3">
+            Pengajuan Surat Terbaru
+            <span class="text-xs font-normal text-neutral-400">({{ MAX_RECENT_LETTERS }} terbaru)</span>
+          </p>
 
           <div class="flex flex-nowrap items-center justify-between gap-2">
             <div class="min-w-0 overflow-x-auto">
@@ -447,61 +477,63 @@ onMounted(loadDashboard)
           </div>
         </div>
 
-        <DataTable
-          :value="filteredSubmissions"
-          :loading="loading"
-          dataKey="id"
-          sortField="date"
-          :sortOrder="-1"
-          removableSort
-          class="p-datatable-sm"
-          :pt="{
-            header: { class: '!border-none' },
-            thead: { class: '!bg-neutral-50' },
-            headerCell: { class: '!text-neutral-500 !text-xs !font-semibold !uppercase !tracking-wide !border-neutral-100' },
-            bodyRow: { class: 'hover:!bg-primary-50/40 !border-neutral-100' },
-          }"
-        >
-          <template #empty>
-            <div class="text-center text-sm text-neutral-400 py-8">Tidak ada pengajuan yang cocok.</div>
-          </template>
-
-          <Column field="requestId" header="Request ID" />
-
-          <Column field="citizenId" header="NIK" />
-
-          <Column field="serviceType" header="Jenis Layanan" />
-
-          <Column field="date" header="Tanggal" sortable>
-            <template #body="{ data }">
-              <span class="text-neutral-600">{{ formatLetterDate(data.date) }}</span>
+        <div class="flex-1">
+          <DataTable
+            :value="filteredSubmissions"
+            :loading="loading"
+            dataKey="id"
+            sortField="date"
+            :sortOrder="-1"
+            removableSort
+            class="p-datatable-sm"
+            :pt="{
+              header: { class: '!border-none' },
+              thead: { class: '!bg-neutral-50' },
+              headerCell: { class: '!text-neutral-500 !text-xs !font-semibold !uppercase !tracking-wide !border-neutral-100' },
+              bodyRow: { class: 'hover:!bg-primary-50/40 !border-neutral-100' },
+            }"
+          >
+            <template #empty>
+              <div class="text-center text-sm text-neutral-400 py-8">Tidak ada pengajuan yang cocok.</div>
             </template>
-          </Column>
 
-          <Column field="status" header="Status">
-            <template #body="{ data }">
-              <Tag
-                :value="data.status"
-                :severity="statusSeverity[data.status]"
-                :pt="{ root: { class: '!inline-flex !justify-center !w-28' } }"
-              />
-            </template>
-          </Column>
+            <Column field="requestId" header="Request ID" />
 
-          <Column header="Aksi">
-            <template #body="{ data }">
-              <div class="flex justify-end">
-                <router-link
-                  :to="{ path: '/letter', query: { requestId: data.requestId } }"
-                  :aria-label="`Lihat ${data.requestId}`"
-                  class="w-8 h-8 rounded-full flex items-center justify-center bg-primary-50 text-primary-600 hover:bg-primary-100 transition-colors"
-                >
-                  <i class="pi pi-eye" />
-                </router-link>
-              </div>
-            </template>
-          </Column>
-        </DataTable>
+            <Column field="citizenId" header="NIK" />
+
+            <Column field="serviceType" header="Jenis Layanan" />
+
+            <Column field="date" header="Tanggal" sortable>
+              <template #body="{ data }">
+                <span class="text-neutral-600">{{ formatLetterDate(data.date) }}</span>
+              </template>
+            </Column>
+
+            <Column field="status" header="Status">
+              <template #body="{ data }">
+                <Tag
+                  :value="data.status"
+                  :severity="statusSeverity[data.status]"
+                  :pt="{ root: { class: '!inline-flex !justify-center !w-28' } }"
+                />
+              </template>
+            </Column>
+
+            <Column header="Aksi">
+              <template #body="{ data }">
+                <div class="flex justify-end">
+                  <router-link
+                    :to="{ path: '/letter', query: { requestId: data.requestId } }"
+                    :aria-label="`Lihat ${data.requestId}`"
+                    class="w-8 h-8 rounded-full flex items-center justify-center bg-primary-50 text-primary-600 hover:bg-primary-100 transition-colors"
+                  >
+                    <i class="pi pi-eye" />
+                  </router-link>
+                </div>
+              </template>
+            </Column>
+          </DataTable>
+        </div>
       </div>
 
       <div class="flex flex-col gap-3 min-w-0 lg:col-span-1">
@@ -535,7 +567,7 @@ onMounted(loadDashboard)
           </router-link>
         </div>
 
-        <div class="bg-gradient-to-br from-primary-700 to-primary-950 rounded-xl p-4 text-white shadow-md flex flex-col">
+        <div class="bg-gradient-to-br from-primary-700 to-primary-950 rounded-xl p-4 text-white shadow-md flex flex-col flex-1">
           <p class="text-sm font-semibold flex items-center gap-2 mb-3">
             <i class="pi pi-calendar text-base" />
             Agenda Terdekat
@@ -558,6 +590,8 @@ onMounted(loadDashboard)
             </div>
           </div>
           <p v-else class="text-sm text-white/70">Belum ada agenda mendatang.</p>
+
+          <div class="flex-1" />
 
           <router-link
             to="/agenda"

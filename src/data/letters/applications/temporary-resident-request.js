@@ -1,7 +1,7 @@
 // Disalin dari public: views/services/letters/applications/temporary-resident-request.vue (hanya bagian isian & dokumen).
 // Isian di sini harus tetap sama dengan di public. Tampilan wizard ada di views/letter/create/.
 // Surat Permohonan Menjadi Penduduk Sementara / SKTS
-import { f, pemohon, DOC } from "@/data/letterFields";
+import { f, pemohon, DOC, signerNames } from "@/data/letterFields";
 
 const wilayah = (prefix) => [
   f.text(`${prefix}Village`, "Desa/Kelurahan"),
@@ -47,6 +47,9 @@ export const sections = [
       ], { max: 5 }),
     ],
   },
+
+  // TTD (2): 1. Dukuh  2. Pemohon (= Nama Lengkap pemohon di atas)
+  signerNames(["hamletHead"], "Opsional. Tanda tangan Pemohon memakai Nama Lengkap di atas. Isi nama Dukuh bila ingin dicetak; kosongkan bila ditulis tangan."),
 ];
 
 export const documents = [

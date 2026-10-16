@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import Card from 'primevue/card'
 import Select from 'primevue/select'
@@ -12,13 +11,11 @@ import InputIcon from 'primevue/inputicon'
 import InputText from 'primevue/inputtext'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
-import AppButton from '@/components/common/AppButton.vue'
 import { useLetterTypeStore } from '@/stores/useLetterTypeStore'
 
 const router = useRouter()
-const confirm = useConfirm()
 const toast = useToast()
-const { rows, removeLetterType, updateLetterType, fetchRows } = useLetterTypeStore()
+const { rows, updateLetterType, fetchRows } = useLetterTypeStore()
 
 onMounted(async () => {
   try {
@@ -84,8 +81,6 @@ const stats = computed(() => {
 
 // ====== Toggle active/inactive status ======
 async function toggleStatus(data) {
-  // TODO: call API here
-  // await letterTypeService.updateStatus(data.letter_type_id, data.is_active)
   try {
     await updateLetterType(data.letter_type_id, { is_active: data.is_active })
     toast.add({
@@ -99,33 +94,9 @@ async function toggleStatus(data) {
   }
 }
 
-// ====== Navigate to create/manage page ======
-function openCreate() {
-  router.push({ name: 'letter-type-manage', params: { id: 'new' } })
-}
-
+// ====== Navigate to manage page ======
 function handleKelola(data) {
   router.push({ name: 'letter-type-manage', params: { id: data.letter_type_id } })
-}
-
-// ====== Delete ======
-function handleDelete(data) {
-  confirm.require({
-    message: `Hapus tipe surat "${data.letter_name}"?`,
-    header: 'Konfirmasi Hapus',
-    icon: 'pi pi-exclamation-triangle',
-    acceptLabel: 'Hapus',
-    rejectLabel: 'Batal',
-    acceptClass: 'p-button-danger',
-    accept: async () => {
-      try {
-        await removeLetterType(data.letter_type_id)
-        toast.add({ severity: 'success', summary: 'Berhasil dihapus', life: 2000 })
-      } catch (error) {
-        toast.add({ severity: 'error', summary: 'Gagal menghapus tipe surat', life: 2500 })
-      }
-    },
-  })
 }
 </script>
 
@@ -183,34 +154,23 @@ function handleDelete(data) {
     <!-- Table Content -->
     <Card>
       <template #content>
-        <!-- Toolbar: search + filter + add -->
-        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-4">
-          <div class="flex flex-col sm:flex-row gap-3 flex-1">
-            <IconField class="w-full sm:w-72">
-              <InputIcon class="pi pi-search" />
-              <InputText v-model="searchQuery" placeholder="Cari nama surat / kode..." class="w-full" />
-            </IconField>
+        <!-- Toolbar: search + filter -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4">
+          <IconField class="w-full sm:w-72">
+            <InputIcon class="pi pi-search" />
+            <InputText v-model="searchQuery" placeholder="Cari nama surat / kode..." class="w-full" />
+          </IconField>
 
-            <Select
-              v-model="selectedCategory"
-              :options="categoryOptions"
-              option-label="label"
-              option-value="value"
-              placeholder="Semua Kategori"
-              class="w-full sm:w-52"
-            />
-          </div>
-
-          <AppButton
-            label="Tambah Tipe Surat Baru"
-            icon="pi pi-plus"
-            variant="primary"
-            @click="openCreate"
+          <Select
+            v-model="selectedCategory"
+            :options="categoryOptions"
+            option-label="label"
+            option-value="value"
+            placeholder="Semua Kategori"
+            class="w-full sm:w-52"
           />
         </div>
 
-        <!-- Table: DataTable/Column PrimeVue langsung, semua kolom sortable.
-             Default sort: created_at terbaru dulu (sortOrder -1). -->
         <DataTable
           :value="filteredRows"
           data-key="letter_type_id"
@@ -260,7 +220,6 @@ function handleDelete(data) {
             </template>
           </Column>
 
-          <!-- Kolom baru: Tanggal Dibuat, dasar sorting yang diminta -->
           <Column field="created_at" header="Tanggal Dibuat" sortable>
             <template #body="{ data }">
               <span class="text-gray-600">{{ formatCreatedAt(data.created_at) }}</span>
@@ -275,15 +234,12 @@ function handleDelete(data) {
 
           <Column header="Aksi">
             <template #body="{ data }">
-              <div class="flex items-center gap-2">
-                <button
-                  class="text-sm font-medium text-gray-700 hover:text-gray-900 inline-flex items-center gap-1"
-                  @click="handleKelola(data)"
-                >
-                  Kelola <i class="pi pi-arrow-right text-xs"></i>
-                </button>
-                <AppButton icon="pi pi-trash" variant="ghost" size="small" @click="handleDelete(data)" />
-              </div>
+              <button
+                class="text-sm font-medium text-gray-700 hover:text-gray-900 inline-flex items-center gap-1"
+                @click="handleKelola(data)"
+              >
+                Kelola <i class="pi pi-arrow-right text-xs"></i>
+              </button>
             </template>
           </Column>
 
