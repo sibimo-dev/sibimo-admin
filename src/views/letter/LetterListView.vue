@@ -112,12 +112,13 @@ const statusColor = {
 }
 
 // Verifikasi, otorisasi, cetak, dan unduh PDF kini ada di halaman detail.
+// Pakai route bernama (letter-detail) supaya tidak bergantung pada bentuk path.
 function goToDetail(data) {
-  router.push({ path: `/letter/${data.id}`, query: { highlight: data.requestId } })
+  router.push({ name: 'letter-detail', params: { id: data.id }, query: { highlight: data.requestId } })
 }
 
 function goToTambahSurat() {
-  router.push('/letter/create')
+  router.push({ name: 'letter-create' })
 }
 
 

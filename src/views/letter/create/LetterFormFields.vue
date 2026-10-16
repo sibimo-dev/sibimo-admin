@@ -67,7 +67,7 @@ const minRows = (field) => field.min ?? (field.optional ? 0 : 1);
               <span
                 v-if="autoFilled[field.key]"
                 class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700"
-                title="Diambil dari isian sebelumnya. Silakan periksa dan ubah bila perlu."
+                title="Diambil dari data warga / isian sebelumnya. Silakan periksa dan ubah bila perlu."
               >
                 <i class="pi pi-bolt text-[9px]" /> terisi otomatis
               </span>
