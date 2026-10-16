@@ -4,8 +4,8 @@ const unwrap = (request) => request.then((response) => response.data.data)
 
 export const getLetterRequests = () => unwrap(api.get('/letter-requests'))
 export const getLetterRequest = (id) => unwrap(api.get('/letter-requests/' + id))
-export const createLetterRequest = (payload) =>
-  unwrap(api.post('/letter-requests', payload))
+export const createLetterRequest = (payload, config) =>
+  unwrap(api.post('/letter-requests', payload, config))
 export const updateLetterRequest = (id, payload) =>
   unwrap(api.put('/letter-requests/' + id, payload))
 export const deleteLetterRequest = (id) =>
@@ -29,6 +29,17 @@ export const getLetterPdf = async (id, options = {}) => {
 }
 
 export const downloadLetterPdf = (id) => getLetterPdf(id, { download: true })
+
+// TODO(BE): preview/unduh GABUNGAN beberapa surat dalam 1 PDF. Backend merender tiap surat (DomPDF) lalu menggabungkan
+// PDF-nya berurutan sesuai urutan `ids` (mis. FPDI) supaya ukuran kertas & margin tiap template tidak saling rusak.
+// Dipakai halaman Verifikasi + Otorisasi bila MERGED_PREVIEW_ENABLED = true (views/letter/review/LetterBundleAuthorization.vue).
+export const getLetterBundlePdf = async (ids, options = {}) => {
+  const response = await api.get('/letter-requests/bundle/pdf', {
+    params: { ids: ids.join(','), download: options?.download ? 1 : 0 },
+    responseType: 'blob',
+  })
+  return response.data
+}
 
 export function openPdfBlob(blob) {
   const url = URL.createObjectURL(blob)

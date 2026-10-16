@@ -1,9 +1,11 @@
 <script setup>
 /* Tambah Surat (admin). Isian & langkah mengikuti public (Layanan Mandiri), dibagi 2 kelompok:
    1) Pengajuan Surat        → katalog surat satuan + paket surat → wizard (1 surat: 3 langkah, paket: 4 langkah)
-   2) Pendaftaran Warga Baru → pilih jenis pendaftaran → wizard paket (4 langkah)
+   2) Pendaftaran Warga Baru → pilih jenis pendaftaran → wizard paket (4 langkah; 3 langkah bila hanya 1 pilihan surat)
+   Langkah pertama isian = input NIK pemohon (data warga mengisi formulir otomatis); dokumen pendukung opsional;
+   setelah croscheck (tanpa tombol/pop-up Kirim) langsung ke halaman Verifikasi + Otorisasi (route `letter-detail`).
    Isian tiap surat dibaca dari data/letters/<kelompok>/<slug>.js (salinan dari public).
-   Pengiriman dilakukan melalui API backend dari wizard. */
+   Penyimpanan lewat services/letter-create.service.js (POST /letter-requests), lalu langsung ke halaman Verifikasi + Otorisasi. */
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import Message from "primevue/message";
@@ -78,9 +80,9 @@ async function openService(service) {
     if (!path) throw new Error(`Berkas surat ${service.slug}.js tidak ditemukan`);
     const mod = await letterModules[path]();
     letter.value = {
-      slug: service.slug,
       title: mod.meta?.title ?? service.title,
       code: mod.meta?.code ?? service.shortCode,
+      slug: service.slug,
       sections: mod.sections,
       documents: mod.documents ?? [],
       hue: hueForCategory(service.category),
@@ -106,16 +108,12 @@ async function openRegister(type) {
       ui: {
         kindLabel: "Pendaftaran Warga Baru",
         selectTitle: "Surat apa saja yang dibutuhkan pemohon?",
-        selectHint: "Pilih surat/dokumen kependudukan untuk mendaftar. Setiap surat yang dipilih mendapat satu langkah pengisian sendiri, termasuk data diri.",
+        selectHint: "Pilih surat/dokumen kependudukan untuk mendaftar. Setiap surat yang dipilih mendapat satu langkah pengisian sendiri, termasuk data diri. Bila hanya ada satu pilihan, langkah ini dilewati.",
         backLabel: "Kembali ke Jenis Pendaftaran",
-        submitLabel: "Kirim Pendaftaran",
-        confirmTitle: "Kirim Pendaftaran?",
-        confirmText: "Apakah Anda yakin ingin mengirim pendaftaran warga baru sekarang?",
-        confirmNote: "Setelah dikirim, pendaftaran akan masuk ke daftar surat untuk diperiksa dan disetujui.",
-        confirmYes: "Ya, Kirim Pendaftaran",
-        doneTitle: "Pendaftaran Terkirim",
+        submitLabel: "Lanjut ke Verifikasi & Otorisasi",
+        doneTitle: "Pendaftaran Tersimpan",
         failTitle: "Pendaftaran Gagal",
-        doneIntro: "Pendaftaran warga baru berhasil dikirim.",
+        doneIntro: "Pendaftaran warga baru berhasil disimpan.",
         doneMessage: "Data pemohon menunggu pemeriksaan dan persetujuan.",
       },
     });
@@ -188,8 +186,8 @@ const restartWizard = backFromWizard;
         v-else-if="view === 'letter' && letter"
         :key="`letter-${wizardKey}`"
         :title="letter.title"
-        :slug="letter.slug"
         :code="letter.code"
+        :slug="letter.slug"
         :sections="letter.sections"
         :documents="letter.documents"
         :hue="letter.hue"

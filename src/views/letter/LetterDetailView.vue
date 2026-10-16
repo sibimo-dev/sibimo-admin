@@ -32,7 +32,8 @@ const signatureType = ref('manual')
 const authorizing = ref(false)
 
 // Preview & unduhan
-const selectedLetterId = ref(null)
+const selectedLetterId = ref(null) // id pengajuan (surat) yang sedang dipilih di dropdown
+const bundleRecords = ref([]) // semua surat dalam paket (urutan sama dengan ?with=); kosong untuk surat tunggal
 const previewUrl = ref('')
 const previewLoading = ref(false)
 const previewError = ref('')
@@ -196,15 +197,39 @@ const signatureLabel = computed(
 
 /* ------------------------------ Preview ------------------------------ */
 
-// Satu pengajuan bisa berisi lebih dari satu surat. Asumsi bentuk datanya:
-// record.letters = [{ id, title }, ...]. Sesuaikan di sini kalau field-nya beda.
+// Paket surat = beberapa pengajuan terpisah (1 surat = 1 request & 1 template PDF). Daftar id paket dibawa lewat
+// ?with=<id>,<id> dari halaman Tambah Surat. Dropdown memilih surat mana yang dipratinjau, diunduh, dan diverifikasi.
+const bundleIds = computed(() => {
+  const raw = String(route.query.with ?? '')
+  const ids = raw.split(',').map((v) => v.trim()).filter(Boolean)
+  const current = String(route.params.id)
+  return ids.length > 1 ? [...new Set(ids.includes(current) ? ids : [current, ...ids])] : []
+})
+
 const letterOptions = computed(() =>
-  (record.value?.letters ?? []).map((letter, index) => ({
-    value: letter.id ?? letter.letter_id ?? index,
-    label: letter.title ?? letter.name ?? letter.purpose ?? `Surat ${index + 1}`,
+  bundleRecords.value.map((letter, index) => ({
+    value: letter.id,
+    label: `${index + 1}. ${letter.purpose || 'Surat'} - ${statusMeta[letter.backendStatus]?.label ?? letter.status ?? '-'}`,
   })),
 )
 const hasMultipleLetters = computed(() => letterOptions.value.length > 1)
+
+async function loadBundle() {
+  if (!bundleIds.value.length) {
+    bundleRecords.value = []
+    return
+  }
+  const results = await Promise.allSettled(
+    bundleIds.value.map((id) => letterStore.getSuratById(id) ?? letterStore.fetchById(id)),
+  )
+  bundleRecords.value = results.filter((r) => r.status === 'fulfilled' && r.value).map((r) => r.value)
+}
+
+// Jaga daftar paket tetap sinkron setelah verifikasi/otorisasi mengubah status surat yang aktif.
+function syncBundleRecord(updated) {
+  const i = bundleRecords.value.findIndex((r) => String(r.id) === String(updated?.id))
+  if (i >= 0) bundleRecords.value[i] = updated
+}
 
 async function readErrorMessage(error) {
   const data = error.response?.data
@@ -229,9 +254,6 @@ async function loadPreview() {
   previewLoading.value = true
   previewError.value = ''
   try {
-    // FIX #6: jangan pass selectedLetterId sebagai arg ke-2.
-    // getLetterPdf(id, options) — angka akan diinterpretasi sebagai
-    // Boolean(1)=true sehingga mode jadi download, bukan stream preview.
     const blob = await getLetterPdf(record.value.id)
     if (token !== previewToken) return
     clearPreviewUrl()
@@ -245,20 +267,42 @@ async function loadPreview() {
   }
 }
 
-function onLetterChange(value) {
-  selectedLetterId.value = value
+async function onLetterChange(value) {
+  if (value === null || value === undefined || String(value) === String(record.value?.id)) return
+  const target = bundleRecords.value.find((r) => String(r.id) === String(value))
+  if (!target) return
+  selectedLetterId.value = target.id
+  applyRecord(target) // form verifikasi/otorisasi ikut berpindah ke surat yang dipilih
+  router.replace({ name: 'letter-detail', params: { id: target.id }, query: route.query })
   loadPreview()
+  try {
+    const fresh = await letterStore.fetchById(target.id) // status terbaru (mis. sudah diotorisasi di tab lain)
+    if (String(record.value?.id) === String(fresh.id)) {
+      applyRecord(fresh)
+      syncBundleRecord(fresh)
+    }
+  } catch {
+    /* pakai data yang sudah ada */
+  }
 }
+
+const safeFilePart = (text) =>
+  String(text ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60)
 
 async function downloadPdf() {
   if (!record.value) return
   downloading.value = true
   try {
-    const blob = await downloadLetterPdf(record.value.id, selectedLetterId.value)
+    const blob = await downloadLetterPdf(record.value.id)
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `${record.value.requestId || 'surat'}.pdf`
+    link.download = `${[record.value.requestId || 'surat', hasMultipleLetters.value ? safeFilePart(record.value.purpose) : ''].filter(Boolean).join('-')}.pdf`
     document.body.appendChild(link)
     link.click()
     link.remove()
@@ -315,9 +359,7 @@ function applyRecord(data) {
   notes.value = data?.notes ?? ''
   selectedSignerId.value = data?.authorized_by_signer_id ?? data?.letter_type?.signer_id ?? null
   signatureType.value = data?.signature_type ?? 'manual'
-  if (selectedLetterId.value === null) {
-    selectedLetterId.value = letterOptions.value[0]?.value ?? null
-  }
+  selectedLetterId.value = data?.id ?? null
 }
 
 onMounted(async () => {
@@ -327,6 +369,7 @@ onMounted(async () => {
     applyRecord(cached)
     loading.value = false
   }
+  loadBundle() // dropdown paket muncul secepatnya (pakai cache bila ada)
 
   try {
     const [fresh] = await Promise.all([
@@ -334,6 +377,7 @@ onMounted(async () => {
       typeStore.fetchSigners(),
     ])
     applyRecord(fresh)
+    await loadBundle()
   } catch {
     if (!record.value) {
       toast.add({ severity: 'error', summary: 'Gagal memuat detail surat', life: 3000 })
@@ -362,6 +406,7 @@ async function verify(newStatus) {
   try {
     const updated = await letterStore.verifySurat(record.value.id, newStatus, notes.value.trim() || null)
     record.value = updated
+    syncBundleRecord(updated)
     toast.add({
       severity: 'success',
       summary: newStatus === 'verified' ? 'Surat berhasil diverifikasi' : 'Surat berhasil ditolak',
@@ -401,12 +446,12 @@ async function authorize() {
 
   authorizing.value = true
   try {
-    // FIX #4: notes tidak dikirim saat otorisasi — notes hanya untuk alasan penolakan.
     record.value = await letterStore.authorizeSurat(record.value.id, {
       status: 'authorized',
       authorized_by_signer_id: selectedSignerId.value,
       signature_type: signatureType.value,
     })
+    syncBundleRecord(record.value)
     toast.add({ severity: 'success', summary: 'Surat berhasil diotorisasi', life: 2200 })
     loadPreview()
   } catch (error) {
@@ -492,7 +537,6 @@ function sendNotification() {
           label="Kembali ke Daftar"
           icon="pi pi-arrow-left"
           variant="outline"
-         
           @click="router.push('/letter')"
         />
       </div>
@@ -727,7 +771,6 @@ function sendNotification() {
                 label="Cetak"
                 icon="pi pi-print"
                 variant="light"
-               
                 :disabled="!previewUrl"
                 @click="printPreview"
               />
@@ -735,17 +778,17 @@ function sendNotification() {
                 :label="isAuthorized ? 'Unduh PDF' : 'Unduh Draft'"
                 icon="pi pi-download"
                 variant="light"
-               
                 :loading="downloading"
                 @click="downloadPdf"
               />
             </div>
           </div>
 
-          <!-- Dropdown hanya muncul kalau ada lebih dari satu surat -->
+          <!-- Dropdown hanya muncul untuk paket (lebih dari satu surat). Pratinjau, cetak, unduh, dan aksi
+               verifikasi/otorisasi di halaman ini mengikuti surat yang dipilih. -->
           <div v-if="hasMultipleLetters" class="mb-3">
             <label class="block text-sm font-semibold text-slate-500 mb-1">
-              Pilih Surat ({{ letterOptions.length }} surat diajukan)
+              Pilih Surat ({{ letterOptions.length }} surat dalam paket)
             </label>
             <AppSelect
               :model-value="selectedLetterId"

@@ -11,7 +11,8 @@ export const sections = [
     fields: [f.kk("kkNumber", "Nomor Kartu Keluarga"), f.text("headOfFamily", "Nama Kepala Keluarga")],
   },
   // 3. Alamat (RT, RW, Dusun, Desa, Kecamatan, Kab/Kota, Provinsi, Kode Pos, Telepon)
-  alamat("origin", "Alamat Daerah Asal"),
+  //    Alamat asal = alamat pemohon → terisi otomatis dari data warga & dibaca sebagai applicant.address
+  alamat("origin", "Alamat Daerah Asal", { from: "address", phoneFrom: "phoneNumber" }),
   // 4. NIK Pemohon, 5. Tempat/Tanggal Lahir, 6. Nama Lengkap
   {
     title: "Data Pemohon",
@@ -27,8 +28,9 @@ export const sections = [
   {
     title: "Data Kepindahan",
     fields: [
-      f.select("relocationReason", "Alasan Pindah", ["Pekerjaan", "Pendidikan", "Keamanan", "Kesehatan", "Perumahan", "Keluarga", "Lainnya"]),
-      f.text("relocationReasonOther", "Sebutkan alasan lainnya", { showIf: (form) => form.relocationReason === "Lainnya" }),
+      f.select("relocationReason", "Alasan Pindah", OPT.relocationReason),
+      f.text("relocationReasonOther", "Sebutkan alasan lainnya", { showIf: (form) => String(form.relocationReason || "").startsWith("7") }),
+      f.select("relocationTypeLabel", "Cakupan Kepindahan (subjudul formulir)", OPT.relocationScope, { default: OPT.relocationScope[0], span: 2 }),
     ],
   },
   // 2. Alamat Tujuan Pindah
@@ -37,14 +39,9 @@ export const sections = [
   {
     title: "Jenis Kepindahan & Status KK",
     fields: [
-      f.select("relocationType", "Jenis Kepindahan", [
-        "Kep. Keluarga",
-        "Kep. Keluarga dan seluruh Angg. Keluarga",
-        "Kep. Keluarga dan sbg Angg. Keluarga",
-        "Anggota Keluarga",
-      ], { span: 2 }),
-      f.select("originKkStatus", "Status KK bagi yang tidak pindah", OPT.kkStatus),
-      f.select("destinationKkStatus", "Status Nomor KK bagi yang pindah", OPT.kkStatus),
+      f.select("relocationType", "Jenis Kepindahan", OPT.relocationType, { span: 2 }),
+      f.select("originKkStatus", "Status KK bagi yang tidak pindah", OPT.kkStatusNo),
+      f.select("destinationKkStatus", "Status Nomor KK bagi yang pindah", OPT.kkStatusNo),
     ],
   },
   // 6. Keluarga yang Pindah (tabel 7 baris: NIK, Nama, Masa Berlaku KTP s/d, SHDK)
