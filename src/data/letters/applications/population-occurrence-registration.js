@@ -97,11 +97,15 @@ export const sections = [
   },
 ];
 
-// Langkah 2: dokumen pendukung (opt(...) = tidak wajib)
-export const documents = [
-  DOC.ktp,
-  DOC.kk,
-  opt("Dokumen persyaratan lain sesuai yang dicentang di atas"),
-];
+// Langkah 2: dokumen pendukung dinamis mengikuti pilihan persyaratan yang dicentang di Langkah 1
+export const documents = (form) => {
+  const reqs = Array.isArray(form?.requirements) ? form.requirements.filter(Boolean) : [];
+  return [
+    DOC.ktp,
+    DOC.kk,
+    ...reqs.map((req) => opt(req)),
+    ...(reqs.length === 0 ? [opt("Dokumen persyaratan lain sesuai keperluan")] : []),
+  ];
+};
 
 export const meta = {"title": "Formulir Pendaftaran Peristiwa Kependudukan", "code": "PPK"};

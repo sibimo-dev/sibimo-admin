@@ -24,11 +24,19 @@ export function display(field, v) {
 export const filledRows = (field, form) => form[field.key].filter((r) => Object.values(r).some(isFilled));
 
 /* Normalisasi daftar dokumen: "Nama" atau { label, optional } → { id, label, optional }.
-   `prefix` dipakai supaya id unik antar surat di dalam satu paket. */
-export function normalizeDocs(documents = [], prefix = "") {
-  return documents.map((d, i) => {
+   Mendukung fungsi dinamis (form) => [] dan prefix unik untuk paket surat. */
+export function normalizeDocs(documents = [], prefix = "", form = null) {
+  const list = typeof documents === "function" ? documents(form) : documents;
+  if (!Array.isArray(list)) return [];
+  const seen = new Map();
+  return list.map((d, i) => {
     const base = typeof d === "string" ? { label: d, optional: false } : { optional: false, ...d };
-    return { ...base, id: prefix ? `${prefix}::${i}` : i };
+    const labelKey = base.label || String(i);
+    const count = seen.get(labelKey) || 0;
+    seen.set(labelKey, count + 1);
+    const uniqueKey = count === 0 ? labelKey : `${labelKey}_${count}`;
+    const id = base.id ?? (prefix ? `${prefix}::${uniqueKey}` : uniqueKey);
+    return { ...base, id };
   });
 }
 

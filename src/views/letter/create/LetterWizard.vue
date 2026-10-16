@@ -24,7 +24,7 @@ const props = defineProps({
   slug: { type: String, default: "" },
   code: { type: String, default: "SRT" }, // awalan kode surat, contoh: SKTM
   sections: { type: Array, required: true }, // lihat data/letterFields.js
-  documents: { type: Array, default: () => [] }, // "Nama dokumen" atau { label, optional }
+  documents: { type: [Array, Function], default: () => [] }, // "Nama dokumen", { label, optional }, atau fungsi dinamis (form) => []
   hue: { type: String, default: "violet" },
   internal: { type: Boolean, default: false }, // surat internal kantor (Perintah/Balasan): kontak WhatsApp tidak wajib
 });
@@ -44,10 +44,11 @@ const allSections = computed(() => [
     fields: [{ key: "whatsapp", label: "Nomor WhatsApp", type: "text", from: "phoneNumber", placeholder: "08xx-xxxx-xxxx", optional: props.internal }],
   },
 ]);
-const docList = computed(() => normalizeDocs(props.documents));
 
 const form = reactive({});
 fillForm(form, allSections.value);
+
+const docList = computed(() => normalizeDocs(props.documents, "", form));
 
 const files = reactive({}); // { [indexDokumen]: File }
 const preview = reactive({ open: false, file: null, title: "" });
