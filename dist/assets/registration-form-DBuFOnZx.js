@@ -1,0 +1,1 @@
+import{n as e}from"./rolldown-runtime-QTnfLwEv.js";import{I as t,P as n,s as r,y as i}from"./letterFields-BTqoFLxj.js";var a=e({documents:()=>s,meta:()=>c,sections:()=>o}),o=[i(),t(),n()],s=[r.ktp,r.kk,r.aktaLahir,r.pasFoto],c={title:`Data Isian Pendaftaran Nikah`,code:`FPN`};export{a as t};

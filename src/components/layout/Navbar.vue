@@ -64,7 +64,15 @@ function toggleMenu(event) {
     </div>
 
     <div class="flex items-center gap-3">
-      <NotificationBell />
+      <div
+        class="flex items-center justify-center pr-3 pl-1
+          [&_.pi-bell]:text-2xl!
+          [&_.p-badge]:min-w-6! [&_.p-badge]:h-6! [&_.p-badge]:text-sm!
+          [&_.p-badge]:font-bold! [&_.p-badge]:bg-red-600! [&_.p-badge]:text-white!
+          [&_.p-badge]:top-2! [&_.p-badge]:-right-1! [&_.p-badge]:ring-2 [&_.p-badge]:ring-white [&_.p-badge]:shadow-md"
+      >
+        <NotificationBell />
+      </div>
 
       <span class="w-px h-6 bg-neutral-100" />
 

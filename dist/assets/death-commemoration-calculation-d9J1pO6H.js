@@ -1,0 +1,1 @@
+import{n as e}from"./rolldown-runtime-QTnfLwEv.js";import{L as t,q as n,s as r}from"./letterFields-BTqoFLxj.js";var i=e({documents:()=>o,meta:()=>s,sections:()=>a}),a=[t([`name`,`address`,`deathDate`,`deathDay`,`deathTime`],`Data Almarhum/ah`,{name:`Nama`})],o=[r.ktp,n(r.suratKematian)],s={title:`Perhitungan Selamatan 3 Hari Sampai 1000 Hari`,code:`HPK`};export{i as t};

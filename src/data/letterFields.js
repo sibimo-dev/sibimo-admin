@@ -10,6 +10,11 @@ export const OPT = {
   occupation: ["Belum/Tidak Bekerja", "Pelajar/Mahasiswa", "Ibu Rumah Tangga", "Petani", "Buruh", "Wiraswasta", "Karyawan Swasta", "PNS/ASN", "TNI/Polri", "Pensiunan"],
   shdk: ["Kepala Keluarga", "Suami", "Istri", "Anak", "Menantu", "Cucu", "Orang Tua", "Mertua", "Famili Lain", "Pembantu", "Lainnya"],
   kkStatus: ["Numpang KK", "Membuat KK Baru", "Nomor KK Tetap"],
+  // Opsi bernomor mengikuti formulir cetak: angka di depan = angka yang dicetak di kotak pilihan pada PDF.
+  kkStatusNo: ["1. Numpang KK", "2. Membuat KK Baru", "3. Nomor KK Tetap"],
+  relocationReason: ["1. Pekerjaan", "2. Pendidikan", "3. Keamanan", "4. Kesehatan", "5. Perumahan", "6. Keluarga", "7. Lainnya (sebutkan)"],
+  relocationType: ["1. Kep. Keluarga", "2. Kep. Keluarga dan seluruh Angg. Keluarga", "3. Kep. Keluarga dan sbg Angg. Keluarga", "4. Anggota Keluarga"],
+  relocationScope: ["Antar Desa Dalam Satu Kecamatan", "Antar Kecamatan Dalam Satu Kabupaten/Kota", "Antar Kabupaten/Kota Atau Antar Provinsi"],
   delivery: ["Rumah Sakit", "Puskesmas", "Polindes", "Rumah Bersalin", "Rumah", "Lainnya"],
   attendant: ["Dokter", "Bidan", "Dukun", "Lainnya"],
   plurality: ["Tunggal", "Kembar 2", "Kembar 3", "Kembar 4", "Lainnya"],
@@ -192,11 +197,17 @@ export const calonIstri = (parts = NIKAH) => person("bride", "Data Calon Istri",
 export const ortuNikah = (prefix, title, binLabel) =>
   person(prefix, title, ["name", "nik", "birth", "nationality", "religion", "occupation", "address"], [f.text(`${prefix}Bin`, binLabel)]);
 
-/* ---------- Alamat lengkap (surat pindah/datang, dll) ---------- */
-export const alamat = (prefix, title) => ({
+/* ---------- Alamat lengkap (surat pindah/datang, dll) ----------
+   Opsi (opsional):
+     from      = kunci data warga untuk mengisi "Alamat (jalan/nomor)" otomatis (mis. "address").
+                 Dipakai pada alamat asal surat pindah: alamat asal = alamat pemohon, sekaligus dibaca applicantOf()
+                 sebagai applicant.address.
+     phoneFrom = kunci data warga untuk mengisi "Telepon" otomatis (mis. "phoneNumber").
+   Pemanggilan lama alamat("origin", "Judul") tetap berjalan seperti biasa. */
+export const alamat = (prefix, title, { from, phoneFrom } = {}) => ({
   title,
   fields: [
-    f.area(`${prefix}Address`, "Alamat (jalan/nomor)", { span: 2 }),
+    f.area(`${prefix}Address`, "Alamat (jalan/nomor)", { span: 2, ...(from ? { from } : {}) }),
     f.text(`${prefix}Rt`, "RT"),
     f.text(`${prefix}Rw`, "RW"),
     f.text(`${prefix}Hamlet`, "Dusun/Dukuh/Kampung", { optional: true }),
@@ -205,7 +216,7 @@ export const alamat = (prefix, title) => ({
     f.text(`${prefix}Regency`, "Kabupaten/Kota"),
     f.text(`${prefix}Province`, "Provinsi"),
     f.text(`${prefix}PostalCode`, "Kode Pos", { optional: true }),
-    f.text(`${prefix}Phone`, "Telepon", { optional: true }),
+    f.text(`${prefix}Phone`, "Telepon", { optional: true, ...(phoneFrom ? { from: phoneFrom } : {}) }),
   ],
 });
 
