@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import AppButton from '@/components/common/AppButton.vue'
@@ -142,7 +142,9 @@ async function loadPreview() {
   previewLoading.value = true
   previewError.value = ''
   try {
-    const blob = await getLetterPdf(record.value.id)
+    const blob = await getLetterPdf(record.value.id, {
+      signer_id: selectedSignerId.value,
+    })
     if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
     previewUrl.value = URL.createObjectURL(blob)
   } catch (error) {
@@ -154,6 +156,12 @@ async function loadPreview() {
     previewLoading.value = false
   }
 }
+
+watch(selectedSignerId, (newId, oldId) => {
+  if (oldId !== undefined && newId !== oldId) {
+    loadPreview()
+  }
+})
 
 onBeforeUnmount(() => {
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
