@@ -65,7 +65,7 @@ const hasChecklist = props.bundle.letters.filter((l) => !l.hidden).length > 1;
 const selected = ref(hasChecklist ? [...(props.bundle.ui?.preselected ?? [])].filter((id) => props.bundle.letters.some((l) => l.id === id)) : props.bundle.letters.map((l) => l.id));
 const selectError = ref(false);
 const selectedLetters = computed(() => props.bundle.letters.filter((l) => selected.value.includes(l.id)));
-const docsOf = (letter) => normalizeDocs(letter.documents, letter.id);
+const docsOf = (letter) => normalizeDocs(letter.documents, letter.id, form);
 const sectionsOf = (letter) => (letter.id === selectedLetters.value[0]?.id ? [...letter.sections, NOTIF_SECTION] : letter.sections);
 
 const STEPS = ["Pilih Surat", "Isian Surat", "Dokumen"];
