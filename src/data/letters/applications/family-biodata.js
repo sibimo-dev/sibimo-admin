@@ -4,7 +4,7 @@
 // Template PDF: letters/family-biodata-form.blade.php
 // Bagian "Diisi Oleh Petugas" (Provinsi, Kab, Kecamatan, Desa, Dusun, Nomor KK)
 // tidak diisi pemohon, dibiarkan kosong di PDF dan diisi/diedit admin.
-import { f, OPT, pemohonRingkas, opt } from "@/data/letterFields";
+import { f, OPT, pemohonRingkas, opt, signerNames } from "@/data/letterFields";
 
 // Opsi tambahan khusus formulir ini
 const ADA_TIDAK = ["Ada", "Tidak Ada"];
@@ -64,6 +64,9 @@ export const sections = [
       ], { max: 8 }),
     ],
   },
+
+  // TTD (4): 1. Petugas kecamatan  2. Kepala desa  3. Dukuh  4. Kepala keluarga (= Nama Lengkap di Data Kepala Keluarga)
+  signerNames(["districtOfficer", "hamletHead"], "Opsional. Tanda tangan Kepala Keluarga memakai Nama Lengkap di atas. Isi nama Petugas Kecamatan dan Dukuh bila ingin dicetak; kosongkan bila ditulis tangan."),
 ];
 
 // Langkah 2: dokumen pendukung (string biasa, keterangan ditulis di dalam label)

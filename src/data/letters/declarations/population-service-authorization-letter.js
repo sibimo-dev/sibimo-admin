@@ -8,6 +8,8 @@
 import { f, OPT, person, DOC } from "@/data/letterFields";
 
 // Langkah 1: isian sesuai surat yang diajukan
+// TTD (2): Yang diberi kuasa (attorneyName), Yang memberi kuasa (name)
+// → kedua penandatangan sudah punya isian nama di bawah, jadi tidak perlu field nama penandatangan tambahan.
 export const sections = [
   {
     // Surat (pemberi kuasa): Nama, NIK, Tempat & Tanggal Lahir, Pekerjaan, Alamat

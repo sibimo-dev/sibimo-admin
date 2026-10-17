@@ -1,6 +1,6 @@
 // Disalin dari public: views/services/letters/applications/temporary-stay-application-form.vue (hanya bagian isian & dokumen).
 // Isian di sini harus tetap sama dengan di public. Tampilan wizard ada di views/letter/create/.
-import { f, pemohon, DOC, opt } from "@/data/letterFields";
+import { f, pemohon, DOC, opt, signerNames } from "@/data/letterFields";
 // permohonan tinggal sementara
 
 export const sections = [
@@ -55,6 +55,8 @@ export const sections = [
       f.text("familyMember5Name", "Nama anggota 5", { optional: true }), f.text("familyMember5Nik", "NIK anggota 5", { optional: true }),
     ],
   },
+  // TTD (2): 1. Dukuh  2. Pemohon (= Nama Lengkap pemohon di atas)
+  signerNames(["hamletHead"], "Opsional. Tanda tangan Pemohon memakai Nama Lengkap di atas. Isi nama Dukuh bila ingin dicetak; kosongkan bila ditulis tangan."),
 ];
 
 export const documents = [
