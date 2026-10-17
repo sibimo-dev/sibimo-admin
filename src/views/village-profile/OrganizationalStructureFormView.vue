@@ -634,8 +634,6 @@ async function onPersonSignatureChange(event) {
               @click="triggerPersonPhotoUpload"
             >
               <img v-if="personForm.photo" :src="photoSrc(personForm.photo)" alt="Foto pamong" class="h-full w-full object-contain" />
-              <img v-if="personForm.photo" :src="personForm.photo" alt="Foto pamong" class="h-full w-full object-contain" />
-              <img v-if="personForm.photo" :src="photoSrc(personForm.photo)" alt="Foto pamong" class="h-full w-full object-contain" />
               <div v-else class="flex flex-col items-center gap-1.5 text-slate-400">
                 <i class="pi pi-camera text-2xl" />
                 <span class="text-xs font-medium">Upload Foto</span>
@@ -656,8 +654,6 @@ async function onPersonSignatureChange(event) {
           <label class="text-[13px] font-semibold text-slate-700">Tanda Tangan Digital</label>
           <div class="flex items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
             <div class="flex h-20 flex-1 items-center justify-center overflow-hidden rounded bg-white">
-              <img v-if="personForm.signature" :src="photoSrc(personForm.signature)" alt="Tanda tangan digital" class="h-full w-full object-contain" />
-              <img v-if="personForm.signature" :src="personForm.signature" alt="Tanda tangan digital" class="h-full w-full object-contain" />
               <img v-if="personForm.signature" :src="photoSrc(personForm.signature)" alt="Tanda tangan digital" class="h-full w-full object-contain" />
               <span v-else class="text-xs text-slate-400">Belum ada tanda tangan</span>
             </div>

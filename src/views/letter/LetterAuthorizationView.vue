@@ -174,7 +174,8 @@ onMounted(async () => {
     selectedSignerId.value =
       record.value?.authorized_by_signer_id ?? record.value?.letter_type?.signer_id ?? null
     signatureType.value = record.value?.signature_type ?? 'manual'
-    statusValue.value = record.value?.backendStatus ?? 'verified'
+    statusValue.value =
+      record.value?.backendStatus === 'verified' ? 'authorized' : (record.value?.backendStatus ?? 'authorized')
   } catch (error) {
     toast.add({ severity: 'error', summary: 'Gagal memuat detail otorisasi', life: 3000 })
   } finally {
