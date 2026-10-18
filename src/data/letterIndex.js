@@ -56,6 +56,7 @@ export const LETTER_INDEX = [
   ["population-service-authorization-letter", "declarations", "pernyataan", "Surat Kuasa Dalam Pelayanan Administrasi Kependudukan", "KPK"],
   ["birth-report-statement", "birth", "pernyataan", "Laporan Kelahiran", "PLK"],
   ["spousal-relationship-responsibility-statement", "birth", "pernyataan", "Surat Pernyataan Tanggung Jawab Mutlak Kebenaran Sebagai Pasangan Suami Istri", "PHS"],
+  ["birth-data-responsibility-statement", "birth", "pernyataan", "Surat Pernyataan Tanggung Jawab Mutlak Kebenaran Data Kelahiran", "PDL"],
   ["birth-certificate-power-of-attorney", "birth", "pernyataan", "Surat Kuasa", "KAK"],
   ["death-general-statement", "death", "pernyataan", "Surat Keterangan Mohon Akta Kematian", "PKU"],
   ["death-data-statement", "death", "pernyataan", "Surat Pernyataan Tanggung Jawab Mutlak (SPTJM) Kebenaran Data Kematian", "PDM"],

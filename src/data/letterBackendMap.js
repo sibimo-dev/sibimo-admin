@@ -26,6 +26,7 @@ export const BACKEND_CODE_BY_SLUG = {
   "birth-registration-report": "LPKL", "birth-report-form": "FPK", "birth-report-statement": "LK",
   "late-birth-registration-approval-decree": "PPKT", "out-of-domicile-birth-report": "LKLD",
   "spousal-relationship-responsibility-statement": "SPTJMPSI", "death-certificate": "SKKM",
+  "birth-data-responsibility-statement": "SPTJMDK",
   "death-certificate-application": "DKA", "death-data-statement": "DKS", "death-general-statement": "DKU",
   "death-power-of-attorney": "DKP", "death-registration-report": "DKC", "death-report": "DKR",
   "death-report-form": "DKF", "land-origin-certificate-letter": "SKTA", "land-price-certificate-letter": "SKTH",
