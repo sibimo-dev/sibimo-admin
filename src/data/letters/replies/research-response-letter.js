@@ -1,41 +1,30 @@
 // Surat Balasan Penelitian (jenis Balasan, surat internal kantor kalurahan).
-// CATATAN: berkas ini TIDAK ada di public, jadi isiannya disusun baru dari judul surat.
-// Cocokkan dengan template Blade-nya, lalu sesuaikan isian di bawah bila perlu.
+// Template PDF: letters/replies/research-response-letter.blade.php  (backend SBP)
+// Key mengikuti variabel blade:
+//   $recipient                  → recipientName          (Yth.; baris "Di" tetap "Di Tempat")
+//   $ref_number                 → refLetterNumber        (nomor surat saudara)
+//   $researcher['name']         → researcherName         (Nama Mahasiswa)
+//   $researcher['nim']          → researcherNim
+//   $researcher['study_program']→ researcherStudyProgram
+//   $researcher['faculty']      → researcherFaculty
+// Nomor surat, kota & tanggal, dan penandatangan diisi sistem.
 import { f, DOC, opt } from "@/data/letterFields";
 
 export const sections = [
   {
-    title: "Surat Permohonan Penelitian",
+    title: "Tujuan Surat",
     fields: [
-      f.text("requestNumber", "Nomor surat permohonan"),
-      f.date("requestDate", "Tanggal surat permohonan"),
-      f.text("requestInstitution", "Asal instansi / perguruan tinggi", { span: 2 }),
+      f.text("recipientName", "Ditujukan kepada (Universitas/Instansi)", { span: 2 }),
+      f.text("refLetterNumber", "Nomor surat saudara", { span: 2 }),
     ],
   },
   {
-    title: "Data Peneliti",
+    title: "Data Mahasiswa Peneliti",
     fields: [
-      f.text("researcherName", "Nama peneliti"),
-      f.text("researcherNumber", "NIM / NIP / NIDN"),
-      f.text("researcherStudyProgram", "Program studi / jurusan"),
-      f.text("researcherPhone", "Nomor telepon", { optional: true }),
-    ],
-  },
-  {
-    title: "Rencana Penelitian",
-    fields: [
-      f.area("researchTitle", "Judul penelitian", { span: 2 }),
-      f.text("researchLocation", "Lokasi penelitian", { span: 2 }),
-      f.date("researchStartDate", "Tanggal mulai penelitian"),
-      f.date("researchEndDate", "Tanggal selesai penelitian"),
-    ],
-  },
-  {
-    title: "Tanggapan",
-    fields: [
-      f.select("responseResult", "Hasil tanggapan", ["Diizinkan", "Tidak diizinkan"]),
-      f.area("responseConditions", "Ketentuan selama penelitian", { span: 2, optional: true }),
-      f.text("destination", "Surat ditujukan kepada", { span: 2 }),
+      f.text("researcherName", "Nama Mahasiswa", { span: 2 }),
+      f.text("researcherNim", "NIM"),
+      f.text("researcherStudyProgram", "Program Studi"),
+      f.text("researcherFaculty", "Fakultas", { span: 2 }),
     ],
   },
 ];

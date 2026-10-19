@@ -7,11 +7,24 @@
 // Langkah 3 (cek ulang, ceklis dokumen asli, kirim, pop-up hasil) sudah ditangani LetterWizard.
 import { f, OPT, person, DOC, opt } from "@/data/letterFields";
 
+// Suami/istri = pihak pertama/kedua. Pemohon adalah salah satunya, jadi hasil pencarian NIK hanya mengisi blok yang cocok
+// dengan jenis kelaminnya: laki-laki -> Suami, perempuan -> Istri (pola asFather/asMother = laki-laki/perempuan, sama seperti
+// blok Ayah/Ibu pada surat kelahiran). Blok pasangannya dibiarkan kosong untuk diisi manual.
+const SPOUSE_FROM = { Name: "fullName", Nik: "nik", BirthPlace: "birthPlace", BirthDate: "birthDate", Occupation: "occupation", Address: "address" };
+const byGender = (block, prefix, role) => ({
+  ...block,
+  hint: "Terisi otomatis bila NIK yang dicari sesuai jenis kelamin. Bila bukan, isi manual.",
+  fields: block.fields.map((fl) => {
+    const src = SPOUSE_FROM[fl.key.slice(prefix.length)];
+    return src ? { ...fl, from: `${role}:${src}` } : fl;
+  }),
+});
+
 // Langkah 1: isian sesuai surat yang diajukan
 export const sections = [
   // Surat: Nama, NIK, Tempat & Tanggal Lahir, Pekerjaan, Alamat (suami = Pihak Pertama, istri = Pihak Kedua)
-  person("husband", "Data Suami (Pihak Pertama)", ["name", "nik", "birth", "occupation", "address"]),
-  person("wife", "Data Istri (Pihak Kedua)", ["name", "nik", "birth", "occupation", "address"]),
+  byGender(person("husband", "Data Suami (Pihak Pertama)", ["name", "nik", "birth", "occupation", "address"]), "husband", "asFather"),
+  byGender(person("wife", "Data Istri (Pihak Kedua)", ["name", "nik", "birth", "occupation", "address"]), "wife", "asMother"),
   {
     title: "Data Perkawinan",
     fields: [f.date("marriageDate", "Tanggal Perkawinan Dilaksanakan")],

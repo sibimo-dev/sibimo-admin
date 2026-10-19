@@ -96,7 +96,7 @@ export const LETTER_INDEX = [
   ["duty-travel-order-letter", "orders", "perintah", "SPPD", "SPPD"],
   ["late-birth-registration-approval-decree", "birth", "perintah", "Surat Pencatatan Kelahiran Terlambat", "SKT"],
   ["permit-followup-letter", "replies", "balasan", "Surat Tindak Lanjut Permohonan Izin", "TLP"],
-  ["lease-offer-letter", "replies", "balasan", "Surat Penawaran Sewa Kontrak Gedung BRI Unit Ngemplak II", "SPS"],
+  ["lease-offer-letter", "replies", "balasan", "Surat Penawaran Sewa Kontrak", "SPS"],
   ["research-response-letter", "replies", "balasan", "Surat Balasan Penelitian", "BIP"],
   ["marriage-certificate-duplicate-letter", "cover-letters", "pengantar", "Surat Pengantar Duplikat Nikah", "DAN"],
   ["general-cover-letter", "cover-letters", "pengantar", "Surat Pengantar Umum", "PGU"],

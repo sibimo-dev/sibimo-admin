@@ -7,11 +7,250 @@
    Kalau ada field yang belum cocok, buka halaman  /letter/mapping-check  (membandingkan SEMUA surat dengan
    backend), lalu isi override di sini. */
 
-/* Override manual. "*" berlaku untuk semua surat; per-slug mengalahkan "*".
-   Format: { "<slug>": { "<key di form>": "<field_key di backend>" } }
-   Contoh:  "marriage-certificate-duplicate-letter": { destination: "tujuan" } */
+/* Override eksplisit (key di form -> field_key di backend). DIHASILKAN dari perbandingan form frontend dengan
+   seeder/katalog backend (laporan-mismatch-surat.md). Hanya pasangan yang yakin (nama + peran orang + konteks seksi
+   cocok). Pasangan yang ragu ada di letter-mapping-review.md dan harus diputuskan manual.
+   Format: { "<slug>": { "<key di form>": "<field_key di backend>" } } */
 export const FIELD_OVERRIDES = {
-  "*": {},
+  /* Nama penandatangan (opsional) — key unik per jabatan, jadi aman dipasang untuk semua surat.
+     field_key di sisi kanan HARUS dibuat di letter_type_fields (type text, tidak wajib) pada surat terkait;
+     kalau belum ada di backend, pasangan ini otomatis dilewati dan terdaftar di /letter/mapping-check. */
+  "*": {
+    hamletHeadName: "nama_dukuh", // tiga kata (hamlet+head+name) tidak cocok otomatis dengan "Nama Dukuh"
+    districtHeadName: "nama_camat",
+    rtHeadName: "nama_ketua_rt",
+    rwHeadName: "nama_ketua_rw",
+    registrarName: "nama_petugas_registrasi",
+    officerName: "nama_petugas",
+    districtOfficerName: "nama_petugas_kecamatan",
+    receivingOfficerName: "nama_petugas_penerima_berkas",
+    notaryName: "nama_notaris",
+    departmentHeadName: "nama_kepala_dinas",
+    departmentHeadNip: "nip_kepala_dinas",
+  },
+  "income-permit-letter": {
+    purpose: "dipergunakan_untuk", // manual
+  },
+  "birth-attestation-letter": {
+    marriageRecordDate: "tanggal_pencatatan_perkawinan",
+    reporterReportDate: "tanggal_lapor",
+    childDeliveryPlace: "tempat_dilahirkan",
+    childBirthPlace: "tempat_kelahiran_kota",
+    childBirthTime: "jam_kelahiran",
+    childPlurality: "jenis_kelahiran",
+    childBirthOrder: "kelahiran_ke",
+    childBirthAttendant: "penolong_kelahiran",
+    childWeight: "berat_bayi",
+    childLength: "panjang_bayi",
+    marriageRecordPlace: "tempat_pencatatan_perkawinan",
+    childBirthDate: "hari_tanggal_lahir",
+  },
+  "birth-certificate-application-form": {
+    reporterPhone: "kontak_pelapor",
+  },
+  "birth-report-form": {
+    marriageRecordDate: "tanggal_pencatatan_perkawinan",
+    reporterReportDate: "tanggal_lapor",
+    childDeliveryPlace: "tempat_dilahirkan",
+    childBirthPlace: "tempat_kelahiran_kota",
+    childBirthTime: "jam_kelahiran",
+    childPlurality: "jenis_kelahiran",
+    childBirthOrder: "kelahiran_ke",
+    childBirthAttendant: "penolong_kelahiran",
+    childWeight: "berat_bayi",
+    childLength: "panjang_bayi",
+    marriageRecordPlace: "tempat_pencatatan_perkawinan",
+    childBirthDate: "hari_tanggal_lahir",
+  },
+  "birth-report-statement": {
+    reporterRelationship: "hubungan_dengan_bayi",
+  },
+  "death-certificate": {
+    reporterReportDate: "tanggal_lapor",
+    deceasedChildOrder: "anak_ke_jenazah",
+  },
+  "death-certificate-application": {
+    reportType: "jenis_pelaporan",
+    deathDate: "meninggal_hari_tanggal",
+    deathPlace: "kota_tempat_meninggal",
+    reporterApplicationDate: "tanggal_lapor",
+  },
+  "death-registration-report": {
+    deceasedChildOrder: "anak_ke_jenazah",
+    deathDate: "meninggal_hari_tanggal",
+    witness1BirthDate: "ttl_saksi_1",
+    witness2BirthDate: "ttl_saksi_2",
+    deathPlace: "kota_tempat_meninggal",
+  },
+  "death-report": {
+    deceasedChildOrder: "anak_ke_jenazah",
+  },
+  "death-report-form": {
+    reportType: "jenis_pelaporan", // blok Data Administrasi (Jenis Pelaporan) kini ada di form ini; pastikan field-nya ada di backend
+    reporterReportDate: "tanggal_lapor",
+    deceasedChildOrder: "anak_ke_jenazah",
+    deathPlace: "kota_tempat_meninggal",
+  },
+  "domicile-certificate": {
+    buildingUsage: "kegunaan_bangunan",
+  },
+  "duty-travel-order-letter": {
+    returnDueDate: "tanggal_kembali",
+    employeeRank: "pangkat_golongan",
+    employeePosition: "jabatan",
+    purpose: "maksud_perjalanan",
+    transport: "alat_angkutan",
+    companions: "pengikut",
+    budgetItem: "anggaran_mata_anggaran",
+    notes: "keterangan_lain",
+    issuingOfficial: "pejabat_berwenang",
+  },
+  "event-permit-letter": {
+    eventDate: "pada_hari_tanggal",
+    eventTime: "jam",
+    eventPlace: "tempat",
+    eventParticipants: "peserta",
+    eventObjective: "tujuan",
+    responsiblePerson: "penanggung_jawab",
+  },
+  "fuel-recommendation-letter": {
+    volumeAllocation: "alokasi_volume",
+    pickupLocation: "tempat_pengambilan",
+    distributorNumber: "nomor_lembaga_penyalur",
+  },
+  "general-statement-letter": {
+    purpose: "menerangkan_bahwa",
+  },
+  "guardian-statement": {
+    guardianRelation: "hubungan_wali_nasab",
+  },
+  "health-referral": {
+    conduct: "kelakuan",
+    note: "keterangan_lain",
+  },
+  "judge-guardian": {
+    judgeGuardianReason: "sebab_wali_hakim",
+  },
+  "kia-application-form": {
+    householdHead: "nama_kepala_keluarga", // manual
+    bloodType: "golongan_darah_anak",
+    // Data anak vs penandatangan pemohon (orang tua/wali): dipisah eksplisit supaya alias generik `name`/`nik`
+    // (-> nama_pemohon / nik_pemohon) tidak menimpa data anak.
+    name: "nama_anak",
+    nik: "nik_anak",
+    birthPlace: "tempat_lahir_anak",
+    birthDate: "tanggal_lahir_anak",
+    gender: "jenis_kelamin_anak",
+    religion: "agama_anak",
+    applicantName: "nama_pemohon",
+    applicantNik: "nik_pemohon",
+  },
+  "land-origin-certificate-letter": {
+    measurementLetterDate: "land_measurement_letter_date",
+    area: "land_area",
+    measurementLetterNumber: "land_measurement_letter_number",
+    areaInWords: "land_area_in_words",
+    certificateNumber: "land_certificate_number",
+  },
+  "land-price-certificate-letter": {
+    area: "land_area",
+    certificateNumber: "land_certificate_number",
+    priceMin: "land_price_min",
+    priceMax: "land_price_max",
+  },
+  "lease-offer-letter": {
+    recipientName: "ditujukan_kepada",
+    recipientAddress: "lokasi_tujuan_surat",
+    leaseBuildingName: "nama_gedung",
+    leaseBuildingAddress: "alamat_gedung",
+    leaseDurationYears: "lama_sewa_tahun",
+  },
+  "letter-c-data-statement-letter": {
+    purposeType: "purpose",
+    hamletHeadName: "dukuh_name",
+  },
+  "n2": {
+    akadDate: "hari_tanggal_akad",
+  },
+  "out-of-domicile-birth-report": {
+    marriageRecordDate: "tanggal_pencatatan_perkawinan",
+    reporterReportDate: "tanggal_lapor",
+    childDeliveryPlace: "tempat_dilahirkan",
+    childBirthPlace: "tempat_kelahiran_kota",
+    childBirthTime: "jam_kelahiran",
+    childPlurality: "jenis_kelahiran",
+    childBirthAttendant: "penolong_kelahiran",
+    childWeight: "berat_bayi",
+    childLength: "panjang_bayi",
+    marriageRecordPlace: "tempat_pencatatan_perkawinan",
+    childBirthDate: "hari_tanggal_lahir",
+    childBirthOrder: "anak_ke",
+  },
+  "parental-consent-letter": {
+    fatherName: "groom_father_name",
+    fatherNik: "groom_father_nik",
+    fatherAddress: "groom_father_address",
+    motherName: "groom_mother_name",
+    motherNik: "groom_mother_nik",
+    motherAddress: "groom_mother_address",
+  },
+  "permit-followup-letter": {
+    recipientName: "ditujukan_kepada",
+    recipientAddress: "lokasi_tujuan_surat",
+    refLetterNumber: "nomor_surat_asal",
+    eventDate: "tanggal_kegiatan",
+    eventEndDate: "tanggal_selesai_kegiatan",
+    eventTime: "waktu_kegiatan",
+    eventEndTime: "waktu_selesai_kegiatan",
+    eventObjective: "nama_acara",
+    eventPlace: "tempat_kegiatan",
+  },
+  "registration-form": {
+    groomName: "nama_suami_terdahulu",
+    groomNik: "nik_suami_terdahulu",
+    groomNationality: "kewarganegaraan_suami_terdahulu",
+    groomAddress: "alamat_suami_terdahulu",
+    groomBin: "bin_suami_terdahulu",
+  },
+  "relocation-certificate-form": {
+    headOfFamily: "origin_head_of_family",
+    kkNumber: "origin_kk_number",
+    originKkStatus: "origin_kk_status_code",
+    destinationKkStatus: "destination_kk_status_code",
+  },
+
+  "relocation-cover-letter": {
+    headOfFamily: "nama_kepala_keluarga",
+    relocationReason: "alasan_pindah",
+    originKkStatus: "status_kk_tidak_pindah",
+    destinationKkStatus: "status_kk_pindah",
+  },
+  "research-response-letter": {
+    recipientName: "ditujukan_kepada",
+    refLetterNumber: "nomor_surat_asal",
+    researcherName: "nama_mahasiswa",
+    researcherNim: "nim",
+    researcherStudyProgram: "program_studi",
+    researcherFaculty: "fakultas",
+  },
+  "sktm-general": {
+    kkmNumber: "nomor_kkm_krm",
+  },
+};
+
+/* Isian berulang (rows) -> field backend bernomor. Contoh: familyMembers[i].nik -> nik_pindah_{i+1}.
+   max = jumlah baris yang tersedia di backend; baris berlebih dibuang (ada peringatan di console). */
+export const ROW_OVERRIDES = {
+  "relocation-cover-letter": {
+    familyMembers: { max: 7, columns: { nik: "nik_pindah", name: "nama_pindah", validUntil: "masa_berlaku_ktp", shdk: "shdk" } },
+  },
+  "spousal-relationship-responsibility-statement": {
+    marriageWitnesses: { max: 2, columns: { name: "nama_saksi", nik: "nik_saksi" } },
+  },
+  // Tembusan bisa ditambah: carbonCopies[i].name -> tembusan_{i+1} (tembusan_1 .. tembusan_10 harus ada di backend)
+  "permit-followup-letter": {
+    carbonCopies: { max: 10, columns: { name: "tembusan" } },
+  },
 };
 
 /* Satu baris = satu "makna". Kata Inggris & Indonesia di baris yang sama dianggap sama. */
@@ -73,6 +312,7 @@ GROUPS.forEach((g, i) => g.forEach((t) => { if (!GROUP_OF.has(t)) GROUP_OF.set(t
 export function tokenize(text) {
   return String(text ?? "")
     .replace(/\([^)]*\)/g, " ") // "Binti (nama ayah)" -> "Binti"
+    .replace(/^\s*(?:\d+\s*[.)]|[a-zA-Z][.)]\s+)\s*/, " ") // "1. Nomor KK" / "a. Desa" -> nomor di depan label dibuang
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/([A-Za-z])(\d)/g, "$1 $2")
@@ -111,3 +351,4 @@ export function matchBySignature(key, backendFields, isFree = () => true) {
 }
 
 export const overrideFor = (slug, key) => FIELD_OVERRIDES[slug]?.[key] ?? FIELD_OVERRIDES["*"]?.[key] ?? null;
+export const rowsFor = (slug, key) => ROW_OVERRIDES[slug]?.[key] ?? null;

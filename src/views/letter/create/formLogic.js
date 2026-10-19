@@ -38,7 +38,8 @@ export function normalizeDocs(documents = [], prefix = "", form = null) {
     seen.set(labelKey, count + 1);
     const uniqueKey = count === 0 ? labelKey : `${labelKey}_${count}`;
     const id = base.id ?? (prefix ? `${prefix}::${uniqueKey}` : uniqueKey);
-    return { ...base, id };
+    // Admin: semua dokumen dipaksa opsional, apa pun isi `documents` di data/letters/*.
+    return { ...base, optional: DOCS_OPTIONAL || !!base.optional, id };
   });
 }
 
@@ -168,6 +169,7 @@ export function validateFields(sections, form) {
 
 export function validateDocs(docs, files) {
   const e = {};
+  if (DOCS_OPTIONAL) return e;
   for (const d of docs) if (!files[d.id] && !d.optional) e[d.id] = `${d.label} wajib diunggah.`;
   return e;
 }
