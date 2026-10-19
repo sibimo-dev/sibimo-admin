@@ -270,7 +270,8 @@ function checkAndSubmit() {
     return focusFirstError();
   }
   stepAlert.value = "";
-  if (!isOriginal.value) {
+  // Pernyataan dokumen asli hanya relevan bila ada berkas yang diunggah (unggah dokumen opsional).
+  if (Object.keys(files).length && !isOriginal.value) {
     confirmError.value = true;
     return;
   }

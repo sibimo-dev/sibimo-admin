@@ -95,6 +95,11 @@ function next() {
   fileErrors.value = validateDocs(docList.value, files);
   if (Object.keys(fileErrors.value).length) return;
   if (!isOriginal.value) {
+  // langkah dokumen = langkah terakhir → langsung ke Verifikasi + Otorisasi
+  fileErrors.value = validateDocs(docList.value, files);
+  if (Object.keys(fileErrors.value).length) return;
+  // Pernyataan dokumen asli hanya relevan bila ada berkas yang diunggah (unggah dokumen opsional).
+  if (Object.keys(files).length && !isOriginal.value) {
     confirmError.value = true;
     return;
   }

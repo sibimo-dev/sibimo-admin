@@ -16,6 +16,7 @@ export const FIELD_OVERRIDES = {
      field_key di sisi kanan HARUS dibuat di letter_type_fields (type text, tidak wajib) pada surat terkait;
      kalau belum ada di backend, pasangan ini otomatis dilewati dan terdaftar di /letter/mapping-check. */
   "*": {
+    hamletHeadName: "nama_dukuh", // tiga kata (hamlet+head+name) tidak cocok otomatis dengan "Nama Dukuh"
     districtHeadName: "nama_camat",
     rtHeadName: "nama_ketua_rt",
     rwHeadName: "nama_ketua_rw",
@@ -85,6 +86,7 @@ export const FIELD_OVERRIDES = {
     deceasedChildOrder: "anak_ke_jenazah",
   },
   "death-report-form": {
+    reportType: "jenis_pelaporan", // blok Data Administrasi (Jenis Pelaporan) kini ada di form ini; pastikan field-nya ada di backend
     reporterReportDate: "tanggal_lapor",
     deceasedChildOrder: "anak_ke_jenazah",
     deathPlace: "kota_tempat_meninggal",
@@ -132,6 +134,16 @@ export const FIELD_OVERRIDES = {
   "kia-application-form": {
     householdHead: "nama_kepala_keluarga", // manual
     bloodType: "golongan_darah_anak",
+    // Data anak vs penandatangan pemohon (orang tua/wali): dipisah eksplisit supaya alias generik `name`/`nik`
+    // (-> nama_pemohon / nik_pemohon) tidak menimpa data anak.
+    name: "nama_anak",
+    nik: "nik_anak",
+    birthPlace: "tempat_lahir_anak",
+    birthDate: "tanggal_lahir_anak",
+    gender: "jenis_kelamin_anak",
+    religion: "agama_anak",
+    applicantName: "nama_pemohon",
+    applicantNik: "nik_pemohon",
   },
   "land-origin-certificate-letter": {
     measurementLetterDate: "land_measurement_letter_date",
@@ -145,6 +157,13 @@ export const FIELD_OVERRIDES = {
     certificateNumber: "land_certificate_number",
     priceMin: "land_price_min",
     priceMax: "land_price_max",
+  },
+  "lease-offer-letter": {
+    recipientName: "ditujukan_kepada",
+    recipientAddress: "lokasi_tujuan_surat",
+    leaseBuildingName: "nama_gedung",
+    leaseBuildingAddress: "alamat_gedung",
+    leaseDurationYears: "lama_sewa_tahun",
   },
   "letter-c-data-statement-letter": {
     purposeType: "purpose",
@@ -176,7 +195,15 @@ export const FIELD_OVERRIDES = {
     motherAddress: "groom_mother_address",
   },
   "permit-followup-letter": {
-    carbonCopy: "tembusan",
+    recipientName: "ditujukan_kepada",
+    recipientAddress: "lokasi_tujuan_surat",
+    refLetterNumber: "nomor_surat_asal",
+    eventDate: "tanggal_kegiatan",
+    eventEndDate: "tanggal_selesai_kegiatan",
+    eventTime: "waktu_kegiatan",
+    eventEndTime: "waktu_selesai_kegiatan",
+    eventObjective: "nama_acara",
+    eventPlace: "tempat_kegiatan",
   },
   "registration-form": {
     groomName: "nama_suami_terdahulu",
@@ -198,6 +225,14 @@ export const FIELD_OVERRIDES = {
     originKkStatus: "status_kk_tidak_pindah",
     destinationKkStatus: "status_kk_pindah",
   },
+  "research-response-letter": {
+    recipientName: "ditujukan_kepada",
+    refLetterNumber: "nomor_surat_asal",
+    researcherName: "nama_mahasiswa",
+    researcherNim: "nim",
+    researcherStudyProgram: "program_studi",
+    researcherFaculty: "fakultas",
+  },
   "sktm-general": {
     kkmNumber: "nomor_kkm_krm",
   },
@@ -211,6 +246,10 @@ export const ROW_OVERRIDES = {
   },
   "spousal-relationship-responsibility-statement": {
     marriageWitnesses: { max: 2, columns: { name: "nama_saksi", nik: "nik_saksi" } },
+  },
+  // Tembusan bisa ditambah: carbonCopies[i].name -> tembusan_{i+1} (tembusan_1 .. tembusan_10 harus ada di backend)
+  "permit-followup-letter": {
+    carbonCopies: { max: 10, columns: { name: "tembusan" } },
   },
 };
 
