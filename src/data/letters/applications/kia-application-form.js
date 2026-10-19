@@ -4,7 +4,7 @@
 // Template PDF: letters/kia-application-form.blade.php
 // 1 file = 1 surat. Isi `sections` (langkah 1) dan `documents` (langkah 2).
 // Langkah 3 (cek ulang, ceklis dokumen asli, kirim, pop-up hasil) sudah ditangani LetterWizard.
-import { f, OPT } from "@/data/letterFields";
+import { f, OPT, signerNames } from "@/data/letterFields";
 
 // Langkah 1: isian sesuai formulir (kunci mengikuti $kia di template PDF)
 // Urutan mengikuti formulir: NIK, Nama, Tempat/Tgl Lahir, Jenis Kelamin, Gol. Darah,
@@ -45,6 +45,8 @@ export const sections = [
       f.text("district", "Kecamatan", { default: "Ngemplak" }),
     ],
   },
+  // TTD (2): 1. Pemohon  2. Petugas
+  signerNames(["officer"], "Opsional. Isi nama Petugas bila ingin dicetak di bawah tanda tangan; kosongkan bila ditulis tangan. Pemohon (orang tua/wali) menandatangani sendiri."),
 ];
 
 // Langkah 2: dokumen pendukung (string biasa, keduanya wajib)

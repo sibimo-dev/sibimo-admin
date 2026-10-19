@@ -1,7 +1,7 @@
 // Disalin dari public: views/services/letters/applications/resident-arrival-form.vue (hanya bagian isian & dokumen).
 // Isian di sini harus tetap sama dengan di public. Tampilan wizard ada di views/letter/create/.
 // Formulir Permohonan Pindah Datang WNI
-import { f, OPT, pemohon, DOC } from "@/data/letterFields";
+import { f, OPT, pemohon, DOC, signerNames } from "@/data/letterFields";
 const alamatLengkap = (prefix, title, addressLabel = "Alamat") => ({
   title,
   fields: [
@@ -83,6 +83,9 @@ export const sections = [
       ], { max: 6 }),
     ],
   },
+
+  // TTD (3): 1. Petugas registrasi  2. Lurah Bimomartani  3. Pemohon (= Nama Lengkap pemohon di atas)
+  signerNames(["registrar"], "Opsional. Tanda tangan Pemohon memakai Nama Lengkap di atas. Isi nama Petugas Registrasi bila ingin dicetak; kosongkan bila ditulis tangan."),
 ];
 
 export const documents = [

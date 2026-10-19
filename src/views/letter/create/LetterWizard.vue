@@ -25,7 +25,7 @@ const props = defineProps({
   code: { type: String, default: "SRT" }, // awalan kode surat, contoh: SKTM
   slug: { type: String, default: "" }, // slug berkas surat → dipetakan ke kode tipe surat backend
   sections: { type: Array, required: true }, // lihat data/letterFields.js
-  documents: { type: Array, default: () => [] }, // "Nama dokumen" atau { label, optional }
+  documents: { type: [Array, Function], default: () => [] }, // "Nama dokumen", { label, optional }, atau fungsi dinamis (form) => []
   hue: { type: String, default: "violet" },
   internal: { type: Boolean, default: false }, // surat internal kantor (Perintah/Balasan): kontak WhatsApp tidak wajib
 });
@@ -45,14 +45,17 @@ const allSections = computed(() => [
     fields: [{ key: "whatsapp", label: "Nomor Telepon / WhatsApp", type: "text", from: "phoneNumber", placeholder: "08xx-xxxx-xxxx", optional: true }],
   },
 ]);
-const docList = computed(() => normalizeDocs(props.documents));
 
 const form = reactive({});
 fillForm(form, allSections.value);
 
+// Dipakai template (ApplicantLookup & LetterFormFields) dan buildPayload(). Tanpa 3 baris ini halaman gagal tampil
+// ("Property lookup was accessed during render but is not defined").
 const autoFilled = reactive({}); // { [fieldKey]: true } — penanda "terisi otomatis" (dari pencarian NIK)
 const onEdit = (key) => delete autoFilled[key];
 const lookup = useApplicantLookup();
+
+const docList = computed(() => normalizeDocs(props.documents, "", form));
 
 const files = reactive({}); // { [indexDokumen]: File }
 const errors = ref({});

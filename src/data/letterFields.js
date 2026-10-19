@@ -430,6 +430,37 @@ export const birthHamlet = () => ({
   fields: [f.text("hamletName", "Nama Dusun (Dukuh)"), f.text("hamletHeadName", "Nama Dukuh (untuk tanda tangan)", { optional: true })],
 });
 
+/* ---------- Nama penandatangan (OPSIONAL) ----------
+   Dipakai surat yang di kertasnya punya kolom tanda tangan pihak lain (sumber: kolom "Keterangan TTD" pada
+   Form Identifikasi Layanan). Penandatangan yang SUDAH punya isian (pemohon, pihak pertama/kedua, saksi, penerima/
+   pemberi kuasa) tidak diulang di sini. Isian ini TIDAK wajib: dikosongkan = nama dicetak kosong / ditulis tangan.
+   parts: hamletHead districtHead rtHead rwHead witness1 witness2 registrar officer districtOfficer receivingOfficer departmentHead notary
+   Lurah / Petugas Kalurahan TIDAK dibuat form: penandatangannya sudah ditangani di otorisasi surat.
+   Key sama di semua surat (hamletHeadName dst.) → dalam satu paket cukup diisi sekali. */
+const SIGNER_NAME = {
+  hamletHead: () => f.text("hamletHeadName", "Nama Dukuh", { optional: true }),
+  districtHead: () => f.text("districtHeadName", "Nama Camat", { optional: true }),
+  rtHead: () => f.text("rtHeadName", "Nama Ketua RT", { optional: true }),
+  rwHead: () => f.text("rwHeadName", "Nama Ketua RW", { optional: true }),
+  witness1: () => f.text("witness1Name", "Nama Saksi I", { optional: true }),
+  witness2: () => f.text("witness2Name", "Nama Saksi II", { optional: true }),
+  registrar: () => f.text("registrarName", "Nama Petugas Registrasi", { optional: true }),
+  officer: () => f.text("officerName", "Nama Petugas", { optional: true }),
+  districtOfficer: () => f.text("districtOfficerName", "Nama Petugas Kecamatan", { optional: true }),
+  receivingOfficer: () => f.text("receivingOfficerName", "Nama Petugas Penerima Berkas", { optional: true }),
+  // Kepala Dinas (Dukcapil): nama + NIP. Satu "part" menghasilkan 2 isian.
+  departmentHead: () => [
+    f.text("departmentHeadName", "Nama Kepala Dinas", { optional: true }),
+    f.text("departmentHeadNip", "NIP Kepala Dinas", { optional: true, placeholder: "Contoh: 19700101 199503 1 001" }),
+  ],
+  notary: () => f.text("notaryName", "Nama Notaris", { optional: true }),
+};
+export const signerNames = (parts, hint = "Opsional. Isi bila nama penandatangan ingin dicetak di bawah tanda tangan; kosongkan bila akan ditulis tangan.") => ({
+  title: "Nama Penandatangan (Opsional)",
+  hint,
+  fields: parts.flatMap((p) => [].concat(SIGNER_NAME[p]())),
+});
+
 /* ---------- Susunan form yang SAMA PERSIS di beberapa blade ---------- */
 /* birth-report-form, birth-attestation-letter, out-of-domicile-birth-report */
 export const birthReportSections = () => [

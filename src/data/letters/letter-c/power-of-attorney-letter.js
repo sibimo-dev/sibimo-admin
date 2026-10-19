@@ -32,11 +32,12 @@ export const sections = [
       f.area("attorneyAddress", "Alamat", { span: 2 }),
     ],
   },
+  // TTD di xlsx (3): Penerima kuasa (attorneyName), Pemberi kuasa (name), Kalurahan/Notaris.
+  // Penerima & pemberi kuasa SUDAH punya isian. Nama yang mengetahui (Kalurahan/Notaris) tidak dibuat field (tidak perlu).
   {
     title: "Mengetahui",
     fields: [
       f.text("endorserOffice", "Kelurahan/Notaris", { optional: true }),
-      f.text("endorserName", "Nama yang mengetahui", { optional: true }),
     ],
   },
 ];

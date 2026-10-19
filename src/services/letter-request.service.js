@@ -20,8 +20,12 @@ export const authorizeLetterRequest = (id, payload) =>
 // Mendukung pemanggilan lama dengan boolean dan pemanggilan baru dengan object options.
 export const getLetterPdf = async (id, options = {}) => {
   const download = typeof options === 'boolean' ? options : Boolean(options?.download)
+  const signerId = typeof options === 'object' && options?.signer_id ? options.signer_id : undefined
   const response = await api.get('/letter-requests/' + id + '/pdf', {
-    params: { download: download ? 1 : 0 },
+    params: {
+      download: download ? 1 : 0,
+      ...(signerId ? { signer_id: signerId } : {}),
+    },
     responseType: 'blob',
   })
 

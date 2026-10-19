@@ -1,7 +1,7 @@
 import { createLetterRequest } from "./letter-request.service";
 import { getLetterTypes, getFields } from "./letter-type.service";
 import { getBackendLetterCode } from "@/data/letterBackendMap";
-import { matchBySignature, overrideFor, signature } from "@/data/letterFieldMap";
+import { matchBySignature, overrideFor, rowsFor, signature } from "@/data/letterFieldMap";
 
 // Key generik yang dipakai untuk dua isian berbeda: label di form yang menentukan ("Tujuan" vs "Pergi ke").
 /* Pasangan yang sudah dipastikan dari backend asli: { slug: { keyDiForm: "label ATAU field_key backend" } } */
@@ -226,7 +226,44 @@ function applicantFromFields(applicant = {}, fields = {}) {
     phone: get("phone", "applicantPhone", "phoneNumber", "nomorTelepon", "noHp"),
   };
 }
-function fieldLabelKey(label) { return norm(label); }
+/* Label backend sering disalin dari PDF dan bernomor ("1. Nomor Kartu Keluarga", "a. Desa/Kelurahan"). Nomor/huruf
+   di depan diabaikan saat mencocokkan label, kalau tidak field-nya tidak pernah ketemu & kolom di blade kosong. */
+const LABEL_PREFIX = /^\s*(?:\d+\s*[.)]|[a-zA-Z][.)]\s+)\s*/;
+function fieldLabelKey(label) { return norm(String(label ?? "").replace(LABEL_PREFIX, "")); }
+
+/* Isian berulang -> field backend bernomor. Cocok bila field_key = <base>_<n>, atau key/label berakhiran angka n
+   yang bagian depannya bermakna sama dengan <base> (nik_pindah_1, "NIK Pindah 1", nik_anggota_1, dst). */
+function rowTarget(backendFields, base, n, used) {
+  const sigBase = signature(base);
+  const hit = backendFields.find((f) => {
+    const k = String(f.field_key);
+    if (used.has(k)) return false;
+    if (k === `${base}_${n}`) return true;
+    const mk = k.match(/^(.*?)[_\s-]?(\d+)$/);
+    if (mk && mk[1] && Number(mk[2]) === n && signature(mk[1]) === sigBase) return true;
+    const ml = String(f.field_label ?? "").match(/^(.*?)[\s(]*(\d+)\)?\s*$/);
+    return !!(ml && ml[1].trim() && Number(ml[2]) === n && signature(ml[1]) === sigBase);
+  });
+  return hit ? String(hit.field_key) : null;
+}
+
+/* Form memecah "Tempat" & "Tanggal Lahir" jadi 2 isian, sedangkan blade/backend sering hanya punya SATU field
+   "Tempat/Tanggal Lahir" (ttl). Bila ada tepat satu field gabungan yang belum terpakai, isi dengan "Serang 16-07-1998". */
+const fmtDate = (v) => { const m = String(v ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : String(v ?? ""); };
+const PD_PREFIXES = ["", "father", "mother", "child", "deceased", "groom", "bride", "husband", "wife", "witness1", "witness2"];
+function combinePlaceDate(fields, backendFields, normalized, used) {
+  for (const p of PD_PREFIXES) {
+    const place = fields[p ? `${p}BirthPlace` : "birthPlace"] ?? fields[p ? `${p}PlaceOfBirth` : "placeOfBirth"];
+    const date = fields[p ? `${p}BirthDate` : "birthDate"] ?? fields[p ? `${p}DateOfBirth` : "dateOfBirth"];
+    if (!place && !date) continue;
+    const sigs = new Set([signature(`${p} tempat tanggal lahir`), signature(`${p} ttl`)]);
+    const hits = backendFields.filter((f) => !used.has(String(f.field_key)) && (sigs.has(signature(f.field_key)) || sigs.has(signature(f.field_label))));
+    if (hits.length !== 1) continue;
+    const k = String(hits[0].field_key);
+    normalized[k] = [place, date ? fmtDate(date) : ""].filter(Boolean).join(" ");
+    used.add(k);
+  }
+}
 /* Opsi select bernomor di form ("2. Pendidikan") belum tentu sama dengan opsi di backend ("Pendidikan"), dan backend
    menolak nilai di luar opsinya ("Nilai field ... tidak valid"). Nilai bernomor disamakan dengan opsi backend yang
    cocok (abaikan nomor di depan & huruf besar/kecil); bila backend tidak punya padanan, nomornya dibuang. Nilai tanpa
@@ -264,6 +301,7 @@ export function mapFieldsToBackend(fields = {}, backendFields = [], slug = "", l
   const byLabel = new Map(backendFields.map(f => [fieldLabelKey(f.field_label), String(f.field_key)]));
   const normalized = {};
   const unresolved = [];
+  const rowMissed = [];
   const used = new Set(); // satu field backend hanya dipakai satu isian (mis. "Tujuan" tidak ditimpa "Keperluan")
   const free = (k) => k && !used.has(String(k));
   // key yang tanda tangannya kembar dalam satu surat tidak boleh dicocokkan otomatis (ambigu) -> pakai override
@@ -271,9 +309,24 @@ export function mapFieldsToBackend(fields = {}, backendFields = [], slug = "", l
   Object.keys(fields).forEach((k) => { const sg = signature(k); sigCount[sg] = (sigCount[sg] || 0) + 1; });
   for (const [key, value] of Object.entries(fields)) {
     if (value === undefined || value === null || value === "") continue;
+    // isian berulang (rows) -> field backend bernomor (data/letterFieldMap.js: ROW_OVERRIDES)
+    const rowCfg = Array.isArray(value) ? rowsFor(slug, key) : null;
+    if (rowCfg) {
+      if (value.length > rowCfg.max) console.warn(`[letter-create] ${slug}.${key}: ${value.length} baris, backend hanya menampung ${rowCfg.max}. Sisanya tidak tersimpan.`);
+      value.slice(0, rowCfg.max).forEach((row, i) => {
+        for (const [col, base] of Object.entries(rowCfg.columns)) {
+          const v = row?.[col];
+          if (v === undefined || v === null || v === "") continue;
+          const bk = rowTarget(backendFields, base, i + 1, used);
+          if (bk) { normalized[bk] = v; used.add(bk); }
+          else rowMissed.push(`${key}[${i + 1}].${col} -> ${base}_${i + 1}`);
+        }
+      });
+      continue;
+    }
     // 0) override manual (data/letterFieldMap.js)
     let target = EXTRA_OVERRIDES[slug]?.[key] ?? overrideFor(slug, key);
-    if (target && !allowed.has(target)) target = backendFields.find(f => norm(f.field_key) === norm(target) || norm(f.field_label) === norm(target))?.field_key ?? null;
+    if (target && !allowed.has(target)) target = backendFields.find(f => norm(f.field_key) === norm(target) || fieldLabelKey(f.field_label) === norm(target))?.field_key ?? null;
     if (target && used.has(String(target))) target = null;
     // 0b) label "Pergi ke" selalu ke field backend "Pergi Ke" (bukan "Tujuan"), apa pun key-nya (destination / travelTo)
     const lab = labels[key];
@@ -317,9 +370,15 @@ export function mapFieldsToBackend(fields = {}, backendFields = [], slug = "", l
       if (v) { normalized[k] = v; used.add(k); }
     }
   }
+  combinePlaceDate(fields, backendFields, normalized, used);
+  if (rowMissed.length) console.warn(`[letter-create] ${slug}: baris tidak ketemu field backend-nya (nama field bernomor di backend: ${backendFields.filter((f) => /\d+$/.test(String(f.field_key))).map((f) => f.field_key).join(", ") || "tidak ada"})`, rowMissed);
   const byKey = new Map(backendFields.map((f) => [String(f.field_key), f]));
   for (const k of Object.keys(normalized)) normalized[k] = matchBackendOption(normalized[k], byKey.get(k));
-  return { fields: Object.fromEntries(Object.entries(normalized).filter(([,v]) => v !== undefined)), unresolved };
+  // field backend (= kolom yang dibaca blade) yang TIDAK terisi sama sekali: ini daftar "ada di blade tapi kosong"
+  const unfilled = backendFields
+    .filter((f) => { const v = normalized[String(f.field_key)]; return v === undefined || v === null || v === ""; })
+    .map((f) => `${f.field_key} ("${f.field_label}")`);
+  return { fields: Object.fromEntries(Object.entries(normalized).filter(([,v]) => v !== undefined)), unresolved, unfilled };
 }
 export async function resolveLetterType(letter) {
   const backendCode = String(getBackendLetterCode(letter.slug, letter.code) ?? "").trim().toUpperCase();
@@ -389,7 +448,8 @@ async function saveOne(letter) {
   /* Field backend wajib yang tidak ada isiannya di form TIDAK lagi memblokir (tidak ada peringatan merah di layar).
      Diisi nilai netral supaya validasi backend lolos; admin bisa melengkapinya nanti di halaman Verifikasi + Otorisasi. */
   mapped.fields = fillRequiredPlaceholders(mapped.fields, backendFields);
-  if (mapped.unresolved.length) console.warn(`[letter-create] ${letter.title}: field belum dipetakan`, mapped.unresolved);
+  if (mapped.unresolved.length) console.warn(`[letter-create] ${letter.title}: isian form yang TIDAK punya field backend`, mapped.unresolved);
+  if (mapped.unfilled?.length) console.warn(`[letter-create] ${letter.title}: field backend yang TIDAK terisi (kosong di blade)`, mapped.unfilled);
   const { body, config } = buildBody({ letterTypeId, applicant, fields: mapped.fields, files: letter.files });
   try {
     const created = await createLetterRequest(body, config);

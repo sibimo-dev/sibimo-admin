@@ -72,8 +72,11 @@ export function saveOrganizationalStructure({ id, payload, files = [] }) {
   if (payload.published_at) formData.append('published_at', payload.published_at)
   formData.append('levels', JSON.stringify(payload.levels ?? []))
 
-  files.forEach(({ token, file }) => {
-    if (token && file) formData.append(`photos[${token}]`, file)
+  files.forEach(({ token, file, type }) => {
+    if (token && file) {
+      const field = type === 'signature' ? `signatures[${token}]` : `photos[${token}]`
+      formData.append(field, file)
+    }
   })
 
   if (id) {
