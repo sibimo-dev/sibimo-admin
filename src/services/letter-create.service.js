@@ -446,7 +446,7 @@ async function submitOne(letter) {
   };
   let created;
   const { body, config } = buildBody({ letterTypeId, applicant, fields: mapped.fields, files: letter.files, internal });
-  const { body, config } = buildBody({ letterTypeId, applicant, fields: mapped.fields, files: letter.files });
+  // const { body, config } = buildBody({ letterTypeId, applicant, fields: mapped.fields, files: letter.files });
   try {
     created = await unwrap(api.post("/letter-requests", {
       letter_type_id: type.letter_type_id,
