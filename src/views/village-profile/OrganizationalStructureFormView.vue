@@ -327,6 +327,8 @@ async function savePersonDialog() {
   }
 
   if (editingPersonId.value) {
+    // photo/photoFile mengikuti isi modal apa adanya (sama seperti signature),
+    // supaya foto yang dihapus di modal benar-benar terhapus saat disimpan.
     form.people = form.people.map((p) =>
       p.id === editingPersonId.value
         ? {
@@ -334,8 +336,8 @@ async function savePersonDialog() {
             jabatan: personForm.jabatan,
             nama,
             desc: personForm.desc.trim(),
-            photo: personForm.photoFile ? personForm.photo : p.photo,
-            photoFile: personForm.photoFile ?? p.photoFile,
+            photo: personForm.photo,
+            photoFile: personForm.photoFile,
             signature: personForm.signature,
             signatureFile: personForm.signatureFile,
           }
@@ -415,10 +417,19 @@ function triggerPersonPhotoUpload() {
   personPhotoInput.value?.click()
 }
 
+function removePersonPhoto() {
+  personForm.photo = null
+  personForm.photoFile = null
+}
+
 function onPersonPhotoChange(event) {
   const file = event.target.files?.[0]
   event.target.value = ''
   if (!file) return
+  if (!file.type.startsWith('image/')) {
+    toast.add({ severity: 'error', summary: 'File foto harus berupa gambar', life: 2500 })
+    return
+  }
 
   const reader = new FileReader()
   reader.onload = () => {
@@ -625,28 +636,30 @@ async function onPersonSignatureChange(event) {
       <input ref="personSignatureInput" type="file" accept="image/*" class="hidden" @change="onPersonSignatureChange" />
 
       <div class="flex flex-col gap-4">
-        <!-- Upload foto: selebar field lain, preview jelas terlihat -->
+        <!-- Upload foto: preview besar + tombol Upload/Ganti & Hapus (sama pola dengan tanda tangan) -->
         <div class="flex flex-col gap-1.5">
           <label class="text-[13px] font-semibold text-slate-700">Foto</label>
-          <div class="relative w-full">
+          <div class="flex items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
             <div
-              class="flex h-44 w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 hover:border-blue-400"
+              class="flex h-44 flex-1 cursor-pointer items-center justify-center overflow-hidden rounded bg-white hover:ring-1 hover:ring-blue-400"
               @click="triggerPersonPhotoUpload"
             >
               <img v-if="personForm.photo" :src="photoSrc(personForm.photo)" alt="Foto pamong" class="h-full w-full object-contain" />
               <div v-else class="flex flex-col items-center gap-1.5 text-slate-400">
                 <i class="pi pi-camera text-2xl" />
-                <span class="text-xs font-medium">Upload Foto</span>
+                <span class="text-xs font-medium">Belum ada foto</span>
               </div>
             </div>
-            <button
-              type="button"
-              class="absolute bottom-2 right-2 grid h-8 w-8 place-items-center rounded-full bg-blue-600 text-white shadow"
-              @click="triggerPersonPhotoUpload"
-              aria-label="Unggah foto"
-            >
-              <i class="pi pi-camera text-sm" />
-            </button>
+            <div class="flex shrink-0 flex-col gap-1.5">
+              <Button
+                :label="personForm.photo ? 'Ganti' : 'Upload'"
+                icon="pi pi-upload"
+                size="small"
+                outlined
+                @click="triggerPersonPhotoUpload"
+              />
+              <Button v-if="personForm.photo" label="Hapus" icon="pi pi-trash" size="small" text severity="danger" @click="removePersonPhoto" />
+            </div>
           </div>
         </div>
 
