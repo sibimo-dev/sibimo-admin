@@ -13,11 +13,13 @@ export const sections = [
   {
     title: "Data Anak",
     fields: [
-      f.nik("nik", "NIK"),
-      f.text("name", "Nama Lengkap"),
-      f.text("birthPlace", "Tempat Lahir"),
-      f.date("birthDate", "Tanggal Lahir"),
-      f.select("gender", "Jenis Kelamin", OPT.gender),
+      // Data anak = BUKAN pemohon. Kunci generik (name/nik/...) sengaja dikecualikan dari isian otomatis,
+      // karena hasil pencarian NIK adalah orang tua/wali yang mengajukan, bukan anaknya.
+      f.nik("nik", "NIK", { noAutofill: true }),
+      f.text("name", "Nama Lengkap", { noAutofill: true }),
+      f.text("birthPlace", "Tempat Lahir", { noAutofill: true }),
+      f.date("birthDate", "Tanggal Lahir", { noAutofill: true }),
+      f.select("gender", "Jenis Kelamin", OPT.gender, { noAutofill: true }),
       f.select("bloodType", "Golongan Darah", ["A", "B", "AB", "O", "Tidak Tahu"], { optional: true }),
     ],
   },
@@ -32,7 +34,7 @@ export const sections = [
   {
     title: "Agama & Kewarganegaraan",
     fields: [
-      f.select("religion", "Agama", OPT.religion),
+      f.select("religion", "Agama", OPT.religion, { noAutofill: true }), // agama anak
       f.text("citizenship", "Kewarganegaraan", { default: "WNI" }),
     ],
   },

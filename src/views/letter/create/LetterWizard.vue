@@ -85,21 +85,53 @@ function back() {
   else goTo(current.value - 1);
 }
 
+// function next() {
+//   if (current.value === 0) {
+//     errors.value = validateFields(allSections.value, form);
+//     if (Object.keys(errors.value).length) return;
+//     return goTo(1);
+//   }
+//   // langkah dokumen = langkah terakhir → langsung ke Verifikasi + Otorisasi
+//   fileErrors.value = validateDocs(docList.value, files);
+//   if (Object.keys(fileErrors.value).length) return;
+//   if (!isOriginal.value) {
+//   // langkah dokumen = langkah terakhir → langsung ke Verifikasi + Otorisasi
+//   fileErrors.value = validateDocs(docList.value, files);
+//   if (Object.keys(fileErrors.value).length) return;
+//   // Pernyataan dokumen asli hanya relevan bila ada berkas yang diunggah (unggah dokumen opsional).
+//   if (Object.keys(files).length && !isOriginal.value) {
+//     confirmError.value = true;
+//     return;
+//   }
+//   submit(); // tanpa pop-up konfirmasi: langsung lanjut ke Verifikasi + Otorisasi
+// }
+
 function next() {
   if (current.value === 0) {
     errors.value = validateFields(allSections.value, form);
+
     if (Object.keys(errors.value).length) return;
+
     return goTo(1);
   }
-  // langkah dokumen = langkah terakhir → langsung ke Verifikasi + Otorisasi
+
+  // Validasi dokumen pendukung
   fileErrors.value = validateDocs(docList.value, files);
+
   if (Object.keys(fileErrors.value).length) return;
-  if (!isOriginal.value) {
+
+  // Pernyataan dokumen asli wajib jika ada berkas yang diunggah
+  if (Object.keys(files).length && !isOriginal.value) {
     confirmError.value = true;
     return;
   }
-  submit(); // tanpa pop-up konfirmasi: langsung lanjut ke Verifikasi + Otorisasi
+
+  confirmError.value = false;
+
+  // Langsung simpan dan buka halaman Verifikasi + Otorisasi
+  submit();
 }
+
 
 /* ---------- Kirim ---------- */
 const isSubmitting = ref(false);

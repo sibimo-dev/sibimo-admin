@@ -1,7 +1,6 @@
 import { createLetterRequest } from "./letter-request.service";
 import { getLetterTypes, getFields } from "./letter-type.service";
 import { getBackendLetterCode } from "@/data/letterBackendMap";
-import { matchBySignature, overrideFor, rowsFor, signature } from "@/data/letterFieldMap";
 
 // Key generik yang dipakai untuk dua isian berbeda: label di form yang menentukan ("Tujuan" vs "Pergi ke").
 /* Pasangan yang sudah dipastikan dari backend asli: { slug: { keyDiForm: "label ATAU field_key backend" } } */
@@ -374,11 +373,7 @@ export function mapFieldsToBackend(fields = {}, backendFields = [], slug = "", l
   if (rowMissed.length) console.warn(`[letter-create] ${slug}: baris tidak ketemu field backend-nya (nama field bernomor di backend: ${backendFields.filter((f) => /\d+$/.test(String(f.field_key))).map((f) => f.field_key).join(", ") || "tidak ada"})`, rowMissed);
   const byKey = new Map(backendFields.map((f) => [String(f.field_key), f]));
   for (const k of Object.keys(normalized)) normalized[k] = matchBackendOption(normalized[k], byKey.get(k));
-  // field backend (= kolom yang dibaca blade) yang TIDAK terisi sama sekali: ini daftar "ada di blade tapi kosong"
-  const unfilled = backendFields
-    .filter((f) => { const v = normalized[String(f.field_key)]; return v === undefined || v === null || v === ""; })
-    .map((f) => `${f.field_key} ("${f.field_label}")`);
-  return { fields: Object.fromEntries(Object.entries(normalized).filter(([,v]) => v !== undefined)), unresolved, unfilled };
+  return { fields: Object.fromEntries(Object.entries(normalized).filter(([, v]) => v !== undefined)), unresolved };
 }
 export async function resolveLetterType(letter) {
   const backendCode = String(getBackendLetterCode(letter.slug, letter.code) ?? "").trim().toUpperCase();
@@ -389,87 +384,86 @@ export async function resolveLetterType(letter) {
   const backendFields = await getFields(id);
   return { id, backendFields };
 }
-function validateRequiredApplicant(applicant, title) {
-  const missing = [];
-  if (!applicant.name) missing.push("nama pemohon");
-  if (!applicant.nik || String(applicant.nik).length !== 16) missing.push("NIK 16 digit");
-  if (!applicant.address) missing.push("alamat pemohon");
-  if (missing.length) throw new Error(`${title}: data wajib belum lengkap (${missing.join(", ")}). Isi identitas pemohon di form, atau cari NIK yang sudah terdaftar di Data Warga pada kotak 'Cari Data Pemohon'.`);
+
+function firstValue(fields, keys) {
+  for (const key of keys) {
+    const value = fields?.[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+  }
+  return "";
 }
-function appendNested(fd, key, value) {
-  if (value === null || value === undefined || value === "") return;
-  if (typeof File !== "undefined" && value instanceof File) return;
-  if (Array.isArray(value)) return value.forEach((v, i) => appendNested(fd, `${key}[${i}]`, v));
-  if (typeof value === "object") return Object.entries(value).forEach(([k, v]) => appendNested(fd, `${key}[${k}]`, v));
-  fd.append(key, typeof value === "boolean" ? (value ? "1" : "0") : String(value));
+
+function applicantFrom(fields) {
+  const applicantName = firstValue(fields, ["name", "applicantName", "reporterName", "groomName", "brideName", "childName", "deceasedName", "headOfFamilyName", "fatherName", "motherName"]);
+  const applicantNik = firstValue(fields, ["nik", "applicantNik", "reporterNik", "groomNik", "brideNik", "childNik", "deceasedNik", "fatherNik", "motherNik"]);
+  const applicantAddress = firstValue(fields, ["address", "applicantAddress", "reporterAddress", "groomAddress", "brideAddress", "deceasedAddress", "fatherAddress", "motherAddress", "originAddress"]);
+  const applicantPhone = firstValue(fields, ["whatsapp", "applicantPhone", "phone", "reporterPhone"]);
+
+  if (!applicantName || !applicantNik || !applicantAddress) throw new Error("Lengkapi nama, NIK, dan alamat pemohon sebelum mengirim surat.");
+  return { applicantName, applicantNik, applicantAddress, applicantPhone };
 }
-function buildBody({ letterTypeId, applicant, fields, files }) {
-  const base = {
-    letter_type_id: letterTypeId,
-    source: LETTER_SOURCE,
-    applicant_nik: String(applicant.nik),
-    applicant_name: String(applicant.name),
-    applicant_phone: String(applicant.phone || ""),
-    applicant_address: String(applicant.address),
-    form_data: fields,
-  };
-  if (!files?.length) return { body: base, config: undefined };
-  const fd = new FormData();
-  Object.entries(base).forEach(([k, v]) => {
-    if (k === "form_data") appendNested(fd, "form_data", v);
-    else fd.append(k, v);
-  });
-  files.forEach((f, i) => {
-    fd.append(`attachments[${i}][label]`, f.label || "Dokumen pendukung");
-    fd.append(`attachments[${i}][file]`, f.file);
-  });
-  return { body: fd, config: { headers: { "Content-Type": "multipart/form-data" } } };
+
+function resolveDocumentId(label, documents) {
+  const normalizedLabel = normalize(label);
+  const exact = documents.find((document) => normalize(document.document_name) === normalizedLabel);
+  if (exact) return exact.letter_type_document_id;
+  const aliases = [["kk", "kk"], ["kartutanda", "ktp"], ["ktp", "ktp"], ["pasfoto", "foto"]];
+  const alias = aliases.find(([needle]) => normalizedLabel.includes(needle));
+  if (alias) {
+    const match = documents.find((document) => normalize(document.document_name).includes(alias[1]));
+    if (match) return match.letter_type_document_id;
+  }
+  const fallback = documents.find((document) => !document.is_required && /lain|pendukung|tambahan/i.test(document.document_name));
+  return fallback?.letter_type_document_id ?? documents[0]?.letter_type_document_id ?? null;
 }
-function readLocal() {
-  try { return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || "[]"); } catch { return []; }
-}
-function saveLocal(letter) {
-  const id = `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const code = `DEMO-${new Date().getFullYear()}-${String(readLocal().length + 1).padStart(4, "0")}`;
-  const record = { id, code, title: letter.title, slug: letter.slug, letter_code: letter.code, applicant: letter.applicant, fields: letter.fields, source: LETTER_SOURCE, status: "Draft lokal", created_at: new Date().toISOString(), files: (letter.files || []).map(f => ({ label: f.label, name: f.file?.name || "" })) };
-  const records = readLocal(); records.push(record);
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(records));
-  return { id, title: letter.title, code };
-}
-async function saveOne(letter) {
-  const applicant = applicantFromFields(letter.applicant, letter.fields);
-  validateRequiredApplicant(applicant, letter.title);
-  const normalizedPayload = { ...letter, applicant };
-  if (LOCAL_MODE) return saveLocal(normalizedPayload);
-  const { id: letterTypeId, backendFields } = await resolveLetterType(letter);
-  const meta = await loadLetterMeta(letter.slug);
-  const mapped = mapFieldsToBackend(letter.fields, backendFields, letter.slug, meta.labels);
-  mapped.fields = fillFromDocuments(mapped.fields, backendFields, meta.documents, letter.files || []);
-  /* Field backend wajib yang tidak ada isiannya di form TIDAK lagi memblokir (tidak ada peringatan merah di layar).
-     Diisi nilai netral supaya validasi backend lolos; admin bisa melengkapinya nanti di halaman Verifikasi + Otorisasi. */
-  mapped.fields = fillRequiredPlaceholders(mapped.fields, backendFields);
-  if (mapped.unresolved.length) console.warn(`[letter-create] ${letter.title}: isian form yang TIDAK punya field backend`, mapped.unresolved);
-  if (mapped.unfilled?.length) console.warn(`[letter-create] ${letter.title}: field backend yang TIDAK terisi (kosong di blade)`, mapped.unfilled);
-  const { body, config } = buildBody({ letterTypeId, applicant, fields: mapped.fields, files: letter.files });
-  try {
-    const created = await createLetterRequest(body, config);
-    const data = created?.data ?? created;
-    const id = data?.letter_request_id ?? data?.id ?? null;
-    if (!id) throw new Error("Backend tidak mengembalikan ID pengajuan.");
-    return { id, title: letter.title, code: data.request_code ?? "" };
-  } catch (err) {
-    const data = err.response?.data;
-    const detail = data?.errors ? Object.values(data.errors).flat()[0] : data?.message;
-    // Nilai select yang ditolak: tampilkan nilai yang dikirim & opsi backend supaya langsung ketahuan bedanya.
-    const selects = backendFields
-      .filter((f) => String(f.field_type ?? "").toLowerCase() === "select" && backendOptionList(f).length)
-      .map((f) => ({ key: String(f.field_key), label: f.field_label, sent: mapped.fields[String(f.field_key)], options: backendOptionList(f).map((o) => o.value) }));
-    if (selects.length) console.warn(`[letter-create] ${letter.title}: isian select terkirim`, selects);
-    const bad = /tidak valid/i.test(String(detail)) ? selects.find((x) => detail && String(detail).includes(String(x.label))) : null;
-    const hint = bad ? ` [dikirim: "${bad.sent}"; opsi backend: ${bad.options.join(" | ")}]` : "";
-    throw new Error(`${letter.title}: ${detail || err.message || "gagal disimpan."}${hint}`);
+
+async function uploadFiles(requestId, files, documents) {
+  for (const item of files ?? []) {
+    const documentId = resolveDocumentId(item.label, documents);
+    if (!documentId) throw new Error(`Dokumen ${item.label} belum memiliki konfigurasi backend.`);
+    const formData = new FormData();
+    formData.append("letter_type_document_id", String(documentId));
+    formData.append("file", item.file, item.file.name);
+    try {
+      await api.post(`/letter-requests/${requestId}/attachments`, formData);
+    } catch (error) {
+      throw new Error(`Upload dokumen "${item.label}" gagal: ${getLetterRequestError(error, "file ditolak backend.")}`, { cause: error });
+    }
   }
 }
+
+async function submitOne(letter) {
+  const type = await resolveLetterType(letter);
+  const fields = cleanValue(letter.fields ?? {});
+  const applicant = applicantFrom(fields);
+  // Simpan juga key asli dari form admin. Sebagian tipe surat lama memakai
+  // kontrak field camelCase yang berbeda dari metadata backend; backend akan
+  // menormalisasikannya saat membangun preview PDF. Field canonical hasil
+  // adapter tetap menimpa key yang sama agar kontrak baru diprioritaskan.
+  const formData = {
+    ...fields,
+    ...backendFormData(fields, type.fields ?? [], letter.fieldDefinitions ?? []),
+  };
+  let created;
+  const { body, config } = buildBody({ letterTypeId, applicant, fields: mapped.fields, files: letter.files, internal });
+  // const { body, config } = buildBody({ letterTypeId, applicant, fields: mapped.fields, files: letter.files });
+  try {
+    created = await unwrap(api.post("/letter-requests", {
+      letter_type_id: type.letter_type_id,
+      applicant_name: String(applicant.applicantName),
+      applicant_nik: String(applicant.applicantNik),
+      applicant_phone: normalizePhone(applicant.applicantPhone),
+      applicant_address: String(applicant.applicantAddress),
+      source: LETTER_SOURCE,
+      form_data: formData,
+    }));
+  } catch (error) {
+    throw new Error(`Data pengajuan ditolak: ${getLetterRequestError(error, "periksa isian surat dan identitas pemohon.")}`, { cause: error });
+  }
+  await uploadFiles(created.letter_request_id, letter.files, type.documents ?? []);
+  return { title: letter.title, code: created.request_code, request: created };
+}
+
 export async function submitSingleLetter(payload) {
   const result = await saveOne(payload);
   return { id: result.id, code: result.code };

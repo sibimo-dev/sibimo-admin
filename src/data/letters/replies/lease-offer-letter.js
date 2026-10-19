@@ -1,43 +1,29 @@
-// Surat Penawaran Sewa Kontrak Gedung BRI Unit Ngemplak II (jenis Balasan, surat internal kantor kalurahan).
-// CATATAN: berkas ini TIDAK ada di public, jadi isiannya disusun baru dari judul surat.
-// Cocokkan dengan template Blade-nya, lalu sesuaikan isian di bawah bila perlu.
+// Surat Penawaran Sewa Kontrak Gedung (jenis Balasan, surat internal kantor kalurahan).
+// Template PDF: letters/replies/lease-offer-letter.blade.php  (backend SPSKG)
+// Key mengikuti variabel blade:
+//   $recipient                 → recipientName          (Yth.)
+//   $recipient_address         → recipientAddress       (baris "Di")
+//   $lease['building_name']    → leaseBuildingName
+//   $lease['building_address'] → leaseBuildingAddress
+//   $lease['duration_years']   → leaseDurationYears
+// Yang SENGAJA bukan field (ditulis titik-titik di blade untuk diisi tangan): nama/jabatan/alamat penandatangan,
+// tanggal berakhir sewa, nominal sewa & terbilang. Nomor surat ($number), kota & tanggal ($signature) diisi sistem.
 import { f, opt } from "@/data/letterFields";
 
 export const sections = [
   {
-    title: "Surat Permintaan dari Pihak Penyewa",
+    title: "Tujuan Surat",
     fields: [
-      f.text("requestNumber", "Nomor surat permintaan"),
-      f.date("requestDate", "Tanggal surat permintaan"),
-      f.text("requestSubject", "Perihal surat permintaan", { span: 2, optional: true }),
-    ],
-  },
-  {
-    title: "Pihak Penyewa",
-    fields: [
-      f.text("tenantName", "Nama instansi penyewa", { default: "PT Bank Rakyat Indonesia (Persero) Tbk Unit Ngemplak II", span: 2 }),
-      f.text("tenantRepresentative", "Nama pimpinan / penerima surat"),
-      f.text("tenantPosition", "Jabatan"),
-      f.area("tenantAddress", "Alamat instansi penyewa", { span: 2 }),
+      f.text("recipientName", "Ditujukan kepada (Yth.)", { span: 2, placeholder: "Nama / jabatan pihak yang dituju" }),
+      f.text("recipientAddress", "Lokasi tujuan surat (baris \"Di\")", { span: 2, optional: true }),
     ],
   },
   {
     title: "Objek Sewa",
     fields: [
-      f.text("propertyName", "Nama objek sewa", { default: "Gedung BRI Unit Ngemplak II", span: 2 }),
-      f.area("propertyAddress", "Alamat / lokasi objek sewa", { span: 2 }),
-      f.text("buildingArea", "Luas bangunan (m²)"),
-      f.text("landArea", "Luas tanah (m²)", { optional: true }),
-    ],
-  },
-  {
-    title: "Penawaran Sewa",
-    fields: [
-      f.text("rentPrice", "Harga sewa", { placeholder: "Contoh: Rp 50.000.000" }),
-      f.text("rentPeriod", "Jangka waktu sewa", { placeholder: "Contoh: 5 tahun" }),
-      f.date("rentStartDate", "Tanggal mulai sewa"),
-      f.area("paymentTerms", "Cara pembayaran", { span: 2 }),
-      f.area("otherTerms", "Ketentuan lain", { span: 2, optional: true }),
+      f.text("leaseBuildingName", "Nama gedung yang ditawarkan", { default: "Gedung BRI Unit Ngemplak II", span: 2 }),
+      f.area("leaseBuildingAddress", "Alamat gedung", { span: 2 }),
+      f.text("leaseDurationYears", "Lama sewa (tahun)", { placeholder: "Contoh: 5" }),
     ],
   },
 ];
@@ -47,4 +33,4 @@ export const documents = [
   opt("Dokumen kepemilikan aset (sertifikat / Letter C)"),
 ];
 
-export const meta = { title: "Surat Penawaran Sewa Kontrak Gedung BRI Unit Ngemplak II", code: "SPS" };
+export const meta = { title: "Surat Penawaran Sewa Kontrak", code: "SPS" };
