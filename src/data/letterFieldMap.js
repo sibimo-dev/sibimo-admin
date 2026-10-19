@@ -12,7 +12,21 @@
    cocok). Pasangan yang ragu ada di letter-mapping-review.md dan harus diputuskan manual.
    Format: { "<slug>": { "<key di form>": "<field_key di backend>" } } */
 export const FIELD_OVERRIDES = {
-  "*": {},
+  /* Nama penandatangan (opsional) — key unik per jabatan, jadi aman dipasang untuk semua surat.
+     field_key di sisi kanan HARUS dibuat di letter_type_fields (type text, tidak wajib) pada surat terkait;
+     kalau belum ada di backend, pasangan ini otomatis dilewati dan terdaftar di /letter/mapping-check. */
+  "*": {
+    districtHeadName: "nama_camat",
+    rtHeadName: "nama_ketua_rt",
+    rwHeadName: "nama_ketua_rw",
+    registrarName: "nama_petugas_registrasi",
+    officerName: "nama_petugas",
+    districtOfficerName: "nama_petugas_kecamatan",
+    receivingOfficerName: "nama_petugas_penerima_berkas",
+    notaryName: "nama_notaris",
+    departmentHeadName: "nama_kepala_dinas",
+    departmentHeadNip: "nip_kepala_dinas",
+  },
   "income-permit-letter": {
     purpose: "dipergunakan_untuk", // manual
   },
@@ -55,6 +69,7 @@ export const FIELD_OVERRIDES = {
     deceasedChildOrder: "anak_ke_jenazah",
   },
   "death-certificate-application": {
+    reportType: "jenis_pelaporan",
     deathDate: "meninggal_hari_tanggal",
     deathPlace: "kota_tempat_meninggal",
     reporterApplicationDate: "tanggal_lapor",

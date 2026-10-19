@@ -434,7 +434,7 @@ export const birthHamlet = () => ({
    Dipakai surat yang di kertasnya punya kolom tanda tangan pihak lain (sumber: kolom "Keterangan TTD" pada
    Form Identifikasi Layanan). Penandatangan yang SUDAH punya isian (pemohon, pihak pertama/kedua, saksi, penerima/
    pemberi kuasa) tidak diulang di sini. Isian ini TIDAK wajib: dikosongkan = nama dicetak kosong / ditulis tangan.
-   parts: hamletHead districtHead rtHead rwHead witness1 witness2 registrar officer districtOfficer notary
+   parts: hamletHead districtHead rtHead rwHead witness1 witness2 registrar officer districtOfficer receivingOfficer departmentHead notary
    Lurah / Petugas Kalurahan TIDAK dibuat form: penandatangannya sudah ditangani di otorisasi surat.
    Key sama di semua surat (hamletHeadName dst.) → dalam satu paket cukup diisi sekali. */
 const SIGNER_NAME = {
@@ -447,12 +447,18 @@ const SIGNER_NAME = {
   registrar: () => f.text("registrarName", "Nama Petugas Registrasi", { optional: true }),
   officer: () => f.text("officerName", "Nama Petugas", { optional: true }),
   districtOfficer: () => f.text("districtOfficerName", "Nama Petugas Kecamatan", { optional: true }),
+  receivingOfficer: () => f.text("receivingOfficerName", "Nama Petugas Penerima Berkas", { optional: true }),
+  // Kepala Dinas (Dukcapil): nama + NIP. Satu "part" menghasilkan 2 isian.
+  departmentHead: () => [
+    f.text("departmentHeadName", "Nama Kepala Dinas", { optional: true }),
+    f.text("departmentHeadNip", "NIP Kepala Dinas", { optional: true, placeholder: "Contoh: 19700101 199503 1 001" }),
+  ],
   notary: () => f.text("notaryName", "Nama Notaris", { optional: true }),
 };
 export const signerNames = (parts, hint = "Opsional. Isi bila nama penandatangan ingin dicetak di bawah tanda tangan; kosongkan bila akan ditulis tangan.") => ({
   title: "Nama Penandatangan (Opsional)",
   hint,
-  fields: parts.map((p) => SIGNER_NAME[p]()),
+  fields: parts.flatMap((p) => [].concat(SIGNER_NAME[p]())),
 });
 
 /* ---------- Susunan form yang SAMA PERSIS di beberapa blade ---------- */

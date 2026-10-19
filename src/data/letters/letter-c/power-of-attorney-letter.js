@@ -2,7 +2,7 @@
 // Isian di sini harus tetap sama dengan di public. Tampilan wizard ada di views/letter/create/.
 // Surat Kuasa
 // Template PDF: letters/letter-c/power-of-attorney-letter.blade.php
-import { DOC, DOC_LETTER_C, DOC_PBB, f, signerNames } from "@/data/letterFields";
+import { DOC, DOC_LETTER_C, DOC_PBB, f } from "@/data/letterFields";
 
 export const sections = [
   {
@@ -32,9 +32,14 @@ export const sections = [
       f.area("attorneyAddress", "Alamat", { span: 2 }),
     ],
   },
-  // TTD di xlsx (3): Penerima kuasa, Pemberi kuasa (keduanya sudah punya isian), Kalurahan/Notaris.
-  // Kalurahan tidak jadi field (ada di otorisasi); nama Notaris opsional.
-  signerNames(["notary"], "Opsional. Penerima dan Pemberi Kuasa memakai nama pada data di atas. Isi nama Notaris bila ingin dicetak; kosongkan bila ditulis tangan."),
+  // TTD di xlsx (3): Penerima kuasa (attorneyName), Pemberi kuasa (name), Kalurahan/Notaris.
+  // Penerima & pemberi kuasa SUDAH punya isian. Nama yang mengetahui (Kalurahan/Notaris) tidak dibuat field (tidak perlu).
+  {
+    title: "Mengetahui",
+    fields: [
+      f.text("endorserOffice", "Kelurahan/Notaris", { optional: true }),
+    ],
+  },
 ];
 
 export const documents = [DOC.ktp, DOC.kk, DOC_LETTER_C, DOC_PBB, DOC.suratKematian, "Fotokopi KTP penerima kuasa"];

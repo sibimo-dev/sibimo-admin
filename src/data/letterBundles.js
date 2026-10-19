@@ -48,6 +48,7 @@ const LETTERS = {
   pld: letter("pld", "out-of-domicile-birth-report", "Laporan Kelahiran Luar Domisili", "PLD", "Pengantar & Keterangan", "Bila bayi lahir di luar domisili."),
   plk: letter("plk", "birth-report-statement", "Laporan Kelahiran", "PLK", "Pernyataan & Kuasa", "Pernyataan kebenaran data kelahiran."),
   sps: letter("sps", "spousal-relationship-responsibility-statement", "Surat Pernyataan Tanggung Jawab Mutlak Kebenaran Sebagai Pasangan Suami Istri", "SPS", "Pernyataan & Kuasa", "Pernyataan tanggung jawab mutlak kebenaran sebagai pasangan suami istri."),
+  pdl: letter("pdl", "birth-data-responsibility-statement", "Surat Pernyataan Tanggung Jawab Mutlak Kebenaran Data Kelahiran", "PDL", "Pernyataan & Kuasa", "Pernyataan tanggung jawab mutlak kebenaran data kelahiran anak."),
   kak: letter("kak", "birth-certificate-power-of-attorney", "Surat Kuasa", "KAK", "Pernyataan & Kuasa", "Bila pengurusan dikuasakan kepada orang lain."),
   akm: letter("akm", "death-certificate-application", "Permohonan Akta Kematian", "AKM", "Permohonan & Pelaporan", "Formulir permohonan akta kematian."),
   lpm: letter("lpm", "death-report-form", "Formulir Pelaporan Kematian (Untuk Mendapatkan Akta Kematian)", "LPM", "Permohonan & Pelaporan", "Formulir pelaporan kematian."),
@@ -104,10 +105,10 @@ const ALIAS_LETTER_C = [["letterCOwnerName", "ownerName"]]; // pemilik pada Lett
 // 10 surat (married-man) dan 12 surat (marriage-women), sama dengan daftar di scaffold.
 const NIKAH_LAKI = ["khn", "dpn", "pnk", "skn", "knn", "kbp", "pbm", "kkn", "scm", "sio"];
 const NIKAH_PEREMPUAN = ["n2", "fpn", "n1", "phk", "pnn", "kbm", "pbn", "n6", "n4", "n5", "swn", "swh"];
-// Kelahiran = 10 surat (Lama: semua; Baru: tanpa Keputusan Pencatatan Terlambat).
+// Kelahiran = 11 surat (Lama: semua; Baru: tanpa Keputusan Pencatatan Terlambat).
 // Kematian = 7 surat (Baru) / 8 surat (Lama, + SPTJM Data Kematian). "hpk" (Perhitungan Selamatan) tidak dipublikasikan.
-const LAHIR_BARU = ["akl", "lpk", "pcl", "pak", "klh", "pld", "plk", "kak", "sps"];
-const LAHIR_LAMA = ["akl", "lpk", "skt", "pcl", "pak", "klh", "pld", "plk", "kak", "sps"];
+const LAHIR_BARU = ["akl", "lpk", "pcl", "pak", "klh", "pld", "plk", "kak", "sps", "pdl"];
+const LAHIR_LAMA = ["akl", "lpk", "skt", "pcl", "pak", "klh", "pld", "plk", "kak", "sps", "pdl"];
 const MATI_BARU = ["akm", "lpm", "pck", "plm", "kkt", "pku", "kkm"];
 const MATI_LAMA = ["akm", "lpm", "pck", "plm", "kkt", "pdm", "pku", "kkm"];
 const LETTER_C = ["plc", "klc", "kht", "kat"];
