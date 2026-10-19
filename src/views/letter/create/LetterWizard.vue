@@ -49,6 +49,12 @@ const allSections = computed(() => [
 const form = reactive({});
 fillForm(form, allSections.value);
 
+// Dipakai template (ApplicantLookup & LetterFormFields) dan buildPayload(). Tanpa 3 baris ini halaman gagal tampil
+// ("Property lookup was accessed during render but is not defined").
+const autoFilled = reactive({}); // { [fieldKey]: true } — penanda "terisi otomatis" (dari pencarian NIK)
+const onEdit = (key) => delete autoFilled[key];
+const lookup = useApplicantLookup();
+
 const docList = computed(() => normalizeDocs(props.documents, "", form));
 
 const files = reactive({}); // { [indexDokumen]: File }

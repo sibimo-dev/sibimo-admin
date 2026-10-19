@@ -1,0 +1,1 @@
+import{$ as e,s as t}from"./letterFields-CW77l5eo.js";var n=[e(`applicant`,`Data Pemohon`,[`name`,`nik`,`birth`,`gender`,`religion`,`occupation`,`address`])],r=[t.ktp,t.kk,t.rt],i={title:`Surat Keterangan Belum Kawin`,code:`KSB`};export{r as documents,i as meta,n as sections};

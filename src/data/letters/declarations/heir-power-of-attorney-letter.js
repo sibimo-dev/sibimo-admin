@@ -3,7 +3,7 @@
 // Surat Kuasa Sidang Waris
 // Template PDF: letters/heir-power-of-attorney-letter.blade.php
 
-import { f, OPT, person, DOC, opt } from "@/data/letterFields";
+import { f, OPT, person, DOC, opt, signerNames } from "@/data/letterFields";
 
 // Langkah 1: isian sesuai surat yang diajukan
 export const sections = [
@@ -31,6 +31,8 @@ export const sections = [
       f.text("deceasedDeathPlace", "Meninggal Dunia di", { span: 2 }),
     ],
   },
+  // TTD (3): 1. Penerima kuasa (= Data Penerima Kuasa)  2. Notaris  3. Pemberi kuasa (= Data Pemberi Kuasa)
+  signerNames(["notary"], "Opsional. Penerima dan Pemberi Kuasa memakai nama pada data di atas. Isi nama Notaris bila ingin dicetak; kosongkan bila ditulis tangan."),
 ];
 
 // Langkah 2: dokumen pendukung (opt(...) = tidak wajib)

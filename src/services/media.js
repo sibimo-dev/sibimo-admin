@@ -6,6 +6,10 @@ export function mediaUrl(value) {
   const source = String(value).trim()
   if (!source) return ''
 
+  if (source.startsWith('data:') || source.startsWith('blob:')) {
+    return source
+  }
+
   if (/^https?:\/\//i.test(source)) {
     try {
       const url = new URL(source)

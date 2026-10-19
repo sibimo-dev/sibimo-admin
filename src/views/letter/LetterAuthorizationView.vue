@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import AppButton from '@/components/common/AppButton.vue'
@@ -142,7 +142,9 @@ async function loadPreview() {
   previewLoading.value = true
   previewError.value = ''
   try {
-    const blob = await getLetterPdf(record.value.id)
+    const blob = await getLetterPdf(record.value.id, {
+      signer_id: selectedSignerId.value,
+    })
     if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
     previewUrl.value = URL.createObjectURL(blob)
   } catch (error) {
@@ -155,6 +157,12 @@ async function loadPreview() {
   }
 }
 
+watch(selectedSignerId, (newId, oldId) => {
+  if (oldId !== undefined && newId !== oldId) {
+    loadPreview()
+  }
+})
+
 onBeforeUnmount(() => {
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
 })
@@ -166,7 +174,8 @@ onMounted(async () => {
     selectedSignerId.value =
       record.value?.authorized_by_signer_id ?? record.value?.letter_type?.signer_id ?? null
     signatureType.value = record.value?.signature_type ?? 'manual'
-    statusValue.value = record.value?.backendStatus ?? 'verified'
+    statusValue.value =
+      record.value?.backendStatus === 'verified' ? 'authorized' : (record.value?.backendStatus ?? 'authorized')
   } catch (error) {
     toast.add({ severity: 'error', summary: 'Gagal memuat detail otorisasi', life: 3000 })
   } finally {

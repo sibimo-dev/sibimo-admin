@@ -21,6 +21,8 @@ const byGender = (block, prefix, role) => ({
 });
 
 // Langkah 1: isian sesuai surat yang diajukan
+// TTD (4): Pihak pertama (husbandName), Pihak kedua (wifeName), Saksi I (witness1Name), Saksi II (witness2Name)
+// → semua penandatangan sudah punya isian nama di bawah, jadi tidak perlu field nama penandatangan tambahan.
 export const sections = [
   // Surat: Nama, NIK, Tempat & Tanggal Lahir, Pekerjaan, Alamat (suami = Pihak Pertama, istri = Pihak Kedua)
   byGender(person("husband", "Data Suami (Pihak Pertama)", ["name", "nik", "birth", "occupation", "address"]), "husband", "asFather"),
