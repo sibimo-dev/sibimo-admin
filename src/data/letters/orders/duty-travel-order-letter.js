@@ -10,16 +10,6 @@ import { f, DOC } from "@/data/letterFields";
 // Langkah 1: isian sesuai surat yang diajukan
 export const sections = [
   {
-      title: "Pegawai yang Diperintah",
-      fields: [
-        f.text("issuingOfficial", "Pejabat yang memberi perintah"),
-        f.text("employeeName", "Nama pegawai"),
-        f.text("employeeRank", "Pangkat/Golongan"),
-        f.text("employeePosition", "Jabatan"),
-        f.text("travelLevel", "Tingkat perjalanan", { default: "Biasa" }),
-      ],
-    },
-  {
       title: "Perjalanan Dinas",
       fields: [
         f.area("purpose", "Maksud perjalanan dinas", { span: 2 }),
