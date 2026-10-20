@@ -127,8 +127,17 @@ onBeforeUnmount(() => store.stop())
       @click="toggle"
     />
 
-    <Popover ref="popover" :pt="{ content: { class: '!p-0' } }">
-      <div class="w-[360px] max-w-[calc(100vw-2rem)]">
+    <Popover
+      ref="popover"
+      :pt="{
+        root: {
+          class:
+            'max-md:!left-0 max-md:!right-0 max-md:!mx-auto max-md:!w-fit max-md:before:!hidden max-md:after:!hidden',
+        },
+        content: { class: '!p-0' },
+      }"
+    >
+      <div class="w-[360px] max-w-[calc(100vw-2rem)] mx-auto">
         <div class="flex items-center justify-between gap-3 px-4 py-3">
           <div>
             <p class="m-0 text-sm font-semibold text-neutral-900">Notifikasi</p>

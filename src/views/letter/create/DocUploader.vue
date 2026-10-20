@@ -3,7 +3,6 @@
    `files` = objek reaktif { [doc.id]: File } milik induk. Komponen ini hanya memberi tahu induk lewat event. */
 import { reactive, ref } from "vue";
 import Button from "primevue/button";
-import FileUpload from "primevue/fileupload";
 import FileThumb from "./FileThumb.vue";
 import FilePreviewDialog from "./FilePreviewDialog.vue";
 import { MAX_FILE_MB, checkFile, fileSizeLabel } from "./formLogic";
@@ -22,8 +21,13 @@ const preview = reactive({ open: false, file: null, title: "" });
 const openPreview = (doc) => Object.assign(preview, { open: true, file: props.files[doc.id], title: doc.label });
 const errorOf = (id) => localErrors[id] || props.errors[id];
 
+const inputs = {};
+const pick = (id) => inputs[id]?.click();
+
 function onSelect(id, event) {
-  const file = event.files?.[0];
+  const input = event.target;
+  const file = input.files?.[0];
+  input.value = ""; // supaya file yang sama bisa dipilih ulang
   if (!file) return;
   const problem = checkFile(file);
   if (problem) {
@@ -67,19 +71,25 @@ function reuse(doc, s) {
           </div>
         </div>
 
-        <div v-else class="flex flex-col items-center gap-2 py-2 text-center">
+        <div v-else class="flex flex-col items-center gap-2.5 py-2 text-center">
           <span class="flex h-10 w-10 items-center justify-center rounded-full bg-primary-200 text-primary-700"><i class="pi pi-cloud-upload text-lg" /></span>
-          <FileUpload
-            mode="basic"
-            :name="`doc-${d.id}`"
+          <input
+            :ref="(el) => (inputs[d.id] = el)"
+            type="file"
             accept="image/*,.pdf"
-            chooseLabel="Pilih Dokumen"
-            chooseIcon="pi pi-upload"
-            :auto="false"
-            :customUpload="true"
-            class="[&_input[type='file']]:hidden"
-            @select="onSelect(d.id, $event)"
+            class="hidden"
+            :name="`doc-${d.id}`"
+            @change="onSelect(d.id, $event)"
           />
+          <Button
+            type="button"
+            label="Pilih Dokumen"
+            icon="pi pi-upload"
+            size="small"
+            class="!px-4 !py-1.5 !text-sm"
+            @click="pick(d.id)"
+          />
+          <p class="text-sm text-slate-500">Belum ada file dipilih</p>
           <p class="text-xs text-slate-500">JPG, PNG, atau PDF · maksimal {{ MAX_FILE_MB }} MB</p>
           <Button
             v-if="suggest && suggest(d)"

@@ -27,6 +27,13 @@ import Toast from 'primevue/toast'
 
 
     <AppConfirmDialog />
-    <Toast />
+    <Toast
+      :pt="{
+        root: {
+          class:
+            'max-md:!left-0 max-md:!right-0 max-md:!mx-auto max-md:!w-[calc(100vw-2rem)] max-md:!top-3',
+        },
+      }"
+    />
   </div>
 </template>
