@@ -426,10 +426,15 @@ function resolveDocumentId(label, documents) {
   const normalizedLabel = normalize(label);
   const exact = documents.find((document) => normalize(document.document_name) === normalizedLabel);
   if (exact) return exact.letter_type_document_id;
-  const aliases = [["kk", "kk"], ["kartutanda", "ktp"], ["ktp", "ktp"], ["pasfoto", "foto"]];
-  const alias = aliases.find(([needle]) => normalizedLabel.includes(needle));
+  const aliases = [
+    [/kk/, /kk/],
+    [/kartutanda|ktp/, /kartutanda|ktp/],
+    [/pasfoto|pasphoto|foto|photo/, /foto|photo/],
+    [/spesimen|tandatangan|capjempol/, /spesimen|tandatangan|jempol/],
+  ];
+  const alias = aliases.find(([needle]) => needle.test(normalizedLabel));
   if (alias) {
-    const match = documents.find((document) => normalize(document.document_name).includes(alias[1]));
+    const match = documents.find((document) => alias[1].test(normalize(document.document_name)));
     if (match) return match.letter_type_document_id;
   }
   const fallback = documents.find((document) => !document.is_required && /lain|pendukung|tambahan/i.test(document.document_name));
