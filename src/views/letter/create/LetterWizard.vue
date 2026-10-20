@@ -140,6 +140,7 @@ const submitError = ref(""); // gagal simpan: pesan inline di bawah form, bukan 
 function buildPayload() {
   return {
     source: LETTER_SOURCE,
+    internal: props.internal,
     code: props.code,
     slug: props.slug,
     title: props.title,
