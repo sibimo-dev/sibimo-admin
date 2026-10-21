@@ -1,0 +1,1 @@
+import{n as e}from"./rolldown-runtime-QTnfLwEv.js";import{W as t,Z as n,s as r}from"./letterFields-O_ngR3YI.js";var i=e({documents:()=>o,meta:()=>s,sections:()=>a}),a=[{...n([t.text(`alias`,`Nama alias (bila ada)`,{optional:!0})]),title:`Data Catin Pria`}],o=[r.ktp,r.kk,r.rt],s={title:`Surat Keterangan Belum Pernah Menikah`,code:`KBP`};export{i as t};

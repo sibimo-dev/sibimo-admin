@@ -1,1 +1,0 @@
-import{n as e}from"./rolldown-runtime-QTnfLwEv.js";import{U as t,Z as n,s as r}from"./letterFields-CW77l5eo.js";var i=e({documents:()=>o,meta:()=>s,sections:()=>a}),a=[n(t())],o=[r.ktp,r.kk,r.rt],s={title:`Surat Keterangan Belum Menikah Lagi`,code:`PBN`};export{i as t};
