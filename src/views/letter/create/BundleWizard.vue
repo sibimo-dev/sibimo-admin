@@ -5,10 +5,8 @@
    1) Pilih Surat      : ceklis surat yang dibutuhkan (dilewati bila hanya 1 pilihan)
    2) Isian Surat      : diawali pencarian NIK pemohon (data warga mengisi formulir otomatis), lalu isian KHUSUS tiap surat terpilih.
                          Step di dalam step: 1 surat = 1 halaman, lanjut ke surat berikutnya (tidak scroll panjang)
-   3) Dokumen          : 1 halaman untuk SEMUA surat, OPSIONAL (berkas fisik bisa diserahkan langsung ke kalurahan).
-                         Dokumen yang sama (KTP, KK, dst.) digabung dan cukup diunggah sekali; file otomatis
-                         berlaku untuk setiap surat yang membutuhkannya
-   (tidak ada langkah cek/preview) Dari langkah Dokumen + pernyataan dokumen asli, tombol "Lanjut ke Verifikasi & Otorisasi"
+   3) Verifikasi & Otorisasi (tidak ada langkah upload dokumen; berkas fisik dapat diserahkan langsung ke kalurahan).
+   Dari langkah Isian + pernyataan dokumen asli, tombol "Lanjut ke Verifikasi & Otorisasi"
                          (tanpa tombol/pop-up Kirim) langsung membuka halaman Verifikasi + Otorisasi (route `letter-detail`;
                          halaman itu membuka surat pertama, surat lainnya ada di daftar)
 
@@ -20,11 +18,10 @@ import Button from "primevue/button";
 import Checkbox from "primevue/checkbox";
 import Message from "primevue/message";
 import LetterFormFields from "./LetterFormFields.vue";
-import DocUploader from "./DocUploader.vue";
 import WizardStepper from "./WizardStepper.vue";
 import ApplicantLookup from "./ApplicantLookup.vue";
 import { useApplicantLookup } from "./useApplicantLookup";
-import { applicantOf, applyAliases, buildAliasIndex, fillForm, normalizeDocs, reviewLocation, scrollTop, validateDocs, validateFields, MAX_FILE_MB } from "./formLogic";
+import { applicantOf, applyAliases, buildAliasIndex, fillForm, reviewLocation, scrollTop, validateFields } from "./formLogic";
 import { HUES, SECTION_HUES, hue } from "./pastel";
 import { LETTER_SOURCE, getLetterRequestError, submitLetterBundle } from "@/services/letter-create.service";
 
@@ -51,11 +48,9 @@ const aliasIndex = buildAliasIndex(props.bundle.aliases);
 const form = reactive({});
 fillForm(form, [...props.bundle.letters.flatMap((l) => l.sections), NOTIF_SECTION]);
 
-const files = reactive({}); // { "<letterId>::<index>": File }
 const autoFilled = reactive({}); // { [fieldKey]: true } — penanda "terisi otomatis"
 const lookup = useApplicantLookup(); // pencarian pemohon lewat NIK (langkah Isian, surat pertama)
 const errors = ref({});
-const fileErrors = ref({});
 const stepAlert = ref("");
 
 /* ---------- Surat terpilih → langkah ---------- */
@@ -65,20 +60,17 @@ const hasChecklist = props.bundle.letters.filter((l) => !l.hidden).length > 1;
 const selected = ref(hasChecklist ? [...(props.bundle.ui?.preselected ?? [])].filter((id) => props.bundle.letters.some((l) => l.id === id)) : props.bundle.letters.map((l) => l.id));
 const selectError = ref(false);
 const selectedLetters = computed(() => props.bundle.letters.filter((l) => selected.value.includes(l.id)));
-const docsOf = (letter) => normalizeDocs(letter.documents, letter.id, form);
 const sectionsOf = (letter) => (letter.id === selectedLetters.value[0]?.id ? [...letter.sections, NOTIF_SECTION] : letter.sections);
 
-const STEPS = ["Pilih Surat", "Isian Surat", "Dokumen"];
+const STEPS = ["Pilih Surat", "Isian Surat"];
 const STEP_SELECT = 0;
 const STEP_FIELDS = 1;
-const STEP_DOCS = 2;
 const FIRST_STEP = hasChecklist ? STEP_SELECT : STEP_FIELDS; // tanpa ceklis, stepper mulai dari "Isian Surat"
 const stepLabels = STEPS.slice(FIRST_STEP);
 const current = ref(FIRST_STEP);
 const maxReached = ref(FIRST_STEP);
 const isChecklist = computed(() => current.value === STEP_SELECT);
 const isFields = computed(() => current.value === STEP_FIELDS);
-const isDocs = computed(() => current.value === STEP_DOCS);
 
 // sub-langkah: indeks surat yang sedang tampil pada langkah Isian
 const fieldIdx = ref(0);
@@ -116,7 +108,6 @@ const clearAll = () => (selected.value = []);
 /* ---------- Navigasi ---------- */
 function resetAlerts() {
   errors.value = {};
-  fileErrors.value = {};
   stepAlert.value = "";
 }
 
@@ -127,7 +118,6 @@ function goTo(step, letterId = null) {
   maxReached.value = Math.max(Math.min(maxReached.value, STEPS.length - 1), step);
   const idx = letterId ? Math.max(0, selectedLetters.value.findIndex((l) => l.id === letterId)) : 0;
   if (step === STEP_FIELDS) fieldIdx.value = idx;
-  if (step === STEP_DOCS) syncShared();
   scrollTop();
 }
 // pindah surat di dalam langkah yang sama
@@ -144,10 +134,9 @@ watch([current, fieldIdx], () => {
 });
 
 const nextLabel = computed(() => {
-  if (isDocs.value) return ui.value.submitLabel ?? "Lanjut ke Verifikasi & Otorisasi";
   if (isChecklist.value) return `Lanjut (${selected.value.length} surat)`;
   if (fieldIdx.value < lastIdx.value) return `Lanjut ke ${selectedLetters.value[fieldIdx.value + 1].code}`;
-  return "Lanjut ke Dokumen";
+  return ui.value.submitLabel ?? "Lanjut ke Verifikasi & Otorisasi";
 });
 
 // true bila tombol Kembali keluar dari wizard (ke daftar surat / jenis pendaftaran)
@@ -155,8 +144,10 @@ const leavesWizard = computed(() => isChecklist.value || (!hasChecklist && isFie
 
 function back() {
   if (leavesWizard.value) return emit("back");
-  if (isFields.value) return fieldIdx.value > 0 ? goSub(fieldIdx.value - 1) : goTo(STEP_SELECT);
-  goTo(STEP_FIELDS, selectedLetters.value[lastIdx.value]?.id); // dari Dokumen kembali ke surat terakhir
+  if (isFields.value) {
+    if (fieldIdx.value > 0) return goSub(fieldIdx.value - 1);
+    return hasChecklist ? goTo(STEP_SELECT) : emit("back");
+  }
 }
 
 const focusFirstError = () => nextTick(() => document.querySelector("[aria-invalid='true'], .border-red-300")?.scrollIntoView({ block: "center", behavior: "smooth" }));
@@ -185,17 +176,8 @@ function next() {
       stepAlert.value = `Surat ${selectedLetters.value[bad].code} belum lengkap. Lengkapi dulu sebelum lanjut.`;
       return focusFirstError();
     }
-    return goTo(STEP_DOCS);
+    return checkAndSubmit();
   }
-
-  // langkah dokumen (1 halaman untuk semua surat) = langkah terakhir → langsung ke Verifikasi + Otorisasi
-  const de = validateDocs(sharedDocs.value, files);
-  if (Object.keys(de).length) {
-    fileErrors.value = de;
-    stepAlert.value = `Masih ada ${Object.keys(de).length} dokumen wajib yang belum diunggah.`;
-    return focusFirstError();
-  }
-  checkAndSubmit();
 }
 
 /* ---------- Isian ---------- */
@@ -207,43 +189,6 @@ const autoCount = computed(() => {
   const keys = new Set(selectedLetters.value.flatMap((l) => sectionsOf(l).flatMap((s) => s.fields)).map((f) => f.key));
   return [...keys].filter((k) => autoFilled[k]).length;
 });
-
-/* ---------- Dokumen ---------- */
-/* Dokumen dengan label sama di beberapa surat (KTP, KK, …) digabung jadi 1 entri unggah.
-   Setiap entri menyimpan `ids` = id dokumen per-surat; file yang diunggah disalin ke semua id itu,
-   sehingga validasi, cek ulang, dan payload per surat tetap bekerja seperti sebelumnya. */
-const sharedDocs = computed(() => {
-  const map = new Map();
-  for (const l of selectedLetters.value) {
-    for (const d of docsOf(l)) {
-      const cur = map.get(d.label);
-      if (!cur) map.set(d.label, { id: d.id, label: d.label, optional: !!d.optional, ids: [d.id] });
-      else {
-        cur.ids.push(d.id);
-        cur.optional = cur.optional && !!d.optional; // wajib bila wajib di salah satu surat
-      }
-    }
-  }
-  return [...map.values()];
-});
-const sharedOf = (id) => sharedDocs.value.find((d) => d.id === id);
-// samakan file untuk surat yang baru ditambahkan / dipilih ulang
-function syncShared() {
-  for (const d of sharedDocs.value) {
-    const src = d.ids.find((id) => files[id]);
-    if (src) d.ids.forEach((id) => (files[id] = files[src]));
-  }
-}
-function onFileSelect(id, file) {
-  (sharedOf(id)?.ids ?? [id]).forEach((x) => (files[x] = file));
-  const next = { ...fileErrors.value };
-  delete next[id];
-  fileErrors.value = next;
-}
-function onFileRemove(id) {
-  (sharedOf(id)?.ids ?? [id]).forEach((x) => delete files[x]);
-}
-const docsMissing = computed(() => Object.keys(validateDocs(sharedDocs.value, files)).length);
 
 /* ---------- Cek ulang ---------- */
 const visibleSections = (l) => sectionsOf(l).map((s) => ({ ...s, fields: s.fields.filter((f) => !f.showIf || f.showIf(form)) })).filter((s) => s.fields.length);
@@ -270,8 +215,7 @@ function checkAndSubmit() {
     return focusFirstError();
   }
   stepAlert.value = "";
-  // Pernyataan dokumen asli hanya relevan bila ada berkas yang diunggah (unggah dokumen opsional).
-  if (Object.keys(files).length && !isOriginal.value) {
+  if (!isOriginal.value) {
     confirmError.value = true;
     return;
   }
@@ -297,7 +241,7 @@ function buildPayload() {
       applicant: lookup.withApplicant(applicantOf(sectionsOf(l), form)),
       fields: Object.fromEntries(sectionsOf(l).flatMap((s) => s.fields).map((f) => [f.key, form[f.key]])),
       fieldDefinitions: sectionsOf(l).flatMap((s) => s.fields.map(({ key, label }) => ({ key, label, section: s.title }))),
-      files: docsOf(l).filter((d) => files[d.id]).map((d) => ({ label: d.label, file: files[d.id] })),
+      files: [],
     })),
   };
 }
@@ -416,34 +360,20 @@ async function submit() {
           <LetterFormFields :sections="sectionsOf(fLetter)" :form="form" :errors="shownErrors(fLetter)" :autoFilled="autoFilled" :idPrefix="`f-${fLetter.id}`" @edit="onEdit" />
         </div>
 
-        <Message v-if="stepAlert" severity="error" :closable="false" class="mt-5">{{ stepAlert }}</Message>
       </div>
 
-      <!-- ============ LANGKAH 3: DOKUMEN — 1 HALAMAN UNTUK SEMUA SURAT ============ -->
-      <div v-else>
-        <h2 class="text-lg font-semibold text-slate-800">Dokumen Pendukung</h2>
-        <p class="text-sm mt-1 text-slate-500">
-          Unggah foto/scan dokumen asli (JPG, PNG, atau PDF, maksimal {{ MAX_FILE_MB }} MB per file). Cukup satu kali unggah, dokumen otomatis dipakai untuk semua surat dalam pengajuan ini.
-          Langkah ini opsional: kosongkan bila pemohon menyerahkan berkas fisik langsung ke kantor kalurahan.
-        </p>
-
-        <section class="mt-5 rounded-2xl border p-4 sm:p-5 bg-gradient-to-br from-primary-50/80 to-white border-primary-100">
-          <DocUploader :docs="sharedDocs" :files="files" :errors="fileErrors" @select="onFileSelect" @remove="onFileRemove" />
-        </section>
-
-        <!-- Pernyataan dokumen asli -->
-        <div class="mt-6 rounded-2xl border-2 p-4" :class="confirmError && !isOriginal ? 'border-red-300 bg-red-50' : h.soft">
-          <label class="flex items-start gap-3 cursor-pointer">
-            <Checkbox v-model="isOriginal" binary class="mt-0.5" @update:modelValue="confirmError = false" />
-            <span class="text-sm text-slate-800">
-              Saya menyatakan bahwa seluruh data yang saya input sudah sesuai dengan berkas dari pemohon dan dokumen yang diserahkan pemohon (diunggah atau berkas fisik) adalah <b>dokumen asli</b>.
-            </span>
-          </label>
-          <small v-if="confirmError && !isOriginal" class="block mt-2 text-red-500">Centang pernyataan ini sebelum melanjutkan.</small>
-        </div>
-
-        <Message v-if="stepAlert" severity="error" :closable="false" class="mt-5">{{ stepAlert }}</Message>
+      <!-- Pernyataan dipindahkan langsung ke bawah isian surat terakhir. -->
+      <div v-if="isFields && fieldIdx === lastIdx" class="mt-6 rounded-2xl border-2 p-4" :class="confirmError && !isOriginal ? 'border-red-300 bg-red-50' : h.soft">
+        <label class="flex items-start gap-3 cursor-pointer">
+          <Checkbox v-model="isOriginal" binary class="mt-0.5" @update:modelValue="confirmError = false" />
+          <span class="text-sm text-slate-800">
+            Saya menyatakan bahwa seluruh data yang saya input sudah sesuai dengan berkas dari pemohon dan dokumen yang diserahkan pemohon (berkas fisik) adalah <b>dokumen asli</b>.
+          </span>
+        </label>
+        <small v-if="confirmError && !isOriginal" class="block mt-2 text-red-500">Centang pernyataan ini sebelum melanjutkan.</small>
       </div>
+
+      <Message v-if="stepAlert" severity="error" :closable="false" class="mt-5">{{ stepAlert }}</Message>
 
       <!-- Tombol navigasi -->
       <div class="flex justify-between gap-3 mt-7 pt-6 border-t border-slate-200">

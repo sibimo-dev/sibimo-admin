@@ -5,11 +5,10 @@
 // Template PDF: letters/duty-travel-order-letter.blade.php
 // 1 file = 1 surat. Isi `sections` (langkah 1) dan `documents` (langkah 2).
 // Langkah 3 (cek ulang, ceklis dokumen asli, kirim, pop-up hasil) sudah ditangani LetterWizard.
-import { f, pemohonRingkas, DOC } from "@/data/letterFields";
+import { f, DOC } from "@/data/letterFields";
 
 // Langkah 1: isian sesuai surat yang diajukan
 export const sections = [
-  pemohonRingkas(),
   {
       title: "Pegawai yang Diperintah",
       fields: [

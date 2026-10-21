@@ -24,6 +24,7 @@ export const OPT = {
 const make = (type) => (key, label, opts = {}) => ({ key, label, type, ...opts });
 export const f = {
   text: make("text"),
+  hamlet: (key, label = "Dusun/Dukuh/Kampung", opts = {}) => ({ key, label, type: "hamlet", ...opts }),
   area: make("textarea"),
   select: (key, label, options, opts = {}) => ({ key, label, type: "select", options, ...opts }),
   date: make("date"),

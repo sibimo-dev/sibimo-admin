@@ -35,6 +35,14 @@ const RELOCATION_TYPES = [
 ];
 
 export const sections = [
+  {
+    title: "Wilayah Tujuan",
+    hint: "Pilih dari data dusun/dukuh yang tersedia atau ketik nama secara manual.",
+    fields: [
+      f.hamlet("hamlet", "Dusun/Dukuh/Kampung"),
+    ],
+  },
+
   pemohon(),
 
   {

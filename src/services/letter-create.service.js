@@ -1,6 +1,8 @@
 import { createLetterRequest } from "./letter-request.service";
-import { getLetterTypes, getFields } from "./letter-type.service";
+import api from "./api";
+import { getLetterTypes, getFields, getDocuments } from "./letter-type.service";
 import { getBackendLetterCode } from "@/data/letterBackendMap";
+import { matchBySignature, overrideFor, rowsFor, signature } from "@/data/letterFieldMap";
 
 // Key generik yang dipakai untuk dua isian berbeda: label di form yang menentukan ("Tujuan" vs "Pergi ke").
 /* Pasangan yang sudah dipastikan dari backend asli: { slug: { keyDiForm: "label ATAU field_key backend" } } */
@@ -97,6 +99,21 @@ export function getLetterRequestError(error, fallback = "Pengajuan surat gagal d
 
 const norm = (v) => String(v ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "");
 const snake = (v) => String(v ?? "").replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_|_$/g, "").toLowerCase();
+const normalize = norm;
+
+function cleanValue(value) {
+  if (Array.isArray(value)) return value.map(cleanValue);
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? "" : value.toISOString().slice(0, 10);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined).map(([k, v]) => [k, cleanValue(v)]));
+  }
+  return value;
+}
+
+function normalizePhone(value) {
+  const phone = String(value ?? "").replace(/[^0-9+]/g, "").trim();
+  return phone || null;
+}
 
 const aliases = {
   applicantName: ["nama", "nama_pemohon", "nama_lengkap", "applicant_name"],
@@ -381,8 +398,8 @@ export async function resolveLetterType(letter) {
   const found = types.find(t => String(t.letter_code ?? t.code ?? "").trim().toUpperCase() === backendCode);
   if (!found) throw new Error(`Tipe surat "${letter.title}" (kode ${backendCode || "-"}) belum terdaftar di backend.`);
   const id = found.letter_type_id ?? found.id;
-  const backendFields = await getFields(id);
-  return { id, backendFields };
+  const [backendFields, documents] = await Promise.all([getFields(id), getDocuments(id)]);
+  return { ...found, id, letter_type_id: id, fields: backendFields, documents };
 }
 
 function firstValue(fields, keys) {
@@ -393,13 +410,21 @@ function firstValue(fields, keys) {
   return "";
 }
 
-function applicantFrom(fields) {
-  const applicantName = firstValue(fields, ["name", "applicantName", "reporterName", "groomName", "brideName", "childName", "deceasedName", "headOfFamilyName", "fatherName", "motherName"]);
-  const applicantNik = firstValue(fields, ["nik", "applicantNik", "reporterNik", "groomNik", "brideNik", "childNik", "deceasedNik", "fatherNik", "motherNik"]);
-  const applicantAddress = firstValue(fields, ["address", "applicantAddress", "reporterAddress", "groomAddress", "brideAddress", "deceasedAddress", "fatherAddress", "motherAddress", "originAddress"]);
-  const applicantPhone = firstValue(fields, ["whatsapp", "applicantPhone", "phone", "reporterPhone"]);
+function applicantFrom(fields, allowEmpty = false, requireAddress = true, suppliedApplicant = {}) {
+  // Surat seperti KIA memakai field anak sebagai isian utama, bukan field
+  // identitas pemohon. Wizard mengirim data pemohon hasil pencarian NIK melalui
+  // `letter.applicant`, sehingga data itu harus ikut menjadi sumber identitas.
+  const supplied = applicantFromFields(suppliedApplicant, {});
+  const applicantName = supplied.name || firstValue(fields, ["name", "applicantName", "reporterName", "groomName", "brideName", "childName", "deceasedName", "headOfFamilyName", "fatherName", "motherName"]);
+  const applicantNik = supplied.nik || firstValue(fields, ["nik", "applicantNik", "reporterNik", "groomNik", "brideNik", "childNik", "deceasedNik", "fatherNik", "motherNik"]);
+  const applicantAddress = supplied.address || firstValue(fields, ["address", "applicantAddress", "reporterAddress", "groomAddress", "brideAddress", "deceasedAddress", "fatherAddress", "motherAddress", "originAddress"]);
+  const applicantPhone = supplied.phone || firstValue(fields, ["whatsapp", "applicantPhone", "phone", "reporterPhone"]);
 
-  if (!applicantName || !applicantNik || !applicantAddress) throw new Error("Lengkapi nama, NIK, dan alamat pemohon sebelum mengirim surat.");
+  if (!allowEmpty && (!applicantName || !applicantNik || (requireAddress && !applicantAddress))) {
+    throw new Error(requireAddress
+      ? "Lengkapi nama, NIK, dan alamat pemohon sebelum mengirim surat."
+      : "Lengkapi nama dan NIK pemohon sebelum mengirim surat.");
+  }
   return { applicantName, applicantNik, applicantAddress, applicantPhone };
 }
 
@@ -407,10 +432,15 @@ function resolveDocumentId(label, documents) {
   const normalizedLabel = normalize(label);
   const exact = documents.find((document) => normalize(document.document_name) === normalizedLabel);
   if (exact) return exact.letter_type_document_id;
-  const aliases = [["kk", "kk"], ["kartutanda", "ktp"], ["ktp", "ktp"], ["pasfoto", "foto"]];
-  const alias = aliases.find(([needle]) => normalizedLabel.includes(needle));
+  const aliases = [
+    [/kk/, /kk/],
+    [/kartutanda|ktp/, /kartutanda|ktp/],
+    [/pasfoto|pasphoto|foto|photo/, /foto|photo/],
+    [/spesimen|tandatangan|capjempol/, /spesimen|tandatangan|jempol/],
+  ];
+  const alias = aliases.find(([needle]) => needle.test(normalizedLabel));
   if (alias) {
-    const match = documents.find((document) => normalize(document.document_name).includes(alias[1]));
+    const match = documents.find((document) => alias[1].test(normalize(document.document_name)));
     if (match) return match.letter_type_document_id;
   }
   const fallback = documents.find((document) => !document.is_required && /lain|pendukung|tambahan/i.test(document.document_name));
@@ -435,43 +465,47 @@ async function uploadFiles(requestId, files, documents) {
 async function submitOne(letter) {
   const type = await resolveLetterType(letter);
   const fields = cleanValue(letter.fields ?? {});
-  const applicant = applicantFrom(fields);
+  const internal = Boolean(letter.internal);
+  // F-1.02 hanya meminta nama, NIK, dan nomor KK. Alamat tidak ada di
+  // formulirnya, sehingga tidak boleh dipaksa oleh validasi umum pemohon.
+  const applicant = applicantFrom(fields, internal, letter.slug !== "population-occurrence-registration", letter.applicant);
+  const labels = Object.fromEntries((letter.fieldDefinitions ?? []).map((field) => [field.key, field.label]));
+  const mapped = mapFieldsToBackend(fields, type.fields ?? [], letter.slug, labels);
+  const mappedFields = fillFromDocuments(mapped.fields, type.fields ?? [], type.documents ?? [], letter.files ?? []);
   // Simpan juga key asli dari form admin. Sebagian tipe surat lama memakai
   // kontrak field camelCase yang berbeda dari metadata backend; backend akan
   // menormalisasikannya saat membangun preview PDF. Field canonical hasil
   // adapter tetap menimpa key yang sama agar kontrak baru diprioritaskan.
   const formData = {
     ...fields,
-    ...backendFormData(fields, type.fields ?? [], letter.fieldDefinitions ?? []),
+    ...mappedFields,
   };
   let created;
-  const { body, config } = buildBody({ letterTypeId, applicant, fields: mapped.fields, files: letter.files, internal });
-  // const { body, config } = buildBody({ letterTypeId, applicant, fields: mapped.fields, files: letter.files });
   try {
-    created = await unwrap(api.post("/letter-requests", {
+    created = await createLetterRequest({
       letter_type_id: type.letter_type_id,
-      applicant_name: String(applicant.applicantName),
-      applicant_nik: String(applicant.applicantNik),
+      applicant_name: applicant.applicantName || null,
+      applicant_nik: applicant.applicantNik || null,
       applicant_phone: normalizePhone(applicant.applicantPhone),
-      applicant_address: String(applicant.applicantAddress),
+      applicant_address: applicant.applicantAddress || null,
       source: LETTER_SOURCE,
       form_data: formData,
-    }));
+    });
   } catch (error) {
     throw new Error(`Data pengajuan ditolak: ${getLetterRequestError(error, "periksa isian surat dan identitas pemohon.")}`, { cause: error });
   }
   await uploadFiles(created.letter_request_id, letter.files, type.documents ?? []);
-  return { title: letter.title, code: created.request_code, request: created };
+  return { id: created.letter_request_id, title: letter.title, code: created.request_code, request: created };
 }
 
 export async function submitSingleLetter(payload) {
-  const result = await saveOne(payload);
+  const result = await submitOne(payload);
   return { id: result.id, code: result.code };
 }
 export async function submitLetterBundle(payload) {
   const codes = [];
   for (const letter of payload.letters) {
-    try { codes.push(await saveOne(letter)); }
+    try { codes.push(await submitOne(letter)); }
     catch (err) {
       if (!codes.length) throw err;
       throw new Error(`${err.message} (${codes.length} surat sebelumnya sudah tersimpan: ${codes.map(c => c.code).join(", ")}).`);

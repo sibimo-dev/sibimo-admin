@@ -4,11 +4,13 @@ import InputText from "primevue/inputtext";
 import Textarea from "primevue/textarea";
 import DatePicker from "primevue/datepicker";
 import Select from "primevue/select";
+import AutoComplete from "primevue/autocomplete";
 import Checkbox from "primevue/checkbox";
 import Button from "primevue/button";
-import { watch } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { visible, isFilled, emptyRow, toDate } from "./formLogic";
 import { HUES, SECTION_HUES } from "./pastel";
+import { getRegions } from "@/services/region.service";
 
 const props = defineProps({
   sections: { type: Array, required: true },
@@ -21,6 +23,27 @@ const emit = defineEmits(["edit"]);
 
 const hueFor = (i) => HUES[SECTION_HUES[i % SECTION_HUES.length]];
 const edit = (key) => emit("edit", key);
+
+const hamletOptions = ref([]);
+const hamletSuggestions = ref([]);
+
+const searchHamlets = (event) => {
+  const query = String(event?.query ?? "").trim().toLocaleLowerCase("id-ID");
+  hamletSuggestions.value = !query
+    ? hamletOptions.value.slice(0, 10)
+    : hamletOptions.value.filter((name) => name.toLocaleLowerCase("id-ID").includes(query)).slice(0, 20);
+};
+
+onMounted(async () => {
+  try {
+    const rows = await getRegions();
+    hamletOptions.value = [...new Set((rows ?? []).map((row) => String(row?.name ?? "").trim()).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, "id"));
+  } catch {
+    // Tetap izinkan input manual jika endpoint wilayah tidak tersedia.
+    hamletOptions.value = [];
+  }
+});
 
 /* Field tanggal dengan `dayKey`: isi field hari (Senin–Minggu) otomatis tiap tanggal berubah. */
 const HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
@@ -75,6 +98,7 @@ const minRows = (field) => field.min ?? (field.optional ? 0 : 1);
 
             <Select v-if="field.type === 'select'" :id="`${idPrefix}-${field.key}`" v-model="form[field.key]" :options="field.options" :editable="field.editable" placeholder="Pilih" :invalid="!!errors[field.key]" class="w-full" @update:modelValue="edit(field.key)" />
             <DatePicker v-else-if="field.type === 'date'" :id="`${idPrefix}-${field.key}`" v-model="form[field.key]" showIcon iconDisplay="input" dateFormat="dd/mm/yy" placeholder="dd/mm/yyyy" :invalid="!!errors[field.key]" @update:modelValue="edit(field.key)" />
+            <AutoComplete v-else-if="field.type === 'hamlet'" :id="`${idPrefix}-${field.key}`" v-model="form[field.key]" :suggestions="hamletSuggestions" dropdown placeholder="Pilih atau ketik nama dusun" :invalid="!!errors[field.key]" class="w-full" inputClass="w-full" @complete="searchHamlets" @update:modelValue="edit(field.key)" />
             <Textarea v-else-if="field.type === 'textarea'" :id="`${idPrefix}-${field.key}`" v-model="form[field.key]" rows="3" autoResize :placeholder="field.placeholder" :invalid="!!errors[field.key]" @update:modelValue="edit(field.key)" />
             <InputText v-else-if="field.type === 'time'" :id="`${idPrefix}-${field.key}`" v-model="form[field.key]" type="time" :invalid="!!errors[field.key]" @update:modelValue="edit(field.key)" />
 
