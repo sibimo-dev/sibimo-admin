@@ -236,7 +236,16 @@ const filteredSubmissions = computed(() => {
 })
 
 function formatLetterDate(dateValue) {
-  const d = new Date(`${dateValue}T00:00:00`)
+  const raw = String(dateValue ?? '').trim()
+  if (!raw) return '-'
+
+  // API mengirim submitted_at sebagai timestamp ISO (contoh:
+  // 2026-10-21T08:15:00.000000Z), bukan hanya tanggal YYYY-MM-DD.
+  // Menambahkan T00:00:00 ke timestamp membuat Date invalid dan akhirnya
+  // seluruh kolom tanggal tampil sebagai "-".
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? new Date(`${raw}T00:00:00`)
+    : new Date(raw)
   if (Number.isNaN(d.getTime())) return '-'
   return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
 }
