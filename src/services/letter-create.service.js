@@ -410,11 +410,15 @@ function firstValue(fields, keys) {
   return "";
 }
 
-function applicantFrom(fields, allowEmpty = false, requireAddress = true) {
-  const applicantName = firstValue(fields, ["name", "applicantName", "reporterName", "groomName", "brideName", "childName", "deceasedName", "headOfFamilyName", "fatherName", "motherName"]);
-  const applicantNik = firstValue(fields, ["nik", "applicantNik", "reporterNik", "groomNik", "brideNik", "childNik", "deceasedNik", "fatherNik", "motherNik"]);
-  const applicantAddress = firstValue(fields, ["address", "applicantAddress", "reporterAddress", "groomAddress", "brideAddress", "deceasedAddress", "fatherAddress", "motherAddress", "originAddress"]);
-  const applicantPhone = firstValue(fields, ["whatsapp", "applicantPhone", "phone", "reporterPhone"]);
+function applicantFrom(fields, allowEmpty = false, requireAddress = true, suppliedApplicant = {}) {
+  // Surat seperti KIA memakai field anak sebagai isian utama, bukan field
+  // identitas pemohon. Wizard mengirim data pemohon hasil pencarian NIK melalui
+  // `letter.applicant`, sehingga data itu harus ikut menjadi sumber identitas.
+  const supplied = applicantFromFields(suppliedApplicant, {});
+  const applicantName = supplied.name || firstValue(fields, ["name", "applicantName", "reporterName", "groomName", "brideName", "childName", "deceasedName", "headOfFamilyName", "fatherName", "motherName"]);
+  const applicantNik = supplied.nik || firstValue(fields, ["nik", "applicantNik", "reporterNik", "groomNik", "brideNik", "childNik", "deceasedNik", "fatherNik", "motherNik"]);
+  const applicantAddress = supplied.address || firstValue(fields, ["address", "applicantAddress", "reporterAddress", "groomAddress", "brideAddress", "deceasedAddress", "fatherAddress", "motherAddress", "originAddress"]);
+  const applicantPhone = supplied.phone || firstValue(fields, ["whatsapp", "applicantPhone", "phone", "reporterPhone"]);
 
   if (!allowEmpty && (!applicantName || !applicantNik || (requireAddress && !applicantAddress))) {
     throw new Error(requireAddress
@@ -464,7 +468,7 @@ async function submitOne(letter) {
   const internal = Boolean(letter.internal);
   // F-1.02 hanya meminta nama, NIK, dan nomor KK. Alamat tidak ada di
   // formulirnya, sehingga tidak boleh dipaksa oleh validasi umum pemohon.
-  const applicant = applicantFrom(fields, internal, letter.slug !== "population-occurrence-registration");
+  const applicant = applicantFrom(fields, internal, letter.slug !== "population-occurrence-registration", letter.applicant);
   const labels = Object.fromEntries((letter.fieldDefinitions ?? []).map((field) => [field.key, field.label]));
   const mapped = mapFieldsToBackend(fields, type.fields ?? [], letter.slug, labels);
   const mappedFields = fillFromDocuments(mapped.fields, type.fields ?? [], type.documents ?? [], letter.files ?? []);
