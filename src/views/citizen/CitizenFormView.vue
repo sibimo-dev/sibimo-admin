@@ -53,7 +53,7 @@ const rw = ref('')
 const gender = ref('Laki-laki')
 const birthPlace = ref('')
 const birthDate = ref(null)
-const age = ref(null)
+const age = computed(() => calculateAge(birthDate.value))
 const birthCertificateStatus = ref('')
 const birthCertificateNumber = ref('')
 const bloodType = ref('')
@@ -98,15 +98,36 @@ const statusDisplay = computed(() => (
 // Helper: format Date object -> 'YYYY-MM-DD' buat dikirim ke backend
 function toApiDate(date) {
   if (!date) return null
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date
+
   const d = date instanceof Date ? date : new Date(date)
   if (Number.isNaN(d.getTime())) return null
-  return d.toISOString().split('T')[0]
+
+  const pad = value => String(value).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 function fromApiDate(value) {
   if (!value) return null
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? null : date
+}
+
+function calculateAge(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null
+
+  const today = new Date()
+  if (date > today) return null
+
+  let years = today.getFullYear() - date.getFullYear()
+  const birthdayHasPassed = (
+    today.getMonth() > date.getMonth()
+    || (today.getMonth() === date.getMonth() && today.getDate() >= date.getDate())
+  )
+
+  if (!birthdayHasPassed) years -= 1
+
+  return Math.max(years, 0)
 }
 
 // GANTI: dari hardcode dummy -> fetch data asli dari API
@@ -127,7 +148,6 @@ async function fetchCitizenDetail() {
     gender.value = data.gender ?? 'Laki-laki'
     birthPlace.value = data.birth_place ?? ''
     birthDate.value = fromApiDate(data.birth_date)
-    age.value = data.age ?? null
     birthCertificateStatus.value = data.birth_certificate_status ?? ''
     birthCertificateNumber.value = data.birth_certificate_number ?? ''
     bloodType.value = data.blood_type ?? ''
@@ -409,8 +429,8 @@ function deleteCitizen() {
 
               <div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
                 <div class="flex flex-col gap-2">
-                  <label class="text-[13px] font-semibold text-neutral-700" for="age">Umur</label>
-                  <InputText id="age" v-model="age" type="number" min="0" max="150" placeholder="Umur" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
+                  <label class="text-[13px] font-semibold text-neutral-700" for="age">Umur (otomatis)</label>
+                  <InputText id="age" :model-value="age ?? ''" type="number" readonly placeholder="Otomatis dari tanggal lahir" class="w-full rounded-lg border border-neutral-300 bg-neutral-100 px-3 py-2.5 text-[13px]" />
                 </div>
                 <div class="flex flex-col gap-2">
                   <label class="text-[13px] font-semibold text-neutral-700" for="bloodType">Golongan Darah</label>
