@@ -109,6 +109,7 @@ async function openRegister(type) {
         kindLabel: "Pendaftaran Warga Baru",
         selectTitle: "Surat apa saja yang dibutuhkan pemohon?",
         selectHint: "Pilih surat/dokumen kependudukan untuk mendaftar. Setiap surat yang dipilih mendapat satu langkah pengisian sendiri, termasuk data diri. Bila hanya ada satu pilihan, langkah ini dilewati.",
+        hideApplicantLookup: true,
         backLabel: "Kembali ke Jenis Pendaftaran",
         submitLabel: "Lanjut ke Verifikasi & Otorisasi",
         doneTitle: "Pendaftaran Tersimpan",

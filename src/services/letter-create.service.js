@@ -494,8 +494,13 @@ async function submitOne(letter) {
   } catch (error) {
     throw new Error(`Data pengajuan ditolak: ${getLetterRequestError(error, "periksa isian surat dan identitas pemohon.")}`, { cause: error });
   }
-  await uploadFiles(created.letter_request_id, letter.files, type.documents ?? []);
-  return { id: created.letter_request_id, title: letter.title, code: created.request_code, request: created };
+  const request = created?.data ?? created;
+  const requestId = request?.letter_request_id ?? request?.id;
+  if (!requestId) {
+    throw new Error("Backend tidak mengembalikan ID pengajuan surat. Bersihkan cache API/restart backend lalu coba lagi.");
+  }
+  await uploadFiles(requestId, letter.files, type.documents ?? []);
+  return { id: requestId, title: letter.title, code: request.request_code, request };
 }
 
 export async function submitSingleLetter(payload) {
