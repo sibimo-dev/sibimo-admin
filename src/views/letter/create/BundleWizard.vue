@@ -36,6 +36,10 @@ const router = useRouter();
 const ui = computed(() => props.bundle.ui ?? {}); // penyesuaian teks/navigasi (dipakai register); kosong = tampilan paket
 const hueName = computed(() => props.hue || props.bundle.hue);
 const h = computed(() => hue(hueName.value));
+// Pendaftaran warga baru dimulai dari data manual karena NIK pemohon memang
+// belum tentu sudah tersimpan di tabel citizens. Paket surat biasa tetap
+// menggunakan pencarian NIK untuk autofill.
+const showApplicantLookup = computed(() => !ui.value.hideApplicantLookup);
 
 /* ---------- Data bersama ---------- */
 const NOTIF_SECTION = {
@@ -325,7 +329,7 @@ async function submit() {
       <!-- ============ LANGKAH 2: ISIAN — 1 SURAT PER HALAMAN ============ -->
       <div v-else-if="isFields && fLetter" :key="`f-${fLetter.id}`">
         <!-- Langkah pertama: NIK pemohon → data warga mengisi formulir semua surat terpilih -->
-        <ApplicantLookup v-if="fieldIdx === 0" :state="lookup.state" class="mb-5" @search="lookup.search(selectedLetters.flatMap(sectionsOf), form, autoFilled)" />
+        <ApplicantLookup v-if="showApplicantLookup && fieldIdx === 0" :state="lookup.state" class="mb-5" @search="lookup.search(selectedLetters.flatMap(sectionsOf), form, autoFilled)" />
 
         <!-- penanda sub-langkah per surat -->
         <div v-if="selectedLetters.length > 1" class="flex flex-wrap items-center gap-2">

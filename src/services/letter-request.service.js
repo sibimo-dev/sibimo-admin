@@ -1,6 +1,8 @@
 import api from './api'
 
-const unwrap = (request) => request.then((response) => response.data.data)
+// Backend utama membungkus payload di `data`, tetapi fallback ke body mentah
+// menjaga kompatibilitas dengan versi API lama yang mengembalikan objek langsung.
+const unwrap = (request) => request.then((response) => response.data?.data ?? response.data ?? null)
 
 export const getLetterRequests = () => unwrap(api.get('/letter-requests'))
 export const getLetterRequest = (id) => unwrap(api.get('/letter-requests/' + id))
