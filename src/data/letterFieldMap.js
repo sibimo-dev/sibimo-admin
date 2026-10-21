@@ -163,6 +163,8 @@ export const FIELD_OVERRIDES = {
     recipientAddress: "lokasi_tujuan_surat",
     leaseBuildingName: "nama_gedung",
     leaseBuildingAddress: "alamat_gedung",
+    leaseEndDate: "tanggal_berakhir_sewa_lama",
+    leaseAnnualRent: "harga_sewa_per_tahun",
     leaseDurationYears: "lama_sewa_tahun",
   },
   "letter-c-data-statement-letter": {
