@@ -25,8 +25,58 @@ function toDate(value) {
 const fmtLong = (d) =>
   d ? d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : ''
 
-export function toResident(c) {
+function toResidentPerson(c) {
+  if (!c) return null
   const birthDate = toDate(c.birth_date)
+  return {
+    fullName: c.full_name ?? '',
+    nik: String(c.national_id ?? ''),
+    birthPlace: c.birth_place ?? '',
+    birthDate,
+    birthPlaceDate: [c.birth_place, fmtLong(birthDate)].filter(Boolean).join(', '),
+    gender: normGender(c.gender),
+    maritalStatus: MARITAL[c.marital_status] ?? c.marital_status ?? '',
+    religion: RELIGION[c.religion] ?? c.religion ?? '',
+    occupation: c.occupation ?? '',
+    education: c.education ?? '',
+    nationality: c.nationality ?? 'WNI',
+    address: c.address ?? c.ktp_address ?? '',
+    phoneNumber: c.phone_number ?? '',
+  }
+}
+
+function spouseOf(c, citizens) {
+  const familyCard = String(c?.family_card_number ?? '').trim()
+  if (!familyCard || !/kawin|menikah/i.test(String(c?.marital_status ?? ''))) return null
+  const ownGender = normGender(c.gender)
+  const opposite = ownGender === 'Laki-laki' ? 'Perempuan' : ownGender === 'Perempuan' ? 'Laki-laki' : ''
+  if (!opposite) return null
+  const candidates = citizens
+    .filter((item) => String(item.family_card_number ?? '').trim() === familyCard)
+    .filter((item) => String(item.national_id ?? '') !== String(c.national_id ?? ''))
+    .filter((item) => normGender(item.gender) === opposite)
+  if (!candidates.length) return null
+  const relation = (item) => String(item.family_relationship ?? '').toLowerCase()
+  candidates.sort((a, b) => {
+    const score = (item) => {
+      const value = relation(item)
+      if (ownGender === 'Laki-laki') return value === 'istri' ? 0 : 1
+      return value === 'suami' || value === 'kepala keluarga' ? 0 : 1
+    }
+    return score(a) - score(b)
+  })
+  return toResidentPerson(candidates[0])
+}
+
+export function toResident(c, citizens = []) {
+  const birthDate = toDate(c.birth_date)
+  const byNik = (nik) => citizens.find((item) => String(item.national_id ?? '') === String(nik ?? ''))
+  const fallbackParent = (nik, name) => ({
+    fullName: name ?? '',
+    nik: String(nik ?? ''),
+  })
+  const fatherRecord = byNik(c.father_national_id)
+  const motherRecord = byNik(c.mother_national_id)
   return {
     fullName: c.full_name ?? '',
     nik: String(c.national_id ?? ''),
@@ -38,8 +88,13 @@ export function toResident(c) {
     maritalStatus: MARITAL[c.marital_status] ?? c.marital_status ?? '',
     religion: RELIGION[c.religion] ?? c.religion ?? '',
     occupation: c.occupation ?? '',
+    education: c.education ?? '',
+    nationality: c.nationality ?? 'WNI',
     address: c.address ?? c.ktp_address ?? '',
     phoneNumber: c.phone_number ?? '',
+    father: fatherRecord ? toResidentPerson(fatherRecord) : fallbackParent(c.father_national_id, c.father_name),
+    mother: motherRecord ? toResidentPerson(motherRecord) : fallbackParent(c.mother_national_id, c.mother_name),
+    spouse: spouseOf(c, citizens),
   }
 }
 
@@ -48,5 +103,5 @@ export async function findResidentByNik(nik) {
   const result = await getCitizens()
   const list = Array.isArray(result) ? result : (result?.data ?? [])
   const hit = list.find((c) => String(c.national_id) === String(nik))
-  return hit ? toResident(hit) : null
+  return hit ? toResident(hit, list) : null
 }

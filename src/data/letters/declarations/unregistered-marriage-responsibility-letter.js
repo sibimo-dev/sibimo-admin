@@ -35,10 +35,10 @@ export const sections = [
     // Surat: saksi I dan saksi II (Nama, NIK)
     title: "Saksi-saksi Perkawinan",
     fields: [
-      f.text("witness1Name", "Nama Saksi I"),
-      f.nik("witness1Nik", "NIK Saksi I"),
-      f.text("witness2Name", "Nama Saksi II"),
-      f.nik("witness2Nik", "NIK Saksi II"),
+      f.text("witness1Name", "Nama Saksi I", { optional: true }),
+      f.nik("witness1Nik", "NIK Saksi I", { optional: true }),
+      f.text("witness2Name", "Nama Saksi II", { optional: true }),
+      f.nik("witness2Nik", "NIK Saksi II", { optional: true }),
     ],
   },
   {

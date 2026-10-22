@@ -193,10 +193,30 @@ export const akad = () => ({
   ],
 });
 const NIKAH = ["name", "nik", "birth", "nationality", "religion", "occupation", "education", "address"];
-export const calonSuami = (parts = NIKAH) => person("groom", "Data Calon Suami", parts, [f.text("groomBin", "Bin (nama ayah)")]);
-export const calonIstri = (parts = NIKAH) => person("bride", "Data Calon Istri", parts, [f.text("brideBinti", "Binti (nama ayah)")]);
-export const ortuNikah = (prefix, title, binLabel) =>
-  person(prefix, title, ["name", "nik", "birth", "nationality", "religion", "occupation", "address"], [f.text(`${prefix}Bin`, binLabel)]);
+const RESIDENT_PARTS = {
+  Name: "fullName", Nik: "nik", BirthPlace: "birthPlace", BirthDate: "birthDate", Gender: "gender",
+  Religion: "religion", Occupation: "occupation", Education: "education", Nationality: "nationality",
+  Marital: "maritalStatus", Address: "address",
+};
+const residentFields = (section, relation) => ({
+  ...section,
+  fields: section.fields.map((field) => {
+    const suffix = Object.keys(RESIDENT_PARTS).find((part) => field.key.endsWith(part));
+    return suffix ? { ...field, from: `${relation}:${RESIDENT_PARTS[suffix]}` } : field;
+  }),
+});
+export const calonSuami = (parts = NIKAH) => residentFields(
+  person("groom", "Data Calon Suami", parts, [f.text("groomBin", "Bin (nama ayah)")]),
+  "asGroom",
+);
+export const calonIstri = (parts = NIKAH) => residentFields(
+  person("bride", "Data Calon Istri", parts, [f.text("brideBinti", "Binti (nama ayah)")]),
+  "asBride",
+);
+export const ortuNikah = (prefix, title, binLabel) => residentFields(
+  person(prefix, title, ["name", "nik", "birth", "nationality", "religion", "occupation", "address"], [f.text(`${prefix}Bin`, binLabel)]),
+  String(prefix).toLowerCase().endsWith("father") ? "parentFather" : "parentMother",
+);
 
 /* ---------- Alamat lengkap (surat pindah/datang, dll) ----------
    Opsi (opsional):

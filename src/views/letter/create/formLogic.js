@@ -71,6 +71,8 @@ export function fillForm(form, sections, lookup = () => undefined) {
 /* ---------- Isian dari data warga (pencarian NIK) ----------
    `resident` = hasil services/resident-lookup.service.js. Kunci `from` biasa (fullName, nik, address, ...) membaca langsung;
    `asFather:x` / `asMother:x` hanya terisi bila jenis kelamin warga cocok (laki-laki → blok Ayah, perempuan → blok Ibu).
+   `asGroom:x` / `asBride:x` dipakai untuk blok calon pengantin, sedangkan `parentFather:x` /
+   `parentMother:x` membaca data ayah/ibu yang terhubung ke NIK warga.
    Jenis kelamin dibandingkan secara longgar (huruf besar/kecil, "L"/"P", "Male"/"Female", dst.). */
 const MALE = ["laki-laki", "laki laki", "l", "male", "pria"];
 const FEMALE = ["perempuan", "p", "female", "wanita"];
@@ -78,11 +80,17 @@ const FEMALE = ["perempuan", "p", "female", "wanita"];
 export function makeResidentLookup(resident) {
   return (key) => {
     if (!resident) return undefined;
-    const m = /^as(Father|Mother):(.+)$/.exec(key);
+    const m = /^(asFather|asMother|asGroom|asBride|parentFather|parentMother|spouse):(.+)$/.exec(key);
     if (!m) return resident[key];
+    const [, relation, property] = m;
     const g = String(resident.gender ?? "").trim().toLowerCase();
+    if (relation === "parentFather") return resident.father?.[property];
+    if (relation === "parentMother") return resident.mother?.[property];
+    if (relation === "spouse") return resident.spouse?.[property];
     const role = MALE.includes(g) ? "Father" : FEMALE.includes(g) ? "Mother" : null;
-    return role === m[1] ? resident[m[2]] : undefined;
+    const coupleRole = MALE.includes(g) ? "asGroom" : FEMALE.includes(g) ? "asBride" : null;
+    if (relation === "asFather" || relation === "asMother") return relation === `as${role}` ? resident[property] : undefined;
+    return relation === coupleRole ? resident[property] : undefined;
   };
 }
 
@@ -113,10 +121,17 @@ export function applyResident(form, sections, resident, autoFilled = {}) {
     { from: "occupation", keys: ["occupation", "pekerjaan"], labels: ["pekerjaan"] },
     { from: "phoneNumber", keys: ["phoneNumber", "phone", "whatsapp", "nomorTelepon", "noHp"], labels: ["nomor telepon", "telepon", "nomor hp", "whatsapp"] },
   ];
+  // Label "Nama Lengkap" muncul di banyak blok (calon pengantin, orang tua, saksi, dst.).
+  // Hanya field pemohon/root yang boleh memakai fallback label; blok orang lain harus memakai
+  // `field.from` eksplisit agar tidak ikut terisi dengan nama pemohon.
+  const directIdentityKeys = new Set([
+    "name", "nik", "address", "birthPlace", "birthDate", "gender", "maritalStatus", "religion", "occupation",
+    "applicantName", "applicantNik", "applicantAddress", "applicantPhone", "fullName", "phoneNumber",
+  ]);
   for (const section of sections) {
     for (const field of section.fields) {
       if (field.type === "rows" || field.type === "checks" || /^reporter/i.test(field.key)) continue;
-      const alias = identityAliases.find(a => a.keys.includes(field.key) || a.labels.some(l => norm(l) === norm(field.label)));
+      const alias = identityAliases.find(a => a.keys.includes(field.key) || (directIdentityKeys.has(field.key) && a.labels.some(l => norm(l) === norm(field.label))));
       const source = field.from || alias?.from;
       if (!source) continue;
       const raw = lookup(source);
