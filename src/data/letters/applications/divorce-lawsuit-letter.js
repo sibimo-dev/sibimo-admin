@@ -6,13 +6,17 @@ import { f, DOC, opt } from "@/data/letterFields";
 
 // Helper: field biodata sesuai urutan di surat
 // Urutan: Nama, Tempat tgl lhr, [Agama], Pekerjaan, Alamat
-const biodata = (prefix, { religion = true } = {}) => [
-  f.text(`${prefix}Name`, "Nama"),
-  f.text(`${prefix}Birth`, "Tempat, Tanggal Lahir"),
-  ...(religion ? [f.text(`${prefix}Religion`, "Agama")] : []),
-  f.text(`${prefix}Occupation`, "Pekerjaan"),
-  f.text(`${prefix}Address`, "Alamat"),
-];
+const biodata = (prefix, { religion = true, resident = false, relation = "" } = {}) => {
+  const source = (key) => (relation ? `${relation}:${key}` : key);
+  return [
+    f.text(`${prefix}Name`, "Nama", resident ? { from: source("fullName") } : {}),
+    f.text(`${prefix}Birth`, "Tempat, Tanggal Lahir", resident ? { from: source("birthPlaceDate") } : {}),
+    ...(religion ? [f.text(`${prefix}Religion`, "Agama", resident ? { from: source("religion") } : {})] : []),
+    f.text(`${prefix}Occupation`, "Pekerjaan", resident ? { from: source("occupation") } : {}),
+    f.text(`${prefix}Address`, "Alamat", resident ? { from: source("address") } : {}),
+  ];
+};
+const optionalBiodata = (prefix, options = {}) => biodata(prefix, options).map((field) => ({ ...field, optional: true }));
 
 // Langkah 1: isian sesuai surat
 export const sections = [
@@ -20,8 +24,9 @@ export const sections = [
   {
     title: "Data Orang yang Dihadapkan",
     fields: [
-      f.select("applicantGender", "Jenis Kelamin", ["Laki-laki", "Perempuan"]),
-      ...biodata("applicant"),
+      f.nik("applicantNik", "NIK", { from: "nik" }),
+      f.select("applicantGender", "Jenis Kelamin", ["Laki-laki", "Perempuan"], { from: "gender" }),
+      ...biodata("applicant", { resident: true }),
     ],
   },
 
@@ -29,7 +34,7 @@ export const sections = [
   {
     title: "Data Suami/Istri",
     fields: [
-      ...biodata("spouse", { religion: false }),
+      ...biodata("spouse", { religion: false, resident: true, relation: "spouse" }),
       f.text("marriageCertNumber", "Surat Nikah (Nomor)"),
     ],
   },
@@ -43,8 +48,8 @@ export const sections = [
   },
 
   // "Dua orang saksi"
-  { title: "Data Saksi 1", fields: biodata("witness1") },
-  { title: "Data Saksi 2", fields: biodata("witness2") },
+  { title: "Data Saksi 1 (Opsional)", fields: optionalBiodata("witness1") },
+  { title: "Data Saksi 2 (Opsional)", fields: optionalBiodata("witness2") },
 ];
 
 // Langkah 2: dokumen pendukung (opt(...) = tidak wajib)
