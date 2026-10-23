@@ -34,6 +34,13 @@ const STEPS = ["Isian Surat"];
 const h = computed(() => getHue(props.hue));
 const router = useRouter();
 
+// Formulir pernikahan yang memuat dua blok catin tidak memakai satu NIK pemohon
+// bersama. Masing-masing catin dicari dari kotak NIK-nya sendiri di blok form.
+const requiresDualCatinLookup = computed(() => {
+  const lookupKeys = new Set(props.sections.filter((section) => section.lookupKey).map((section) => section.lookupKey));
+  return lookupKeys.has("groom") && lookupKeys.has("bride");
+});
+
 /* ---------- Data ---------- */
 // Kontak pemohon opsional di semua surat (admin: pemohon datang sendiri, tanpa notifikasi WhatsApp).
 const allSections = computed(() => [
@@ -139,7 +146,7 @@ async function submit() {
       <!-- ============ STEP 1: ISIAN SURAT ============ -->
       <div v-if="current === 0" class="flex flex-col gap-5">
         <!-- Langkah pertama: NIK pemohon → data warga mengisi formulir otomatis (surat internal tidak punya pemohon) -->
-        <ApplicantLookup v-if="!internal" :state="lookup.state" @search="lookup.search(allSections, form, autoFilled)" />
+        <ApplicantLookup v-if="!internal && !requiresDualCatinLookup" :state="lookup.state" @search="lookup.search(allSections, form, autoFilled)" />
         <LetterFormFields :sections="allSections" :form="form" :errors="errors" :autoFilled="autoFilled" @edit="onEdit" />
       </div>
 

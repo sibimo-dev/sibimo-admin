@@ -17,9 +17,11 @@ export const sections = [
     title: "Letak Tanah",
     fields: [
       f.text("hamlet", "Padukuhan"),
-      f.text("village", "Kalurahan/Desa", { placeholder: "Contoh: Bimomartani" }),
-      f.text("district", "Kapanewon", { placeholder: "Contoh: Ngemplak" }),
-      f.text("city", "Kota/Kabupaten", { placeholder: "Contoh: Sleman" }),
+      // Lokasi kalurahan layanan ini tetap Bimomartani. Harga pembandingnya
+      // tetap bebas diisi, termasuk bila sumber transaksi berasal dari luar.
+      f.text("village", "Kalurahan/Desa", { default: "Bimomartani", readonly: true }),
+      f.text("district", "Kapanewon", { default: "Ngemplak", readonly: true }),
+      f.text("city", "Kota/Kabupaten", { default: "Sleman", readonly: true }),
     ],
   },
   {
