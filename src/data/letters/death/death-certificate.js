@@ -6,7 +6,7 @@
 // Template PDF: letters/death/death-certificate.blade.php
 // 1 file = 1 surat. Isi `sections` (langkah 1) dan `documents` (langkah 2).
 // Langkah 3 (cek ulang, ceklis dokumen asli, kirim, pop-up hasil) sudah ditangani LetterWizard.
-import { DEATH_JENAZAH_SKK, PELAPOR_SKK, arrange, dokJenazah, deathDeceased, deathParent, deathWitness, keluarga, pelapor } from "@/data/letterFields";
+import { DEATH_JENAZAH_SKK, PELAPOR_SKK, arrange, dokJenazah, deathDeceased, deathParent, deathWitness, keluarga, pelaporKematian } from "@/data/letterFields";
 
 // Langkah 1: di xlsx urutannya Nama Kepala Keluarga dulu, baru Nomor KK (Pelapor diisi petugas/admin kalurahan, khusus admin)
 export const sections = arrange(
@@ -15,7 +15,7 @@ export const sections = arrange(
     deathDeceased(DEATH_JENAZAH_SKK),
     deathParent("mother", "Data Ibu", ["nik", "name", "birthPlace", "birthDate", "occupation", "addressKtp", "nationality"]),
     deathParent("father", "Data Ayah", ["nik", "name", "birthPlace", "birthDate", "occupation", "addressKtp", "nationality"]),
-    pelapor(PELAPOR_SKK),
+    pelaporKematian(PELAPOR_SKK),
     deathWitness(1),
     deathWitness(2),
   ],

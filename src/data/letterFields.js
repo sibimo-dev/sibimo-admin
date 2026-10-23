@@ -173,15 +173,28 @@ export const almarhum = () => ({
   ],
 });
 
-export const pelaporKematian = () => ({
-  title: "Data Pelapor",
-  fields: [
-    f.text("reporterName", "Nama Lengkap Pelapor", { from: "fullName" }),
-    f.nik("reporterNik", "NIK Pelapor", { from: "nik" }),
-    f.text("reporterRelation", "Hubungan dengan Almarhum/ah", { placeholder: "Contoh: Anak, Istri, Saudara" }),
-    f.area("reporterAddress", "Alamat Pelapor", { from: "address", span: 2 }),
-  ],
-});
+export const pelaporKematian = (parts = null, title = "Data Pelapor") => {
+  if (!parts) {
+    return {
+      title,
+      fields: [
+        f.text("reporterName", "Nama Lengkap Pelapor", { from: "fullName" }),
+        f.nik("reporterNik", "NIK Pelapor", { from: "nik" }),
+        f.text("reporterRelation", "Hubungan dengan Almarhum/ah", { placeholder: "Contoh: Anak, Istri, Saudara" }),
+        f.area("reporterAddress", "Alamat Pelapor", { from: "address", span: 2 }),
+      ],
+    };
+  }
+  return {
+    title,
+    hint: "Terisi otomatis dari data warga berdasarkan NIK pemohon. Koreksi bila ada yang tidak sesuai.",
+    fields: parts.map((p) => ({
+      ...REPORTER[p](),
+      ...(p === "reportDate" ? { default: localToday() } : {}),
+      from: REPORTER_AUTO_FROM[p],
+    })),
+  };
+};
 
 /* ---------- Pernikahan ---------- */
 export const akad = () => ({
@@ -206,15 +219,20 @@ const residentFields = (section, relation) => ({
   }),
 });
 export const calonSuami = (parts = NIKAH) => residentFields(
-  person("groom", "Data Calon Suami", parts, [f.text("groomBin", "Bin (nama ayah)")]),
+  { ...person("groom", "Data Calon Suami", parts, [f.text("groomBin", "Bin (nama ayah)", { from: "asGroom:fatherName" })]), lookupKey: "groom" },
   "asGroom",
 );
 export const calonIstri = (parts = NIKAH) => residentFields(
-  person("bride", "Data Calon Istri", parts, [f.text("brideBinti", "Binti (nama ayah)")]),
+  { ...person("bride", "Data Calon Istri", parts, [f.text("brideBinti", "Binti (nama ayah)", { from: "asBride:fatherName" })]), lookupKey: "bride" },
   "asBride",
 );
 export const ortuNikah = (prefix, title, binLabel) => residentFields(
-  person(prefix, title, ["name", "nik", "birth", "nationality", "religion", "occupation", "address"], [f.text(`${prefix}Bin`, binLabel)]),
+  {
+    ...person(prefix, title, ["name", "nik", "birth", "nationality", "religion", "occupation", "address"], [f.text(`${prefix}Bin`, binLabel, {
+      from: `${String(prefix).toLowerCase().endsWith("father") ? "parentFather" : "parentMother"}:fatherName`,
+    })]),
+    parentOf: /^groom/i.test(prefix) ? "groom" : /^bride/i.test(prefix) ? "bride" : undefined,
+  },
   String(prefix).toLowerCase().endsWith("father") ? "parentFather" : "parentMother",
 );
 
@@ -225,21 +243,26 @@ export const ortuNikah = (prefix, title, binLabel) => residentFields(
                  sebagai applicant.address.
      phoneFrom = kunci data warga untuk mengisi "Telepon" otomatis (mis. "phoneNumber").
    Pemanggilan lama alamat("origin", "Judul") tetap berjalan seperti biasa. */
-export const alamat = (prefix, title, { from, phoneFrom } = {}) => ({
+export const alamat = (prefix, title, { from, phoneFrom, fieldFrom = {}, defaults = {} } = {}) => {
+  const source = (suffix) => (fieldFrom[suffix] ? { from: fieldFrom[suffix] } : {});
+  const fallback = (suffix) => (Object.prototype.hasOwnProperty.call(defaults, suffix) ? { default: defaults[suffix] } : {});
+  const options = (suffix) => ({ ...source(suffix), ...fallback(suffix) });
+  return ({
   title,
   fields: [
     f.area(`${prefix}Address`, "Alamat (jalan/nomor)", { span: 2, ...(from ? { from } : {}) }),
-    f.text(`${prefix}Rt`, "RT"),
-    f.text(`${prefix}Rw`, "RW"),
-    f.text(`${prefix}Hamlet`, "Dusun/Dukuh/Kampung", { optional: true }),
-    f.text(`${prefix}Village`, "Desa/Kelurahan"),
-    f.text(`${prefix}District`, "Kecamatan"),
-    f.text(`${prefix}Regency`, "Kabupaten/Kota"),
-    f.text(`${prefix}Province`, "Provinsi"),
-    f.text(`${prefix}PostalCode`, "Kode Pos", { optional: true }),
-    f.text(`${prefix}Phone`, "Telepon", { optional: true, ...(phoneFrom ? { from: phoneFrom } : {}) }),
+    f.text(`${prefix}Rt`, "RT", options("rt")),
+    f.text(`${prefix}Rw`, "RW", options("rw")),
+    f.text(`${prefix}Hamlet`, "Dusun/Dukuh/Kampung", { optional: true, ...options("hamlet") }),
+    f.text(`${prefix}Village`, "Desa/Kelurahan", options("village")),
+    f.text(`${prefix}District`, "Kecamatan", options("district")),
+    f.text(`${prefix}Regency`, "Kabupaten/Kota", options("regency")),
+    f.text(`${prefix}Province`, "Provinsi", options("province")),
+    f.text(`${prefix}PostalCode`, "Kode Pos", { optional: true, ...options("postalCode") }),
+    f.text(`${prefix}Phone`, "Telepon", { optional: true, ...(phoneFrom ? { from: phoneFrom } : {}), ...options("phone") }),
   ],
-});
+  });
+};
 
 /* ---------- Atur susunan blok & isian PER FILE SURAT ----------
    Blok/isian surat dirakit dari fungsi bersama di atas (mis. birthReportSections dipakai 3 surat), jadi urutannya
@@ -433,6 +456,28 @@ export const pelapor = (parts = PELAPOR_FULL, title = "Data Pelapor", hint = "Da
   hint,
   fields: parts.map((p) => REPORTER[p]()),
 });
+
+/* Pelapor surat kematian di admin mengikuti NIK pemohon yang dicari di awal form.
+   Data jenazah tetap memakai helper `deathDeceased()` tanpa sumber otomatis; hanya
+   blok pelapor yang mengambil identitas pemohon. Tanggal lapor otomatis memakai hari saat form dibuka. */
+const REPORTER_AUTO_FROM = {
+  nik: "nik",
+  name: "fullName",
+  birthPlace: "birthPlace",
+  birthDate: "birthDate",
+  age: "age",
+  occupation: "occupation",
+  address: "address",
+  addressKtp: "address",
+  phone: "phoneNumber",
+};
+const localToday = () => {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 /* ---------- Saksi  ($birth['witnesses'][0] = Saksi I, [1] = Saksi II) ---------- */
 export const birthWitness = (n) => ({

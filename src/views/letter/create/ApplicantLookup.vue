@@ -2,7 +2,7 @@
 /* Kotak "Cari Data Pemohon": input NIK paling atas di form Tambah Surat. Begitu NIK 16 digit diisi
    (atau tombol Cari / Enter), data warga dari backend mengisi formulir otomatis. Tetap bisa diubah manual.
    Komponen ini hanya tampilan: logika pencarian ada di useApplicantLookup.js. */
-import { watch } from "vue";
+import { computed, watch } from "vue";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 
@@ -10,6 +10,10 @@ const props = defineProps({
   state: { type: Object, required: true }, // dari useApplicantLookup()
 });
 const emit = defineEmits(["search"]);
+const nikInvalid = computed(() => {
+  const value = String(props.state.nik ?? "");
+  return value !== "" && !/^\d{16}$/.test(value);
+});
 
 // cari otomatis begitu NIK genap 16 digit
 watch(
@@ -41,9 +45,12 @@ watch(
           inputmode="numeric"
           autocomplete="off"
           placeholder="16 digit NIK"
-          :invalid="state.status === 'invalid'"
+          :invalid="nikInvalid || state.status === 'invalid'"
           @keyup.enter="emit('search')"
         />
+        <small class="text-xs" :class="nikInvalid ? 'text-red-600' : 'text-slate-500'">
+          {{ nikInvalid ? 'NIK harus tepat 16 digit angka.' : 'Masukkan 16 digit angka.' }}
+        </small>
       </div>
       <Button label="Cari" icon="pi pi-search" class="sm:mt-[1.625rem]" :loading="state.status === 'loading'" @click="emit('search')" />
     </div>

@@ -54,12 +54,16 @@ function mapCitizenFromApi(item) {
     id: item.citizen_id,
     recordType: item.record_type,
     recordEvent: item.record_event,
+    recordYear: item.record_year,
+    titleCode: item.title_code,
     name: item.full_name,
     nationalId: item.national_id, 
     familyCardNumber: item.family_card_number,
     dusun: item.dusun,
     rt: item.rt,
     rw: item.rw,
+    rtHeadName: item.rt_head_name,
+    rwHeadName: item.rw_head_name,
     gender: item.gender,
     address: item.address,
     ktpAddress: item.ktp_address,
@@ -68,6 +72,7 @@ function mapCitizenFromApi(item) {
     education: item.education,
     maritalStatus: item.marital_status,
     religion: item.religion,
+    beliefOrganization: item.belief_organization,
     phoneNumber: item.phone_number,
     birthPlace: item.birth_place,
     birthDate: item.birth_date,
@@ -89,6 +94,9 @@ function mapCitizenFromApi(item) {
     fatherNationalId: item.father_national_id,
     fatherName: item.father_name,
     nationality: item.nationality,
+    previousAddress: item.previous_address,
+    passportNumber: item.passport_number,
+    passportExpiryDate: item.passport_expiry_date,
   }
 }
 
@@ -244,12 +252,15 @@ function mapRowToResident(row) {
 
   const record_type = normalized['tulispendudukmatipindahorangluar'] ?? 'PENDUDUK'
   const record_event = normalized['tulislahir01dstdatang01dstpindah01dstmati01dst'] ?? 'Lahir01'
+  const title_code = normalized['gelar'] ?? normalized['kodegelar'] ?? ''
   const full_name = normalized['namalengkap'] ?? normalized['nama'] ?? normalized['name'] ?? ''
   const national_id = normalized['nik'] ?? normalized['nationalid'] ?? ''
   const family_card_number = normalized['nomorkk'] ?? normalized['kk'] ?? normalized['familycardnumber'] ?? ''
   const dusun = normalized['dusun'] ?? ''
   const rt = normalized['rt'] ?? ''
   const rw = normalized['rw'] ?? ''
+  const rt_head_name = normalized['namaketua rt'] ?? normalized['namaketuart'] ?? ''
+  const rw_head_name = normalized['namaketua rw'] ?? normalized['namaketuarw'] ?? ''
   const gender = normalizeGender(normalized['lp'] ?? normalized['jeniskelamin'] ?? normalized['gender'] ?? normalized['jk'] ?? '')
   const birth_place = normalized['tempatlahir'] ?? normalized['birthplace'] ?? ''
   const birth_date = excelDateToIso(normalized['tanggallahir'] ?? normalized['birthdate'] ?? null)
@@ -272,12 +283,16 @@ function mapRowToResident(row) {
   const physical_disability = normalized['kelainanfisik'] ?? ''
   const disability_status = normalized['penyandangcacat'] ?? ''
   const religion = normalizeReligion(normalized['agama'] ?? '')
+  const belief_organization = normalized['organisasikepercayaan'] ?? normalized['namaorganisasikepercayaan'] ?? ''
   const mother_national_id = normalized['nikibu'] ?? ''
   const mother_name = normalized['namalengkapibu'] ?? ''
   const father_national_id = normalized['nikayah'] ?? ''
   const father_name = normalized['namalengkapayah'] ?? ''
   const nationality = normalized['kewarganegaraan'] ?? ''
   const ktp_address = address
+  const previous_address = normalized['alamatsebelumnya'] ?? normalized['alamatsebelum'] ?? ''
+  const passport_number = normalized['nomorpaspor'] ?? normalized['paspor'] ?? ''
+  const passport_expiry_date = excelDateToIso(normalized['tanggalberakhirpaspor'] ?? normalized['tanggalakhirpaspor'] ?? null)
   const status = String(normalized['status'] ?? '').trim().toLowerCase() === 'pindah' ? 'Pindah' : 'Active'
 
 
@@ -286,12 +301,15 @@ function mapRowToResident(row) {
   return {
     record_type: String(record_type).trim() || 'PENDUDUK',
     record_event: String(record_event).trim() || 'Lahir01',
+    title_code: String(title_code).trim(),
     full_name: String(full_name).trim(),
     national_id: String(national_id).trim(),
     family_card_number: String(family_card_number).trim(),
     dusun: String(dusun).trim(),
     rt: String(rt).trim(),
     rw: String(rw).trim(),
+    rt_head_name: String(rt_head_name).trim(),
+    rw_head_name: String(rw_head_name).trim(),
     gender,
     birth_place: String(birth_place).trim(),
     birth_date,
@@ -315,11 +333,15 @@ function mapRowToResident(row) {
     physical_disability: String(physical_disability).trim(),
     disability_status: String(disability_status).trim(),
     religion,
+    belief_organization: String(belief_organization).trim(),
     mother_national_id: String(mother_national_id).trim(),
     mother_name: String(mother_name).trim(),
     father_national_id: String(father_national_id).trim(),
     father_name: String(father_name).trim(),
     nationality: String(nationality).trim(),
+    previous_address: String(previous_address).trim(),
+    passport_number: String(passport_number).trim(),
+    passport_expiry_date,
     status,
   }
 }
@@ -1058,6 +1080,7 @@ function exportReportToPdf() {
           :value="residents"
           :loading="loading"
           :filters="filters"
+          :globalFilterFields="['name', 'nationalId', 'familyCardNumber', 'address', 'occupation', 'dusun']"
           :paginator="true"
           :rows="rowsPerPage"
           :rowsPerPageOptions="[10, 25, 50]"
@@ -1086,8 +1109,13 @@ function exportReportToPdf() {
 
           <Column selectionMode="multiple" headerStyle="width: 2.5rem" />
 
+          <Column header="No." headerStyle="width: 4rem">
+            <template #body="{ index }">{{ index + 1 }}</template>
+          </Column>
+
           <Column field="name" header="Nama Lengkap" sortable />
           <Column field="nationalId" header="NIK" sortable />
+          <Column field="recordEvent" header="Peristiwa" sortable />
           <Column field="gender" header="Jenis Kelamin" sortable />
           <Column field="address" header="Alamat" />
 

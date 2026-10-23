@@ -39,7 +39,6 @@ const h = computed(() => hue(hueName.value));
 // Pendaftaran warga baru dimulai dari data manual karena NIK pemohon memang
 // belum tentu sudah tersimpan di tabel citizens. Paket surat biasa tetap
 // menggunakan pencarian NIK untuk autofill.
-const showApplicantLookup = computed(() => !ui.value.hideApplicantLookup);
 
 /* ---------- Data bersama ---------- */
 const NOTIF_SECTION = {
@@ -64,6 +63,11 @@ const hasChecklist = props.bundle.letters.filter((l) => !l.hidden).length > 1;
 const selected = ref(hasChecklist ? [...(props.bundle.ui?.preselected ?? [])].filter((id) => props.bundle.letters.some((l) => l.id === id)) : props.bundle.letters.map((l) => l.id));
 const selectError = ref(false);
 const selectedLetters = computed(() => props.bundle.letters.filter((l) => selected.value.includes(l.id)));
+const requiresDualCatinLookup = computed(() => selectedLetters.value.some((letter) => {
+  const lookupKeys = new Set((letter.sections ?? []).filter((section) => section.lookupKey).map((section) => section.lookupKey));
+  return lookupKeys.has("groom") && lookupKeys.has("bride");
+}));
+const showApplicantLookup = computed(() => !ui.value.hideApplicantLookup && !requiresDualCatinLookup.value);
 const sectionsOf = (letter) => (letter.id === selectedLetters.value[0]?.id ? [...letter.sections, NOTIF_SECTION] : letter.sections);
 
 const STEPS = ["Pilih Surat", "Isian Surat"];

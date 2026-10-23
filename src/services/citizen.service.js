@@ -10,6 +10,11 @@ export async function getCitizen(id) {
   return response.data.data
 }
 
+export async function getRecordEventCounters(year) {
+  const response = await api.get('/citizens/record-event-counters', { params: year ? { year } : undefined })
+  return response.data.data
+}
+
 export async function createCitizen(payload) {
   const response = await api.post('/citizens', payload)
   return response.data.data

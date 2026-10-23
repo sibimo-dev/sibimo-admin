@@ -208,6 +208,11 @@ export const FIELD_OVERRIDES = {
     eventPlace: "tempat_kegiatan",
   },
   "registration-form": {
+    // PNP memiliki dua field status yang sama-sama berlabel "Status".
+    // Tanpa override, mapper berdasarkan label akan memasukkan status catin
+    // pria ke field status catin putri dan backend menolaknya.
+    groomStatus: "status_catin_putra",
+    brideStatus: "status_catin_putri",
     groomName: "nama_suami_terdahulu",
     groomNik: "nik_suami_terdahulu",
     groomNationality: "kewarganegaraan_suami_terdahulu",
