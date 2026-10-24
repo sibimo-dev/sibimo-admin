@@ -101,8 +101,8 @@ const hamletSuggestions = ref([]);
 const searchHamlets = (event) => {
   const query = String(event?.query ?? "").trim().toLocaleLowerCase("id-ID");
   hamletSuggestions.value = !query
-    ? hamletOptions.value.slice(0, 10)
-    : hamletOptions.value.filter((name) => name.toLocaleLowerCase("id-ID").includes(query)).slice(0, 20);
+    ? hamletOptions.value
+    : hamletOptions.value.filter((name) => name.toLocaleLowerCase("id-ID").includes(query));
 };
 
 onMounted(async () => {
