@@ -64,7 +64,8 @@ const filteredRows = computed(() => {
     const matchSearch =
       !searchQuery.value ||
       r.letter_name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      r.number_prefix.toLowerCase().includes(searchQuery.value.toLowerCase())
+      r.number_prefix.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      (r.classification_index ?? '').toLowerCase().includes(searchQuery.value.toLowerCase())
     const matchCategory = !selectedCategory.value || r.category === selectedCategory.value
     return matchSearch && matchCategory
   })
@@ -195,7 +196,11 @@ function handleKelola(data) {
             </template>
           </Column>
 
-          <Column field="number_prefix" header="Kode Nomor" sortable></Column>
+          <Column field="classification_index" header="Indeks Arsip" sortable>
+            <template #body="{ data }">
+              <span class="font-medium text-gray-700">{{ data.classification_index || '-' }}</span>
+            </template>
+          </Column>
 
           <Column field="processing_time" header="Estimasi Proses" sortable></Column>
 
