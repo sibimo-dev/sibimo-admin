@@ -226,15 +226,23 @@ export const calonIstri = (parts = NIKAH) => residentFields(
   { ...person("bride", "Data Calon Istri", parts, [f.text("brideBinti", "Binti (nama ayah)", { from: "asBride:fatherName" })]), lookupKey: "bride" },
   "asBride",
 );
-export const ortuNikah = (prefix, title, binLabel) => residentFields(
-  {
-    ...person(prefix, title, ["name", "nik", "birth", "nationality", "religion", "occupation", "address"], [f.text(`${prefix}Bin`, binLabel, {
-      from: `${String(prefix).toLowerCase().endsWith("father") ? "parentFather" : "parentMother"}:fatherName`,
-    })]),
-    parentOf: /^groom/i.test(prefix) ? "groom" : /^bride/i.test(prefix) ? "bride" : undefined,
-  },
-  String(prefix).toLowerCase().endsWith("father") ? "parentFather" : "parentMother",
-);
+export const ortuNikah = (prefix, title, binLabel) => {
+  const relation = prefix === "child" ? "asGroom" : prefix === "childSpouse" ? "spouse" : String(prefix).toLowerCase().endsWith("father") ? "parentFather" : "parentMother";
+  const lookupKey = prefix === "child" ? "groom" : prefix === "childSpouse" ? "bride" : undefined;
+  const parentOf = /^groom/i.test(prefix) || ["father", "mother"].includes(prefix)
+    ? "groom"
+    : /^bride/i.test(prefix) ? "bride" : undefined;
+  return residentFields(
+    {
+      ...person(prefix, title, ["name", "nik", "birth", "nationality", "religion", "occupation", "address"], [f.text(`${prefix}Bin`, binLabel, {
+        from: `${relation}:fatherName`,
+      })]),
+      ...(lookupKey ? { lookupKey } : {}),
+      parentOf,
+    },
+    relation,
+  );
+};
 
 /* ---------- Alamat lengkap (surat pindah/datang, dll) ----------
    Opsi (opsional):
@@ -505,7 +513,7 @@ export const birthHamlet = () => ({
    Key sama di semua surat (hamletHeadName dst.) → dalam satu paket cukup diisi sekali. */
 const SIGNER_NAME = {
   hamletHead: () => f.text("hamletHeadName", "Nama Dukuh", { optional: true }),
-  districtHead: () => f.text("districtHeadName", "Nama Camat", { optional: true }),
+  districtHead: () => f.text("districtHeadName", "Nama Camat/Panewu", { optional: true }),
   rtHead: () => f.text("rtHeadName", "Nama Ketua RT", { optional: true }),
   rwHead: () => f.text("rwHeadName", "Nama Ketua RW", { optional: true }),
   witness1: () => f.text("witness1Name", "Nama Saksi I", { optional: true }),

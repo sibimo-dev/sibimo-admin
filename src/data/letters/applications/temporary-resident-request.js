@@ -48,8 +48,8 @@ export const sections = [
     ],
   },
 
-  // TTD (2): 1. Dukuh  2. Pemohon (= Nama Lengkap pemohon di atas)
-  signerNames(["hamletHead"], "Opsional. Tanda tangan Pemohon memakai Nama Lengkap di atas. Isi nama Dukuh bila ingin dicetak; kosongkan bila ditulis tangan."),
+  // TTD: Dukuh, Panewu/Camat, dan Pemohon (= Nama Lengkap pemohon di atas)
+  signerNames(["hamletHead", "districtHead"], "Opsional. Tanda tangan Pemohon memakai Nama Lengkap di atas. Isi nama Dukuh dan Panewu/Camat bila ingin dicetak; kosongkan bila ditulis tangan."),
 ];
 
 export const documents = [

@@ -1,6 +1,6 @@
 <script setup>
 
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import * as XLSX from 'xlsx'
 import { FilterMatchMode } from '@primevue/core/api'
@@ -35,6 +35,25 @@ const loadError = ref('')
 
 const detailDialogVisible = ref(false)
 const selectedDetailResident = ref(null)
+
+const familyMembers = computed(() => {
+  const selected = selectedDetailResident.value
+  const familyCardNumber = String(selected?.familyCardNumber ?? '').trim()
+
+  if (!familyCardNumber) return []
+
+  return residents.value
+    .filter((resident) => (
+      String(resident.familyCardNumber ?? '').trim() === familyCardNumber
+      && resident.status !== 'Pindah'
+    ))
+    .sort((a, b) => {
+      const aIsHead = /kepala\s+keluarga/i.test(String(a.familyRelationship ?? ''))
+      const bIsHead = /kepala\s+keluarga/i.test(String(b.familyRelationship ?? ''))
+      if (aIsHead !== bIsHead) return aIsHead ? -1 : 1
+      return String(a.name ?? '').localeCompare(String(b.name ?? ''), 'id')
+    })
+})
 
 function viewDetail(data) {
   selectedDetailResident.value = data
@@ -98,6 +117,8 @@ function mapCitizenFromApi(item) {
     previousAddress: item.previous_address,
     passportNumber: item.passport_number,
     passportExpiryDate: item.passport_expiry_date,
+    createdAt: item.created_at,
+    updatedAt: item.updated_at,
   }
 }
 
@@ -861,10 +882,11 @@ function buildDemographicReport(sourceResidents) {
   return rows
 }
 
-// Catatan: data warga saat ini tidak menyimpan tanggal pencatatan (createdAt),
+// Catatan: laporan periodik belum memfilter berdasarkan createdAt,
 // sehingga "Laporan Bulanan" dan "Laporan Tahunan" merekap seluruh data warga
-// yang aktif sebagai gambaran populasi terkini, dengan judul mengikuti periode
-// (bulan/tahun) yang dipilih pengguna.
+// sebagai gambaran populasi terkini, dengan judul mengikuti periode
+// (bulan/tahun) yang dipilih pengguna. Export Excel Lengkap di bawah mengambil
+// seluruh baris data warga tanpa filter periode.
 function getResidentsForPeriod() {
   return residents.value
 }
@@ -922,6 +944,75 @@ function exportReportToExcel() {
     : `Tahunan-${selectedDate.getFullYear()}`
 
   XLSX.writeFile(workbook, `Data-Warga-${fileLabel}.xlsx`)
+}
+
+function exportAllCitizensToExcel() {
+  const columns = [
+    ['ID Warga', 'id'],
+    ['Jenis Data', 'recordType'],
+    ['Peristiwa', 'recordEvent'],
+    ['Tahun Peristiwa', 'recordYear'],
+    ['Kode Gelar', 'titleCode'],
+    ['Nama Lengkap', 'name'],
+    ['NIK', 'nationalId'],
+    ['Nomor KK', 'familyCardNumber'],
+    ['Dusun', 'dusun'],
+    ['RT', 'rt'],
+    ['RW', 'rw'],
+    ['Nama Ketua RT', 'rtHeadName'],
+    ['Nama Ketua RW', 'rwHeadName'],
+    ['Tempat Lahir', 'birthPlace'],
+    ['Tanggal Lahir', 'birthDate'],
+    ['Umur', 'age'],
+    ['Jenis Kelamin', 'gender'],
+    ['Alamat', 'address'],
+    ['Alamat sesuai KTP', 'ktpAddress'],
+    ['Nomor Telepon', 'phoneNumber'],
+    ['Status Akta Lahir', 'birthCertificateStatus'],
+    ['Nomor Akta Lahir', 'birthCertificateNumber'],
+    ['Golongan Darah', 'bloodType'],
+    ['Pekerjaan', 'occupation'],
+    ['Pendidikan', 'education'],
+    ['Status Perkawinan', 'maritalStatus'],
+    ['Status Akta Kawin', 'marriageCertificateStatus'],
+    ['Nomor Akta Kawin', 'marriageCertificateNumber'],
+    ['Tanggal Kawin', 'marriageDate'],
+    ['Status Akta Cerai', 'divorceCertificateStatus'],
+    ['Nomor Akta Cerai', 'divorceCertificateNumber'],
+    ['Tanggal Cerai', 'divorceDate'],
+    ['Hubungan Keluarga', 'familyRelationship'],
+    ['Kelainan Fisik', 'physicalDisability'],
+    ['Status Penyandang Cacat', 'disabilityStatus'],
+    ['Agama', 'religion'],
+    ['Organisasi Kepercayaan', 'beliefOrganization'],
+    ['NIK Ibu', 'motherNationalId'],
+    ['Nama Ibu', 'motherName'],
+    ['NIK Ayah', 'fatherNationalId'],
+    ['Nama Ayah', 'fatherName'],
+    ['Kewarganegaraan', 'nationality'],
+    ['Alamat Sebelumnya', 'previousAddress'],
+    ['Nomor Paspor', 'passportNumber'],
+    ['Tanggal Berakhir Paspor', 'passportExpiryDate'],
+    ['Status', 'status'],
+    ['Dibuat Pada', 'createdAt'],
+    ['Diperbarui Pada', 'updatedAt'],
+  ]
+
+  const rows = [
+    columns.map(([label]) => label),
+    ...residents.value.map((resident) => columns.map(([, key]) => resident[key] ?? '')),
+  ]
+
+  const worksheet = XLSX.utils.aoa_to_sheet(rows)
+  worksheet['!cols'] = columns.map(([label]) => ({ wch: Math.min(Math.max(label.length + 3, 14), 28) }))
+  worksheet['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(columns.length - 1)}${rows.length}` }
+
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Data Warga Lengkap')
+
+  const dateLabel = new Date().toISOString().slice(0, 10)
+  XLSX.writeFile(workbook, `Data-Warga-Lengkap-${dateLabel}.xlsx`)
+  downloadDialogVisible.value = false
 }
 
 function exportReportToPdf() {
@@ -1218,6 +1309,14 @@ function exportReportToPdf() {
           @click="downloadDialogVisible = false"
         />
         <Button
+          label="Download Excel Lengkap"
+          icon="pi pi-file-excel"
+          severity="success"
+          outlined
+          class="rounded-lg border border-green-600 bg-white px-3.5 py-2 text-[13px] font-medium text-green-700 hover:bg-green-50"
+          @click="exportAllCitizensToExcel"
+        />
+        <Button
           label="Lihat Preview"
           icon="pi pi-eye"
           class="rounded-lg border border-transparent bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
@@ -1490,6 +1589,47 @@ function exportReportToPdf() {
             <div class="flex flex-col gap-1">
               <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">NIK Ayah</span>
               <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.fatherNationalId || '-' }}</span>
+            </div>
+          </div>
+
+          <div class="mt-1 flex flex-col gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div class="text-[12px] font-semibold text-neutral-700">Anggota dalam KK</div>
+                <div class="text-[11px] text-neutral-500">
+                  {{ familyMembers.length ? `${familyMembers.length} anggota terdaftar pada KK ini` : 'Belum ada anggota lain yang terdaftar pada KK ini' }}
+                </div>
+              </div>
+              <span class="rounded-full bg-white px-2 py-1 text-[11px] font-medium text-neutral-500">
+                KK {{ selectedDetailResident.familyCardNumber || '-' }}
+              </span>
+            </div>
+
+            <div v-if="familyMembers.length" class="flex flex-col gap-2">
+              <button
+                v-for="(member, index) in familyMembers"
+                :key="member.id"
+                type="button"
+                class="flex w-full items-center justify-between gap-3 rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-left transition hover:border-primary-300 hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-200"
+                @click="viewDetail(member)"
+              >
+                <span class="flex min-w-0 items-center gap-3">
+                  <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-100 text-[11px] font-semibold text-primary-700">
+                    {{ index + 1 }}
+                  </span>
+                  <span class="min-w-0">
+                    <span class="block truncate text-[13px] font-semibold text-neutral-800">{{ member.name || '-' }}</span>
+                    <span class="mt-0.5 block truncate text-[11px] text-neutral-500">
+                      {{ member.nationalId || '-' }} · {{ member.familyRelationship || 'Hubungan belum diisi' }}
+                    </span>
+                  </span>
+                </span>
+                <i class="pi pi-chevron-right shrink-0 text-xs text-neutral-400" />
+              </button>
+            </div>
+
+            <div v-else class="rounded-lg border border-dashed border-neutral-300 bg-white px-3 py-3 text-[12px] text-neutral-500">
+              Nomor KK warga ini belum memiliki anggota lain yang bisa ditampilkan.
             </div>
           </div>
         </div>
