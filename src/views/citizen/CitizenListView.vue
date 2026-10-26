@@ -7,6 +7,7 @@ import { FilterMatchMode } from '@primevue/core/api'
 import { useConfirm } from 'primevue/useconfirm'
 import { createCitizen, deleteCitizen as removeCitizen, getCitizens } from '@/services/citizen.service'
 import { getListCache, setListCache } from '@/services/list-cache'
+import CitizenDocumentsPanel from '@/components/citizen/CitizenDocumentsPanel.vue'
 
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
@@ -1510,6 +1511,12 @@ function exportReportToPdf() {
             </div>
           </div>
         </div>
+
+        <CitizenDocumentsPanel
+          v-if="selectedDetailResident?.id"
+          :citizen-id="selectedDetailResident.id"
+          :manage="true"
+        />
 
       </div>
 

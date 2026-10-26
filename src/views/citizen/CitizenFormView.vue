@@ -13,6 +13,8 @@ import AutoComplete from 'primevue/autocomplete'
 import DatePicker from 'primevue/datepicker'
 import Textarea from 'primevue/textarea'
 import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
+import CitizenDocumentsPanel from '@/components/citizen/CitizenDocumentsPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -150,7 +152,17 @@ const statusOpen = ref(true)
 const loading = ref(false)
 const saving = ref(false)
 const errorMessage = ref('')
+// Sumber data anggota KK untuk autofill saat mencatat peristiwa Lahir.
 const citizenLookup = ref([])
+
+// Pop up berhasil simpan
+const successDialog = ref(false)
+const successInfo = ref({ title: '', detail: '' })
+
+function closeSuccessDialog() {
+  successDialog.value = false
+  router.push({ name: 'citizen-list' })
+}
 
 const familyCardMembers = computed(() => {
   const kk = String(familyCardNumber.value ?? '').trim()
@@ -389,11 +401,21 @@ async function fetchCitizenDetail() {
   }
 }
 
+async function fetchCitizenLookup() {
+  if (isEditMode.value) return
+
+  try {
+    const data = await getCitizens()
+    citizenLookup.value = Array.isArray(data) ? data : []
+  } catch {
+    // Form tetap dapat diisi manual bila daftar warga gagal dimuat.
+    citizenLookup.value = []
+  }
+}
+
 onMounted(() => {
   fetchRecordEventCounters()
-  getCitizens()
-    .then((items) => { citizenLookup.value = Array.isArray(items) ? items : [] })
-    .catch(() => { citizenLookup.value = [] })
+  fetchCitizenLookup()
   if (isEditMode.value) fetchCitizenDetail()
 })
 
@@ -1006,6 +1028,12 @@ function deleteCitizen() {
             </div>
           </template>
         </Card>
+
+        <CitizenDocumentsPanel
+          v-if="isEditMode && citizenId"
+          :citizen-id="citizenId"
+          :manage="true"
+        />
 
       </div>
 
