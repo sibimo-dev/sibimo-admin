@@ -12,7 +12,7 @@ export default [
   {
     path: 'complaint/:id',
     name: 'complaint-response',
-    component: () => import('@/views/complaint/ComplaintResponseView.vue'),
+    component: () => import('@/views/complaint/ComplaintDetail.vue'),
     meta: { breadcrumb: ['Pengaduan', 'Detail Aduan'] },
   },
 ]
