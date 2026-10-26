@@ -30,16 +30,93 @@ const activeRoleId = ref(null)
 const saving = ref(false)
 const loading = ref(!cachedRoles && !cachedPermissions)
 
-// Daftar modul yang ditampilkan di matrix hak akses diambil langsung dari
-// table permissions (bukan hardcode di FE lagi). Halaman Dashboard sengaja
-// dikeluarkan dari daftar ini -- semua Role bisa akses Dashboard tanpa
-// perlu diberi hak akses secara eksplisit.
-const assignableModules = computed(() =>
-  permissions.value.filter((permission) => String(permission.slug ?? '').toLowerCase() !== 'dashboard'),
+// Daftar modul di matrix hak akses mengikuti menu sidebar.
+// `slugs` = permission backend yang diwakili modul ini (slug baru + alias lama).
+// Satu centang mengatur semua permission yang cocok, jadi "Persuratan"
+// otomatis mewakili verifikasi + otorisasi surat yang dulu terpisah.
+// Setelah backend selesai integrasi ulang, cukup tambah/ganti slug di sini.
+// Halaman Dashboard sengaja tidak ada: semua Role bisa mengakses Dashboard.
+const MODULE_GROUPS = [
+  {
+    label: 'Layanan',
+    modules: [
+      // Persuratan dipecah sesuai submenu sidebar. Verifikasi + otorisasi sudah
+      // digabung ke "Pengelolaan Surat".
+      { key: 'letter-management', name: 'Pengelolaan Surat', parent: 'Persuratan', slugs: ['letter', 'letter-management', 'letter-verification', 'letter-authorization', 'persuratan', 'pengelolaan-surat', 'verifikasi-surat', 'otorisasi-surat'] },
+      { key: 'letter-type', name: 'Tipe Surat', parent: 'Persuratan', slugs: ['letter-type', 'tipe-surat'] },
+      { key: 'complaint', name: 'Aduan', slugs: ['complaint', 'aduan', 'pengaduan'] },
+      // Perpustakaan dipecah sesuai submenu sidebar.
+      { key: 'library-catalog', name: 'Katalog Buku', parent: 'Perpustakaan', slugs: ['library-catalog', 'book-catalog', 'catalog', 'katalog-buku'] },
+      { key: 'library-loan', name: 'Peminjaman', parent: 'Perpustakaan', slugs: ['library-loan', 'book-loan', 'loan', 'borrowing', 'peminjaman'] },
+      { key: 'library-return', name: 'Pengembalian', parent: 'Perpustakaan', slugs: ['library-return', 'book-return', 'return', 'returning', 'pengembalian'] },
+    ],
+  },
+  {
+    label: 'Konten Publik',
+    modules: [
+      { key: 'news', name: 'Berita & Pengumuman', slugs: ['news', 'berita', 'berita-pengumuman'] },
+      { key: 'agenda', name: 'Agenda', slugs: ['agenda'] },
+      { key: 'gallery', name: 'Galeri', slugs: ['gallery', 'galeri'] },
+      { key: 'development', name: 'Pembangunan', slugs: ['development', 'pembangunan'] },
+      { key: 'legal-product', name: 'Produk Hukum', slugs: ['legal-product', 'produk-hukum'] },
+      { key: 'footer', name: 'Pengaturan Footer', slugs: ['footer', 'footer-settings', 'pengaturan-footer'] },
+    ],
+  },
+  {
+    label: 'Data Kalurahan',
+    modules: [
+      { key: 'citizen', name: 'Data Warga', slugs: ['citizen', 'data-warga'] },
+      { key: 'village-potential', name: 'Potensi Kalurahan', slugs: ['village-potential', 'potensi-kalurahan'] },
+    ],
+  },
+  {
+    label: 'Profil Kalurahan',
+    modules: [
+      { key: 'history', name: 'Sejarah', slugs: ['history', 'sejarah'] },
+      { key: 'vision-mission', name: 'Visi & Misi', slugs: ['vision-mission', 'visi-misi'] },
+      { key: 'organization-structure', name: 'Struktur Organisasi', slugs: ['organization-structure', 'struktur-organisasi'] },
+      { key: 'village-area', name: 'Data Wilayah', slugs: ['village-area', 'data-wilayah'] },
+    ],
+  },
+  {
+    label: 'Manajemen Pengguna',
+    modules: [
+      { key: 'user-list', name: 'Daftar Pengguna', slugs: ['user-list', 'user-management', 'daftar-pengguna'] },
+      { key: 'role-permission', name: 'Role & Hak Akses', slugs: ['role-permission', 'role-management', 'role-hak-akses'] },
+    ],
+  },
+]
+
+const normalizeSlug = (slug) => String(slug ?? '').toLowerCase().replace(/_/g, '-')
+
+// Gabungkan config FE dengan permission dari backend.
+const groupedModules = computed(() =>
+  MODULE_GROUPS.map((group) => ({
+    label: group.label,
+    items: group.modules.map((module, index) => ({
+      ...module,
+      // Tampilkan judul induk (mis. Persuratan) sekali di atas submenu-nya.
+      showParent: Boolean(module.parent) && module.parent !== group.modules[index - 1]?.parent,
+      permissionIds: permissions.value
+        .filter((permission) => module.slugs.includes(normalizeSlug(permission.slug)))
+        .map((permission) => permission.permission_id),
+    })),
+  })),
 )
 
-// Setiap modul sekarang cukup 1 checkbox "Akses" (all access), tidak perlu
-// lagi kolom Lihat / Buat / Edit / Hapus terpisah.
+function isModuleOn(module) {
+  const access = activeRole.value?.access ?? {}
+  return module.permissionIds.length > 0 && module.permissionIds.every((id) => access[id])
+}
+
+function setModule(module, value) {
+  if (!activeRole.value) return
+  module.permissionIds.forEach((id) => {
+    activeRole.value.access[id] = value
+  })
+}
+
+// Setiap modul cukup 1 checkbox "Akses" (all access).
 function buildAccessMap(role) {
   const grantedIds = new Set((role.permissions ?? []).map((permission) => permission.permission_id))
   return Object.fromEntries(
@@ -323,20 +400,36 @@ function cancel() {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="permission in assignableModules" :key="permission.permission_id" class="border-b border-gray-50">
-                <td class="py-3 px-4 font-medium text-gray-800">{{ permission.name ?? permission.slug }}</td>
-                <td class="py-3 px-4 text-center">
-                  <Checkbox
-                    v-model="activeRole.access[permission.permission_id]"
-                    :binary="true"
-                  />
-                </td>
-              </tr>
-              <tr v-if="assignableModules.length === 0">
-                <td colspan="2" class="py-6 px-4 text-center text-gray-400">
-                  Belum ada modul (permission) yang bisa diatur.
-                </td>
-              </tr>
+              <template v-for="group in groupedModules" :key="group.label">
+                <tr class="bg-gray-50/60">
+                  <td colspan="2" class="py-2 px-4 text-xs font-bold tracking-wide text-gray-500 uppercase">
+                    {{ group.label }}
+                  </td>
+                </tr>
+                <template v-for="module in group.items" :key="module.key">
+                  <tr v-if="module.showParent" class="border-b border-gray-50">
+                    <td colspan="2" class="py-3 px-4 font-medium text-gray-800">
+                      {{ module.parent }}
+                    </td>
+                  </tr>
+                  <tr class="border-b border-gray-50">
+                    <td
+                      class="py-3 px-4 text-gray-800"
+                      :class="module.parent ? 'pl-10 text-gray-600' : 'font-medium'"
+                    >
+                      {{ module.name }}
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                      <Checkbox
+                        :model-value="isModuleOn(module)"
+                        :binary="true"
+                        :disabled="module.permissionIds.length === 0"
+                        @update:model-value="setModule(module, $event)"
+                      />
+                    </td>
+                  </tr>
+                </template>
+              </template>
             </tbody>
           </table>
         </div>
