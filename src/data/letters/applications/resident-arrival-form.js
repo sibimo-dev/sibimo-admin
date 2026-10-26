@@ -1,7 +1,7 @@
 // Disalin dari public: views/services/letters/applications/resident-arrival-form.vue (hanya bagian isian & dokumen).
 // Isian di sini harus tetap sama dengan di public. Tampilan wizard ada di views/letter/create/.
 // Formulir Permohonan Pindah Datang WNI
-import { f, OPT, pemohon, DOC, signerNames } from "@/data/letterFields";
+import { f, OPT, pemohon, DOC, signerNames, kodeWilayahFields } from "@/data/letterFields";
 const alamatLengkap = (prefix, title, addressLabel = "Alamat") => ({
   title,
   fields: [
@@ -36,11 +36,9 @@ const RELOCATION_TYPES = [
 
 export const sections = [
   {
-    title: "Wilayah Tujuan",
-    hint: "Pilih dari data dusun/dukuh yang tersedia atau ketik nama secara manual.",
-    fields: [
-      f.hamlet("hamlet", "Dusun/Dukuh/Kampung"),
-    ],
+    title: "Wilayah Tujuan (Diisi Oleh Petugas)",
+    hint: "Kode wilayah sudah terisi default Kalurahan Bimomartani; ubah bila perlu. Pilih dusun/dukuh dari data yang tersedia atau ketik nama secara manual.",
+    fields: kodeWilayahFields({ names: true, hamlet: true }),
   },
 
   pemohon(),
@@ -88,7 +86,7 @@ export const sections = [
         { key: "name", label: "Nama" },
         { key: "shdk", label: "Status Hubungan dalam Keluarga", type: "select", options: OPT.shdk },
         { key: "validUntil", label: "Masa Berlaku KTP", type: "date", optional: true },
-      ], { max: 6 }),
+      ], { max: 6, autoByType: "relocationType" }),
     ],
   },
 

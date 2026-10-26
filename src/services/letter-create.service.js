@@ -16,6 +16,23 @@ function wilayahFor(f) {
   return WILAYAH[t] ?? null;
 }
 const LABEL_FIRST_KEYS = new Set(["destination"]);
+
+/* Surat pindah punya 2 isian berlabel sama ("Dusun/Dukuh/Kampung"): originHamlet (dusun ASAL) dan destinationHamlet (dusun TUJUAN).
+   Dicocokkan lewat label keduanya bisa tertukar / saling menimpa, sehingga dusun di kop "Kode Wilayah" ikut dusun tujuan.
+   Di sini dipisah tegas: field backend bertema dusun yang menyebut tujuan/destination = tujuan; sisanya (kop Kode Wilayah + alamat asal)
+   = asal. Bila backend tidak menyebut "tujuan" di mana pun, field dusun TERAKHIR (urutan formulir) dianggap tujuan. */
+const HAMLET_SPLIT_SLUGS = new Set(["relocation-certificate-form", "relocation-cover-letter"]);
+const HAMLET_SPLIT_KEYS = { originHamlet: "origin", destinationHamlet: "destination" };
+const HAMLET_RE = /dusun|dukuh|kampung|padukuhan|hamlet/i;
+const HAMLET_SKIP_RE = /kode|code|kepala|head|nama_dukuh|ttd|tanda_?tangan/i;
+function hamletTargets(backendFields, side, free) {
+  const all = backendFields.filter((f) => HAMLET_RE.test(`${f.field_key} ${f.field_label}`) && !HAMLET_SKIP_RE.test(`${f.field_key} ${f.field_label}`));
+  const isDest = (f) => /tujuan|destination|dest\b/i.test(`${f.field_key} ${f.field_label}`);
+  let dest = all.filter(isDest);
+  if (!dest.length && all.length > 1) dest = [all[all.length - 1]];
+  const picked = side === "destination" ? dest : all.filter((f) => !dest.includes(f));
+  return picked.map((f) => String(f.field_key)).filter(free);
+}
 const isPergiLabel = (label) => /\bpergi\b/i.test(String(label ?? ""));
 
 // label isian form per surat (key -> label), dipakai untuk membedakan key generik seperti `destination`
@@ -295,8 +312,23 @@ function backendOptionList(f) {
   if (opts && !Array.isArray(opts) && typeof opts === "object") opts = Object.entries(opts).map(([value, label]) => ({ value, label }));
   return Array.isArray(opts) ? opts.map((o) => (o && typeof o === "object" ? { value: o.value ?? o.label, label: o.label ?? o.value } : { value: o, label: o })) : [];
 }
+/* Nilai pilihan form sekarang mengikuti Data Warga ("Belum Menikah", "Menikah", "Konghucu", ...), sedangkan opsi di backend
+   bisa memakai penulisan lama ("Belum Kawin", "Kawin", "Khonghucu"). Bila backend punya daftar opsi dan nilai ini tidak ada
+   di dalamnya, pakai opsi backend yang artinya sama. */
+const SAME_MEANING = [["belummenikah", "belumkawin"], ["menikah", "kawin"], ["konghucu", "khonghucu"], ["buddha", "budha"], ["tidaksekolah", "tidakbelumsekolah"], ["smp", "sltp", "sltpsederajat"], ["smasmk", "slta", "sltasederajat"], ["s1", "d4s1", "diploma4strata1"]];
+function matchPlainOption(value, options) {
+  if (options.some((o) => String(o.value) === value)) return value;
+  const want = norm(value);
+  const group = SAME_MEANING.find((g) => g.includes(want)) ?? [want];
+  const hit = options.find((o) => group.includes(norm(o.value)) || group.includes(norm(o.label)));
+  return hit ? String(hit.value) : value;
+}
 export function matchBackendOption(value, backendField) {
-  if (typeof value !== "string" || !NUMBERED.test(value)) return value;
+  if (typeof value !== "string") return value;
+  if (!NUMBERED.test(value)) {
+    const plain = backendOptionList(backendField);
+    return plain.length ? matchPlainOption(value, plain) : value;
+  }
   const options = backendOptionList(backendField);
   if (!options.length) return value;
   if (options.some((o) => String(o.value) === value)) return value;
@@ -325,6 +357,11 @@ export function mapFieldsToBackend(fields = {}, backendFields = [], slug = "", l
   Object.keys(fields).forEach((k) => { const sg = signature(k); sigCount[sg] = (sigCount[sg] || 0) + 1; });
   for (const [key, value] of Object.entries(fields)) {
     if (value === undefined || value === null || value === "") continue;
+    // dusun asal vs tujuan pada surat pindah: pisahkan tegas (lihat HAMLET_SPLIT_SLUGS)
+    if (HAMLET_SPLIT_SLUGS.has(slug) && HAMLET_SPLIT_KEYS[key]) {
+      const targets = hamletTargets(backendFields, HAMLET_SPLIT_KEYS[key], free);
+      if (targets.length) { for (const t of targets) { normalized[t] = value; used.add(t); } continue; }
+    }
     // isian berulang (rows) -> field backend bernomor (data/letterFieldMap.js: ROW_OVERRIDES)
     const rowCfg = Array.isArray(value) ? rowsFor(slug, key) : null;
     if (rowCfg) {
@@ -480,6 +517,19 @@ async function submitOne(letter) {
     ...fields,
     ...mappedFields,
   };
+  // Surat pindah: dusun di kop "Kode Wilayah" harus = dusun ASAL. Backend menormalkan key mentah (originHamlet / destinationHamlet)
+  // dan bisa menyamakan keduanya menjadi satu variabel dusun (yang terakhir = tujuan menang). Kirim key kanonik eksplisit berisi dusun
+  // asal; key hasil pemetaan (mappedFields) tetap diprioritaskan.
+  if (HAMLET_SPLIT_SLUGS.has(letter.slug) && String(fields.originHamlet ?? "").trim()) {
+    for (const k of ["hamlet", "dusun"]) if (formData[k] === undefined || formData[k] === "") formData[k] = fields.originHamlet;
+  }
+  if (HAMLET_SPLIT_SLUGS.has(letter.slug)) {
+    // diagnosis: lihat di Console browser (F12) field dusun milik backend & ke mana nilai asal/tujuan dikirim
+    console.info("[letter-create] pemetaan dusun", letter.slug, {
+      fieldDusunBackend: (type.fields ?? []).filter((x) => HAMLET_RE.test(`${x.field_key} ${x.field_label}`)).map((x) => `${x.field_key} | ${x.field_label}`),
+      dikirim: Object.fromEntries(Object.entries(formData).filter(([k]) => HAMLET_RE.test(k))),
+    });
+  }
   let created;
   try {
     created = await createLetterRequest({

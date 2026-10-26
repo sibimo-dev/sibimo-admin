@@ -2,7 +2,7 @@
 // Isian di sini harus tetap sama dengan di public. Tampilan wizard ada di views/letter/create/.
 // Surat Kuasa
 // Template PDF: letters/letter-c/power-of-attorney-letter.blade.php
-import { DOC, DOC_LETTER_C, DOC_PBB, f } from "@/data/letterFields";
+import { DOC, DOC_LETTER_C, DOC_PBB, f, OPT } from "@/data/letterFields";
 
 export const sections = [
   {
@@ -10,7 +10,7 @@ export const sections = [
     fields: [
       f.text("name", "Nama"),
       f.text("birthPlaceDate", "Tempat/Tgl. Lahir", { placeholder: "Contoh: Sleman, 17 Agustus 1990" }),
-      f.select("gender", "Jenis Kelamin", ["Laki-laki", "Perempuan"]),
+      f.select("gender", "Jenis Kelamin", OPT.gender),
       f.text("nik", "NIK"),
       f.area("address", "Alamat", { span: 2 }),
     ],
@@ -27,7 +27,7 @@ export const sections = [
     fields: [
       f.text("attorneyName", "Nama"),
       f.text("attorneyBirthPlaceDate", "Tempat/Tgl. Lahir", { placeholder: "Contoh: Sleman, 17 Agustus 1990" }),
-      f.select("attorneyGender", "Jenis Kelamin", ["Laki-laki", "Perempuan"]),
+      f.select("attorneyGender", "Jenis Kelamin", OPT.gender),
       f.text("attorneyNik", "NIK"),
       f.area("attorneyAddress", "Alamat", { span: 2 }),
     ],

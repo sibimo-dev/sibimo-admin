@@ -21,7 +21,7 @@ import LetterFormFields from "./LetterFormFields.vue";
 import WizardStepper from "./WizardStepper.vue";
 import ApplicantLookup from "./ApplicantLookup.vue";
 import { useApplicantLookup } from "./useApplicantLookup";
-import { applicantOf, applyAliases, buildAliasIndex, fillForm, reviewLocation, scrollTop, validateFields } from "./formLogic";
+import { applicantOf, applyAliases, buildAliasIndex, fillForm, reviewLocation, scrollTop, validateFields, focusFirstInvalid } from "./formLogic";
 import { HUES, SECTION_HUES, hue } from "./pastel";
 import { LETTER_SOURCE, getLetterRequestError, submitLetterBundle } from "@/services/letter-create.service";
 
@@ -63,13 +63,30 @@ const hasChecklist = props.bundle.letters.filter((l) => !l.hidden).length > 1;
 const selected = ref(hasChecklist ? [...(props.bundle.ui?.preselected ?? [])].filter((id) => props.bundle.letters.some((l) => l.id === id)) : props.bundle.letters.map((l) => l.id));
 const selectError = ref(false);
 const selectedLetters = computed(() => props.bundle.letters.filter((l) => selected.value.includes(l.id)));
+const selectedVisibleCount = computed(() => props.bundle.letters.filter((l) => !l.hidden && selected.value.includes(l.id)).length);
 const requiresDualCatinLookup = computed(() => selectedLetters.value.some((letter) => {
   const lookupKeys = new Set((letter.sections ?? []).filter((section) => section.lookupKey).map((section) => section.lookupKey));
-  return lookupKeys.has("groom") && lookupKeys.has("bride");
+  return (lookupKeys.has("groom") && lookupKeys.has("bride")) || (lookupKeys.has("child") && lookupKeys.has("childSpouse"));
 }));
-const showApplicantLookup = computed(() => !ui.value.hideApplicantLookup && !requiresDualCatinLookup.value);
+const showApplicantLookup = computed(() => !ui.value.hideApplicantLookup && (selectedVisibleCount.value > 1 || !requiresDualCatinLookup.value));
 const sectionsOf = (letter) => (letter.id === selectedLetters.value[0]?.id ? [...letter.sections, NOTIF_SECTION] : letter.sections);
 
+const applicantLookupSections = computed(() => {
+  const allSections = selectedLetters.value.flatMap(sectionsOf);
+  if (!requiresDualCatinLookup.value) return allSections;
+  const primaryLookupKey = allSections.find((section) =>
+    section.lookupKey === "groom" || section.lookupKey === "bride" || section.lookupKey === "child" || section.lookupKey === "spouse"
+  )?.lookupKey;
+  if (!primaryLookupKey) return allSections;
+  const excludedPrefixes = primaryLookupKey === "groom"
+    ? ["bride", "spouse", "childSpouse"]
+    : ["groom", "spouse", "childSpouse"];
+  return allSections.filter((section) =>
+    !section.fields.some((field) => excludedPrefixes.some((prefix) => field.key.startsWith(prefix))) &&
+    (!section.lookupKey || section.lookupKey === primaryLookupKey) &&
+    (!section.parentOf || section.parentOf === primaryLookupKey)
+  );
+});
 const STEPS = ["Pilih Surat", "Isian Surat"];
 const STEP_SELECT = 0;
 const STEP_FIELDS = 1;
@@ -138,7 +155,8 @@ function goSub(idx) {
 // isi otomatis field yang masih kosong dari surat lain setiap kali sebuah surat ditampilkan
 watch([current, fieldIdx], () => {
   const l = isFields.value ? fLetter.value : null;
-  if (l) for (const key of applyAliases(form, sectionsOf(l), aliasIndex)) autoFilled[key] = true;
+  if (!l) return;
+  for (const key of applyAliases(form, sectionsOf(l), aliasIndex)) autoFilled[key] = true;
 });
 
 const nextLabel = computed(() => {
@@ -158,7 +176,7 @@ function back() {
   }
 }
 
-const focusFirstError = () => nextTick(() => document.querySelector("[aria-invalid='true'], .border-red-300")?.scrollIntoView({ block: "center", behavior: "smooth" }));
+const focusFirstError = (letter) => nextTick(() => focusFirstInvalid(Object.keys(validateFields(sectionsOf(letter), form))));
 
 function next() {
   if (isChecklist.value) {
@@ -173,7 +191,7 @@ function next() {
     if (Object.keys(fieldErrorsOf(l)).length) {
       errors.value = { _checked: true };
       stepAlert.value = `Masih ada isian wajib yang belum lengkap pada surat ${l.code}.`;
-      return focusFirstError();
+      return focusFirstError(l);
     }
     if (fieldIdx.value < lastIdx.value) return goSub(fieldIdx.value + 1);
     // surat terakhir: pastikan tidak ada surat sebelumnya yang terlewat (bisa loncat lewat penanda)
@@ -182,7 +200,7 @@ function next() {
       goSub(bad);
       errors.value = { _checked: true };
       stepAlert.value = `Surat ${selectedLetters.value[bad].code} belum lengkap. Lengkapi dulu sebelum lanjut.`;
-      return focusFirstError();
+      return focusFirstError(selectedLetters.value[bad]);
     }
     return checkAndSubmit();
   }
@@ -220,7 +238,7 @@ function checkAndSubmit() {
     goTo(STEP_FIELDS, incomplete.value[0].id);
     errors.value = { _checked: true };
     stepAlert.value = `Surat ${incomplete.value[0].code} belum lengkap. Lengkapi dulu sebelum lanjut.`;
-    return focusFirstError();
+    return focusFirstError(incomplete.value[0]);
   }
   stepAlert.value = "";
   if (!isOriginal.value) {
@@ -333,7 +351,7 @@ async function submit() {
       <!-- ============ LANGKAH 2: ISIAN — 1 SURAT PER HALAMAN ============ -->
       <div v-else-if="isFields && fLetter" :key="`f-${fLetter.id}`">
         <!-- Langkah pertama: NIK pemohon → data warga mengisi formulir semua surat terpilih -->
-        <ApplicantLookup v-if="showApplicantLookup && fieldIdx === 0" :state="lookup.state" class="mb-5" @search="lookup.search(selectedLetters.flatMap(sectionsOf), form, autoFilled)" />
+        <ApplicantLookup v-if="showApplicantLookup && fieldIdx === 0" :state="lookup.state" class="mb-5" @search="lookup.search(applicantLookupSections, form, autoFilled)" />
 
         <!-- penanda sub-langkah per surat -->
         <div v-if="selectedLetters.length > 1" class="flex flex-wrap items-center gap-2">

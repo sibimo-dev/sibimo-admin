@@ -6,9 +6,8 @@
    Bila backend sudah punya endpoint khusus (mis. GET /citizens/by-nik/{nik}), cukup ganti isi `findResidentByNik`. */
 import { getCitizens } from './citizen.service'
 
-// Pilihan di modul Data Warga ≠ pilihan di form surat (data/letterFields.js → OPT), jadi disamakan di sini.
-const MARITAL = { 'Belum Menikah': 'Belum Kawin', Menikah: 'Kawin' }
-const RELIGION = { Konghucu: 'Khonghucu' }
+// Pilihan form surat (data/letterFields.js → OPT) sekarang sama persis dengan modul Data Warga, jadi status perkawinan,
+// agama, pendidikan, pekerjaan, dan SHDK diteruskan apa adanya tanpa dipetakan lagi.
 const GENDER = {
   l: 'Laki-laki', 'laki-laki': 'Laki-laki', 'laki laki': 'Laki-laki', male: 'Laki-laki', pria: 'Laki-laki',
   p: 'Perempuan', perempuan: 'Perempuan', female: 'Perempuan', wanita: 'Perempuan',
@@ -58,8 +57,8 @@ function toResidentPerson(c) {
     age: ageFromBirthDate(birthDate),
     birthPlaceDate: [c.birth_place, fmtLong(birthDate)].filter(Boolean).join(', '),
     gender: normGender(c.gender),
-    maritalStatus: MARITAL[c.marital_status] ?? c.marital_status ?? '',
-    religion: RELIGION[c.religion] ?? c.religion ?? '',
+    maritalStatus: c.marital_status ?? '',
+    religion: c.religion ?? '',
     beliefOrganization: c.belief_organization ?? '',
     occupation: c.occupation ?? '',
     education: c.education ?? '',
@@ -78,6 +77,20 @@ function toResidentPerson(c) {
     previousAddress: c.previous_address ?? '',
     passportNumber: c.passport_number ?? '',
     passportExpiryDate: toDate(c.passport_expiry_date),
+    // Data tambahan per anggota (dipakai autofill "Daftar anggota keluarga" pada Biodata Penduduk)
+    birthCertificateStatus: c.birth_certificate_status ?? '',
+    birthCertificateNumber: c.birth_certificate_number ?? '',
+    bloodType: c.blood_type ?? '',
+    marriageCertificateStatus: c.marriage_certificate_status ?? '',
+    marriageCertificateNumber: c.marriage_certificate_number ?? '',
+    marriageDate: toDate(c.marriage_date),
+    divorceCertificateStatus: c.divorce_certificate_status ?? '',
+    divorceCertificateNumber: c.divorce_certificate_number ?? '',
+    divorceDate: toDate(c.divorce_date),
+    disabilityStatus: c.disability_status ?? '',
+    disabilityType: c.disability_type ?? '',
+    motherNationalId: normNik(c.mother_national_id),
+    fatherNationalId: normNik(c.father_national_id),
   }
 }
 
@@ -150,8 +163,8 @@ export function toResident(c, citizens = []) {
     // gabungan "Sleman, 17 Agustus 1990" untuk surat yang memakai satu kolom Tempat/Tgl. Lahir
     birthPlaceDate: [c.birth_place, fmtLong(birthDate)].filter(Boolean).join(', '),
     gender: normGender(c.gender),
-    maritalStatus: MARITAL[c.marital_status] ?? c.marital_status ?? '',
-    religion: RELIGION[c.religion] ?? c.religion ?? '',
+    maritalStatus: c.marital_status ?? '',
+    religion: c.religion ?? '',
     beliefOrganization: c.belief_organization ?? '',
     occupation: c.occupation ?? '',
     education: c.education ?? '',
@@ -182,6 +195,7 @@ export function toResident(c, citizens = []) {
     province: c.province ?? c.provinsi ?? 'Daerah Istimewa Yogyakarta',
     postalCode: c.postal_code ?? c.post_code ?? c.kode_pos ?? '',
     household,
+    householdCount: household.length ? String(household.length) : '',
   }
 }
 

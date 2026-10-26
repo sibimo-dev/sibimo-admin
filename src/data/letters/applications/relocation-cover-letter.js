@@ -7,7 +7,7 @@
 // Dusun), Nomor surat (471.21/...), tanggal, serta tanda tangan Petugas Registrasi dan a.n Lurah.
 // Isian sama persis dengan Formulir Keterangan Pindah WNI (kunci field sama) agar digabung 1 halaman saat register.
 // Langkah 3 (cek ulang, ceklis dokumen asli, kirim, pop-up hasil) sudah ditangani LetterWizard.
-import { f, OPT, DOC, opt, alamat } from "@/data/letterFields";
+import { f, OPT, DOC, opt, alamat, kodeWilayah } from "@/data/letterFields";
 
 const ORIGIN_WILAYAH = {
   village: "Bimomartani",
@@ -18,6 +18,8 @@ const ORIGIN_WILAYAH = {
 
 // Langkah 1: urutan mengikuti formulir PDF
 export const sections = [
+  // DIISI OLEH PETUGAS: kode wilayah (default). Nama wilayah diambil dari "Alamat Daerah Asal" di bawah; Dusun/Dukuh/Kampung diisi di blok ini (key originHamlet, sama seperti sebelumnya); Nomor KK dari "Data Daerah Asal".
+  kodeWilayah({ names: false, hamlet: true, hamletCode: true, hamletKey: "originHamlet", hamletOptional: true }, "Kode Wilayah (Diisi Oleh Petugas)"),
   // DATA DAERAH ASAL: 1. Nomor KK, 2. Nama Kepala Keluarga
   {
     title: "Data Daerah Asal",
@@ -34,7 +36,6 @@ export const sections = [
     fieldFrom: {
       rt: "rt",
       rw: "rw",
-      hamlet: "dusun",
       village: "village",
       district: "district",
       regency: "regency",
@@ -43,6 +44,7 @@ export const sections = [
       phone: "phoneNumber",
     },
     defaults: ORIGIN_WILAYAH,
+    hamlet: false, // Dusun/Dukuh/Kampung asal ada di blok Kode Wilayah
   }),
   // 4. NIK Pemohon, 5. Tempat/Tanggal Lahir, 6. Nama Lengkap
   {
@@ -84,7 +86,7 @@ export const sections = [
         { key: "name", label: "Nama" },
         { key: "validUntil", label: "Masa berlaku KTP s/d", type: "date", optional: true },
         { key: "shdk", label: "SHDK", type: "select", options: OPT.shdk },
-      ], { max: 7 }),
+      ], { max: 7, autoByType: "relocationType" }),
     ],
   },
 ];
