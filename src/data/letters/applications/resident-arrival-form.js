@@ -85,7 +85,7 @@ export const sections = [
         { key: "nik", label: "NIK" },
         { key: "name", label: "Nama" },
         { key: "shdk", label: "Status Hubungan dalam Keluarga", type: "select", options: OPT.shdk },
-        { key: "validUntil", label: "Masa Berlaku KTP", type: "date", optional: true, lifetime: true },
+        { key: "validUntil", label: "Masa Berlaku KTP", type: "date", optional: true },
       ], { max: 6, autoByType: "relocationType" }),
     ],
   },

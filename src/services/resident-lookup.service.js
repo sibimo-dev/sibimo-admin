@@ -6,9 +6,8 @@
    Bila backend sudah punya endpoint khusus (mis. GET /citizens/by-nik/{nik}), cukup ganti isi `findResidentByNik`. */
 import { getCitizens } from './citizen.service'
 
-// Pilihan di modul Data Warga ≠ pilihan di form surat (data/letterFields.js → OPT), jadi disamakan di sini.
-const MARITAL = { 'Belum Menikah': 'Belum Kawin', Menikah: 'Kawin' }
-const RELIGION = { Konghucu: 'Khonghucu' }
+// Pilihan form surat (data/letterFields.js → OPT) sekarang sama persis dengan modul Data Warga, jadi status perkawinan,
+// agama, pendidikan, pekerjaan, dan SHDK diteruskan apa adanya tanpa dipetakan lagi.
 const GENDER = {
   l: 'Laki-laki', 'laki-laki': 'Laki-laki', 'laki laki': 'Laki-laki', male: 'Laki-laki', pria: 'Laki-laki',
   p: 'Perempuan', perempuan: 'Perempuan', female: 'Perempuan', wanita: 'Perempuan',
@@ -58,8 +57,8 @@ function toResidentPerson(c) {
     age: ageFromBirthDate(birthDate),
     birthPlaceDate: [c.birth_place, fmtLong(birthDate)].filter(Boolean).join(', '),
     gender: normGender(c.gender),
-    maritalStatus: MARITAL[c.marital_status] ?? c.marital_status ?? '',
-    religion: RELIGION[c.religion] ?? c.religion ?? '',
+    maritalStatus: c.marital_status ?? '',
+    religion: c.religion ?? '',
     beliefOrganization: c.belief_organization ?? '',
     occupation: c.occupation ?? '',
     education: c.education ?? '',
@@ -164,8 +163,8 @@ export function toResident(c, citizens = []) {
     // gabungan "Sleman, 17 Agustus 1990" untuk surat yang memakai satu kolom Tempat/Tgl. Lahir
     birthPlaceDate: [c.birth_place, fmtLong(birthDate)].filter(Boolean).join(', '),
     gender: normGender(c.gender),
-    maritalStatus: MARITAL[c.marital_status] ?? c.marital_status ?? '',
-    religion: RELIGION[c.religion] ?? c.religion ?? '',
+    maritalStatus: c.marital_status ?? '',
+    religion: c.religion ?? '',
     beliefOrganization: c.belief_organization ?? '',
     occupation: c.occupation ?? '',
     education: c.education ?? '',

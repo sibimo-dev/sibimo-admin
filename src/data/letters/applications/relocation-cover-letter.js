@@ -67,7 +67,7 @@ export const sections = [
     ],
   },
   // 2. Alamat Tujuan Pindah
-  alamat("destination", "Alamat Tujuan Pindah", { hamletFree: true }), // tujuan bisa di luar Bimomartani → dusun diketik bebas
+  alamat("destination", "Alamat Tujuan Pindah"),
   // 3. Jenis Kepindahan, 4. Status KK bagi yang tidak pindah, 5. Status Nomor KK bagi yang pindah
   {
     title: "Jenis Kepindahan & Status KK",
@@ -84,7 +84,7 @@ export const sections = [
       f.rows("familyMembers", "Anggota keluarga yang pindah", [
         { key: "nik", label: "NIK" },
         { key: "name", label: "Nama" },
-        { key: "validUntil", label: "Masa berlaku KTP s/d", type: "date", optional: true, lifetime: true },
+        { key: "validUntil", label: "Masa berlaku KTP s/d", type: "date", optional: true },
         { key: "shdk", label: "SHDK", type: "select", options: OPT.shdk },
       ], { max: 7, autoByType: "relocationType" }),
     ],
