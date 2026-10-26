@@ -22,6 +22,7 @@ const form = reactive({
   letter_name: '',
   category: '',
   number_prefix: '',
+  classification_index: '',
   processing_time: '',
   signature_method: 'manual',
   signer_id: null,
@@ -44,7 +45,7 @@ const signerOptions = computed(() =>
   })),
 )
 
-// Mode edit: hanya number_prefix & description yang boleh diubah
+// Mode edit: indeks klasifikasi, prefix lama (internal), dan deskripsi yang boleh diubah
 const lockedFields = computed(() => !isNew.value)
 
 const selectClass = [
@@ -106,6 +107,7 @@ async function handleSave() {
       letter_name: form.letter_name,
       category: form.category,
       number_prefix: form.number_prefix || null,
+      classification_index: form.classification_index || null,
       processing_time: form.processing_time || null,
       signature_method: form.signature_method,
       signer_id: form.signer_id || null,
@@ -230,8 +232,9 @@ function editRequirement(item) {
           </label>
 
           <!-- Field yang bisa diedit -->
-          <div class="md:col-span-2">
-            <AppInput v-model="form.number_prefix" label="Prefix Nomor Surat" />
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:col-span-2">
+            <AppInput v-model="form.classification_index" label="Indeks Klasifikasi Arsip" placeholder="Contoh: 400.12" />
+            <AppInput v-model="form.number_prefix" label="Prefix Lama (internal)" />
           </div>
 
           <label class="text-sm font-medium text-gray-600 md:col-span-2">

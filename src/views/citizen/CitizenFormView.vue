@@ -170,6 +170,50 @@ function closeSuccessDialog() {
   router.push({ name: 'citizen-list' })
 }
 
+const familyCardMembers = computed(() => {
+  const kk = String(familyCardNumber.value ?? '').trim()
+  if (!/^\d{16}$/.test(kk)) return []
+  return citizenLookup.value.filter((citizen) => (
+    String(citizen.family_card_number ?? '') === kk
+    && citizen.status !== 'Pindah'
+  ))
+})
+const familyCardHead = computed(() => familyCardMembers.value.find((citizen) => /kepala|kk/i.test(String(citizen.family_relationship ?? ''))) ?? familyCardMembers.value[0] ?? null)
+const familyCardAutoFillVisible = computed(() => !isEditMode.value && recordEventType.value === 'LAHIR' && familyCardMembers.value.length > 0)
+let lastAutoFilledFamilyCard = ''
+
+function applyBirthFamilyCardData() {
+  const kk = String(familyCardNumber.value ?? '').trim()
+  if (isEditMode.value || recordEventType.value !== 'LAHIR' || !/^\d{16}$/.test(kk) || !familyCardMembers.value.length) return
+  if (lastAutoFilledFamilyCard === kk) return
+
+  const source = familyCardHead.value
+  const father = familyCardMembers.value.find((citizen) => citizen.gender === 'Laki-laki' && /kepala|suami/i.test(String(citizen.family_relationship ?? '')))
+    ?? familyCardMembers.value.find((citizen) => citizen.gender === 'Laki-laki')
+  const mother = familyCardMembers.value.find((citizen) => citizen.gender === 'Perempuan' && /istri/i.test(String(citizen.family_relationship ?? '')))
+    ?? familyCardMembers.value.find((citizen) => citizen.gender === 'Perempuan')
+
+  // Data alamat dan wilayah mengikuti anggota KK yang sudah tercatat.
+  dusun.value = source?.dusun ?? ''
+  rt.value = source?.rt ?? ''
+  rw.value = source?.rw ?? ''
+  rtHeadName.value = source?.rt_head_name ?? ''
+  rwHeadName.value = source?.rw_head_name ?? ''
+  address.value = source?.address ?? ''
+  ktpAddress.value = source?.ktp_address ?? source?.address ?? ''
+  nationality.value = source?.nationality ?? nationality.value
+  familyRelationship.value = 'Anak'
+
+  // Saat pencatatan kelahiran, data orang tua diambil dari anggota KK.
+  motherNationalId.value = mother?.national_id ?? ''
+  motherName.value = mother?.full_name ?? ''
+  fatherNationalId.value = father?.national_id ?? ''
+  fatherName.value = father?.full_name ?? ''
+  lastAutoFilledFamilyCard = kk
+}
+
+watch([familyCardNumber, recordEventType, citizenLookup], applyBirthFamilyCardData, { deep: true })
+
 const familyRelationshipOptions = [
   { value: 'Kepala Keluarga', label: '1. Kepala Keluarga' },
   { value: 'Suami', label: '2. Suami' }, { value: 'Istri', label: '3. Istri' },
@@ -610,6 +654,13 @@ function deleteCitizen() {
                     {{ familyCardInvalid ? 'Nomor KK harus tepat 16 digit angka.' : 'Masukkan 16 digit angka.' }}
                   </small>
                 </div>
+              </div>
+
+              <div v-if="familyCardAutoFillVisible" class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-800">
+                <div class="flex items-center gap-2 font-semibold">
+                  <i class="pi pi-bolt" /> Data KK ditemukan dan isian terkait sudah diisi otomatis.
+                </div>
+                <div class="mt-1">{{ familyCardMembers.length }} anggota KK terdaftar, termasuk {{ familyCardHead?.full_name || 'kepala keluarga' }}.</div>
               </div>
 
               <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
