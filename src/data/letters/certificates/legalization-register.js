@@ -28,7 +28,7 @@ export const sections = [
         { key: "maritalStatus", label: "Status Kawin", type: "select", options: OPT.marital },
         { key: "familyStatus", label: "Status Hub dlm Keluarga", type: "select", options: OPT.shdk },
         { key: "education", label: "Pendidikan Terakhir", type: "select", options: OPT.education },
-        { key: "occupation", label: "Jenis Pekerjaan" },
+        { key: "occupation", label: "Jenis Pekerjaan", type: "occupation", options: OPT.occupation },
       ]),
     ],
   },

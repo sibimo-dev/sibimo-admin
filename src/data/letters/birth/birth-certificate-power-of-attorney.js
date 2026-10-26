@@ -13,7 +13,7 @@ import { arrange, DOC, OPT, f, opt, PELAPOR_ATTORNEY, pelapor } from "@/data/let
 export const sections = arrange(
   [
     // $grantor = $birth['father'] → fatherName, fatherOccupation, fatherAddress
-    { title: "Pemberi Kuasa (Ayah)", fields: [f.text("fatherName", "Nama Lengkap", { from: "asFather:fullName" }), f.select("fatherOccupation", "Pekerjaan", OPT.occupation, { from: "asFather:occupation", editable: true }), f.area("fatherAddress", "Alamat", { from: "asFather:address", span: 2 })] },
+    { title: "Pemberi Kuasa (Ayah)", fields: [f.text("fatherName", "Nama Lengkap", { from: "asFather:fullName" }), f.occupation("fatherOccupation", "Pekerjaan", { from: "asFather:occupation" }), f.area("fatherAddress", "Alamat", { from: "asFather:address", span: 2 })] },
     // Penerima kuasa = pelapor → diisi petugas/admin kalurahan (khusus admin, tidak ada di form public).
     pelapor(PELAPOR_ATTORNEY, "Yang Diberi Kuasa (Pelapor)", "Penerima kuasa yang mengurus pelaporan. Diisi manual oleh petugas."),
     // $childName = $birth['child']['name'] → childName

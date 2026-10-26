@@ -4,22 +4,44 @@
 // Template PDF: letters/family-biodata-form.blade.php
 // Bagian "Diisi Oleh Petugas" (Provinsi, Kab, Kecamatan, Desa, Dusun, Nomor KK)
 // tidak diisi pemohon, dibiarkan kosong di PDF dan diisi/diedit admin.
-import { f, OPT, pemohonRingkas, opt, signerNames } from "@/data/letterFields";
+import { f, OPT, codeOptions, kodeWilayah, pemohonRingkas, opt, signerNames } from "@/data/letterFields";
 
-// Opsi tambahan khusus formulir ini
-const ADA_TIDAK = ["Ada", "Tidak Ada"];
-const GOL_DARAH = ["A", "B", "AB", "O", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Tidak Tahu"];
-const KELAINAN = ["Tidak Ada", "Kelainan Fisik", "Kelainan Mental", "Fisik dan Mental"];
-const CACAT = ["Tidak Ada", "Cacat Fisik", "Cacat Netra/Buta", "Cacat Rungu/Wicara", "Cacat Mental/Jiwa", "Cacat Fisik dan Mental", "Cacat Lainnya"];
+// Kolom bernomor di formulir cetak (7, 11, 13, 14, 15, 16, 19, 22, 23, 24, 25, 26):
+// dropdown menampilkan "1. Laki-laki", tetapi NILAI yang disimpan (dan tercetak di pratinjau) hanya angkanya ("1").
+// Urutan & nomor pilihan sama dengan form Data Warga (OPT di data/letterFields.js).
+const KODE = {
+  gender: codeOptions(OPT.gender),                 // 7
+  certificate: codeOptions(OPT.certificate),       // 11, 16, 19  (1 = Tidak Ada, 2 = Ada)
+  bloodType: codeOptions(OPT.bloodType),           // 13
+  religion: codeOptions(OPT.religion),             // 14
+  marital: codeOptions(OPT.marital),               // 15  (1 = Belum Kawin, 2 = Kawin, 3 = Cerai Hidup, 4 = Cerai Mati)
+  shdk: codeOptions(OPT.shdk),                     // 22
+  disability: codeOptions(OPT.disability),         // 23  (1 = Tidak Ada, 2 = Ada)
+  disabilityType: codeOptions(OPT.disabilityType), // 24
+  education: codeOptions(OPT.education),           // 25
+  occupation: codeOptions(OPT.occupation),         // 26
+};
+const ADA = "2";            // kode "Ada" untuk akta (11, 16, 19) dan kelainan (23)
+const BELUM_KAWIN = "1";    // kode status perkawinan
+const CERAI = ["3", "4"];   // Cerai Hidup, Cerai Mati
+
+// Ketergantungan antar kolom (sama dengan form Data Warga): kolom yang tidak berlaku dinonaktifkan dan dikosongkan.
+const noBirthCert = (row) => row.birthCertStatus !== ADA;
+const neverMarried = (row) => row.maritalStatus === BELUM_KAWIN;
+const notDivorced = (row) => !CERAI.includes(row.maritalStatus);
+const noDisorder = (row) => row.disorder !== ADA;
 
 // Langkah 1: isian sesuai formulir
 export const sections = [
+  // DISIAN OLEH PETUGAS: kode & nama Provinsi/Kab/Kecamatan/Desa (default), Nama Dusun (pilihan), Nomor KK
+  kodeWilayah({ names: true, hamlet: true, kk: true }),
+
   // DATA KEPALA KELUARGA
   pemohonRingkas([
     f.text("postalCode", "Kode Pos"),
     f.text("rt", "RT"),
     f.text("rw", "RW"),
-    f.text("memberCount", "Jumlah Anggota Keluarga (orang)"),
+    f.text("memberCount", "Jumlah Anggota Keluarga (orang)", { from: "householdCount" }),
     f.text("phone", "Telepon"),
   ]),
 
@@ -36,32 +58,46 @@ export const sections = [
         { key: "passportExpiry", label: "Tanggal Berakhir Paspor", type: "date", optional: true },
 
         // Tabel 2 (kolom 7-21), "Umur" dihitung otomatis di template
-        { key: "gender", label: "Jenis Kelamin", type: "select", options: OPT.gender },
+        { key: "gender", label: "Jenis Kelamin", type: "select", options: KODE.gender },
         { key: "birthPlace", label: "Tempat Lahir" },
         { key: "birthDate", label: "Tanggal Lahir", type: "date" },
-        { key: "birthCertStatus", label: "Akta Lahir/Surat Lahir", type: "select", options: ADA_TIDAK },
-        { key: "birthCertNumber", label: "Nomor Akta Kelahiran/Surat Kenal Lahir", optional: true },
-        { key: "bloodType", label: "Golongan Darah", type: "select", options: GOL_DARAH },
-        { key: "religion", label: "Agama", type: "select", options: OPT.religion },
-        { key: "maritalStatus", label: "Status Perkawinan", type: "select", options: OPT.marital },
-        { key: "marriageCertStatus", label: "Akta Perkawinan/Buku Nikah", type: "select", options: ADA_TIDAK },
-        { key: "marriageCertNumber", label: "Nomor Akta Perkawinan/Buku Nikah", optional: true },
-        { key: "marriageDate", label: "Tanggal Perkawinan", type: "date", optional: true },
-        { key: "divorceCertStatus", label: "Akta Cerai/Surat Cerai", type: "select", options: ADA_TIDAK },
-        { key: "divorceCertNumber", label: "Nomor Akta Perceraian/Surat Cerai", optional: true },
-        { key: "divorceDate", label: "Tanggal Perceraian", type: "date", optional: true },
+        { key: "birthCertStatus", label: "Akta Lahir/Surat Lahir", type: "select", options: KODE.certificate },
+        { key: "birthCertNumber", label: "Nomor Akta Kelahiran/Surat Kenal Lahir", optional: true, disabledWhen: noBirthCert },
+        { key: "bloodType", label: "Golongan Darah", type: "select", options: KODE.bloodType },
+        { key: "religion", label: "Agama", type: "select", options: KODE.religion },
+        { key: "maritalStatus", label: "Status Perkawinan", type: "select", options: KODE.marital },
+        { key: "marriageCertStatus", label: "Akta Perkawinan/Buku Nikah", type: "select", options: KODE.certificate, optional: true, disabledWhen: neverMarried },
+        { key: "marriageCertNumber", label: "Nomor Akta Perkawinan/Buku Nikah", optional: true, disabledWhen: neverMarried },
+        { key: "marriageDate", label: "Tanggal Perkawinan", type: "date", optional: true, disabledWhen: neverMarried },
+        { key: "divorceCertStatus", label: "Akta Cerai/Surat Cerai", type: "select", options: KODE.certificate, optional: true, disabledWhen: notDivorced },
+        { key: "divorceCertNumber", label: "Nomor Akta Perceraian/Surat Cerai", optional: true, disabledWhen: notDivorced },
+        { key: "divorceDate", label: "Tanggal Perceraian", type: "date", optional: true, disabledWhen: notDivorced },
 
         // Tabel 3 (kolom 22-30)
-        { key: "shdk", label: "Status Hubungan dalam Keluarga", type: "select", options: OPT.shdk },
-        { key: "disorder", label: "Kelainan Fisik & Mental", type: "select", options: KELAINAN },
-        { key: "disability", label: "Penyandang Cacat", type: "select", options: CACAT },
-        { key: "education", label: "Pendidikan Terakhir", type: "select", options: OPT.education },
-        { key: "occupation", label: "Pekerjaan" },
+        { key: "shdk", label: "Status Hubungan dalam Keluarga", type: "select", options: KODE.shdk },
+        { key: "disorder", label: "Kelainan Fisik & Mental", type: "select", options: KODE.disability },
+        { key: "disability", label: "Penyandang Cacat", type: "select", options: KODE.disabilityType, optional: true, disabledWhen: noDisorder },
+        { key: "education", label: "Pendidikan Terakhir", type: "select", options: KODE.education },
+        { key: "occupation", label: "Pekerjaan", type: "select", options: KODE.occupation, filter: true },
         { key: "motherNik", label: "NIK Ibu", optional: true },
         { key: "motherName", label: "Nama Lengkap Ibu" },
         { key: "fatherNik", label: "NIK Ayah", optional: true },
         { key: "fatherName", label: "Nama Lengkap Ayah" },
-      ], { max: 8 }),
+      ], {
+        max: 8,
+        // Terisi otomatis dari semua anggota KK yang terdaftar di Data Warga (kolom → properti hasil pencarian NIK).
+        fromHousehold: {
+          name: "fullName", nik: "nik", previousAddress: "previousAddress", passportNumber: "passportNumber", passportExpiry: "passportExpiryDate",
+          gender: "gender", birthPlace: "birthPlace", birthDate: "birthDate",
+          birthCertStatus: "birthCertificateStatus", birthCertNumber: "birthCertificateNumber",
+          bloodType: "bloodType", religion: "religion", maritalStatus: "maritalStatus",
+          marriageCertStatus: "marriageCertificateStatus", marriageCertNumber: "marriageCertificateNumber", marriageDate: "marriageDate",
+          divorceCertStatus: "divorceCertificateStatus", divorceCertNumber: "divorceCertificateNumber", divorceDate: "divorceDate",
+          shdk: "familyRelationship", disorder: "disabilityStatus", disability: "disabilityType",
+          education: "education", occupation: "occupation",
+          motherNik: "motherNationalId", motherName: "motherName", fatherNik: "fatherNationalId", fatherName: "fatherName",
+        },
+      }),
     ],
   },
 

@@ -7,11 +7,8 @@
 // Langkah 3 (cek ulang, ceklis dokumen asli, kirim, pop-up hasil) sudah ditangani LetterWizard.
 import { f, OPT, DOC, opt } from "@/data/letterFields";
 
-// Pilihan "Pendidikan Terakhir" mengikuti istilah pada KK.
-const EDUCATION = [
-  "Tidak/Belum Sekolah", "Belum Tamat SD/Sederajat", "Tamat SD/Sederajat", "SLTP/Sederajat", "SLTA/Sederajat",
-  "Diploma I/II", "Akademi/Diploma III/S. Muda", "Diploma IV/Strata I", "Strata II", "Strata III",
-];
+// Pilihan "Pendidikan Terakhir" sama dengan form Data Warga (OPT.education).
+const EDUCATION = OPT.education;
 
 // Tabel perubahan hanya tampil (dan wajib diisi) bila jenis perubahannya dicentang.
 const CHANGES = { education: "Pendidikan Terakhir", job: "Pekerjaan", religion: "Agama", other: "Lainnya (status perkawinan, dll)" };
@@ -62,8 +59,8 @@ export const sections = [
 
       f.rows("jobChanges", "A. Perubahan pekerjaan", [
         who,
-        { key: "before", label: "Semula (opsional)", optional: true },
-        { key: "after", label: "Menjadi (mis. Petani/Pekebun)" },
+        { key: "before", label: "Semula (opsional)", type: "occupation", options: OPT.occupation, optional: true },
+        { key: "after", label: "Menjadi (mis. Petani/Pekebun)", type: "occupation", options: OPT.occupation },
         basis("Dasar perubahan (mis. surat keterangan)"),
       ], { max: 7, showIf: changing(CHANGES.job) }),
 
