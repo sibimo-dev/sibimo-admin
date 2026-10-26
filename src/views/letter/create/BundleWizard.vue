@@ -21,7 +21,7 @@ import LetterFormFields from "./LetterFormFields.vue";
 import WizardStepper from "./WizardStepper.vue";
 import ApplicantLookup from "./ApplicantLookup.vue";
 import { useApplicantLookup } from "./useApplicantLookup";
-import { applicantOf, applyAliases, buildAliasIndex, fillForm, reviewLocation, scrollTop, validateFields } from "./formLogic";
+import { applicantOf, applyAliases, buildAliasIndex, fillForm, reviewLocation, scrollTop, validateFields, focusFirstInvalid } from "./formLogic";
 import { HUES, SECTION_HUES, hue } from "./pastel";
 import { LETTER_SOURCE, getLetterRequestError, submitLetterBundle } from "@/services/letter-create.service";
 
@@ -158,7 +158,7 @@ function back() {
   }
 }
 
-const focusFirstError = () => nextTick(() => document.querySelector("[aria-invalid='true'], .border-red-300")?.scrollIntoView({ block: "center", behavior: "smooth" }));
+const focusFirstError = (letter) => nextTick(() => focusFirstInvalid(Object.keys(validateFields(sectionsOf(letter), form))));
 
 function next() {
   if (isChecklist.value) {
@@ -173,7 +173,7 @@ function next() {
     if (Object.keys(fieldErrorsOf(l)).length) {
       errors.value = { _checked: true };
       stepAlert.value = `Masih ada isian wajib yang belum lengkap pada surat ${l.code}.`;
-      return focusFirstError();
+      return focusFirstError(l);
     }
     if (fieldIdx.value < lastIdx.value) return goSub(fieldIdx.value + 1);
     // surat terakhir: pastikan tidak ada surat sebelumnya yang terlewat (bisa loncat lewat penanda)
@@ -182,7 +182,7 @@ function next() {
       goSub(bad);
       errors.value = { _checked: true };
       stepAlert.value = `Surat ${selectedLetters.value[bad].code} belum lengkap. Lengkapi dulu sebelum lanjut.`;
-      return focusFirstError();
+      return focusFirstError(selectedLetters.value[bad]);
     }
     return checkAndSubmit();
   }
@@ -220,7 +220,7 @@ function checkAndSubmit() {
     goTo(STEP_FIELDS, incomplete.value[0].id);
     errors.value = { _checked: true };
     stepAlert.value = `Surat ${incomplete.value[0].code} belum lengkap. Lengkapi dulu sebelum lanjut.`;
-    return focusFirstError();
+    return focusFirstError(incomplete.value[0]);
   }
   stepAlert.value = "";
   if (!isOriginal.value) {

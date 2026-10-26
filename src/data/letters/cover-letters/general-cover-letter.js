@@ -23,7 +23,7 @@ export const sections = [
       f.select("gender", "Jenis Kelamin", OPT.gender, { from: "gender" }),
       f.select("maritalStatus", "Status Perkawinan", OPT.marital, { from: "maritalStatus" }),
       f.select("religion", "Agama", OPT.religion, { from: "religion" }),
-      f.select("occupation", "Pekerjaan", OPT.occupation, { from: "occupation", editable: true }),
+      f.occupation("occupation", "Pekerjaan", { from: "occupation" }),
       f.area("address", "Alamat", { from: "address", span: 2 }),
     ],
   },

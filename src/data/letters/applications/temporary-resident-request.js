@@ -1,5 +1,5 @@
 // Surat Permohonan Menjadi Penduduk Sementara / SKTS
-import { f, pemohon, DOC, signerNames } from "@/data/letterFields";
+import { f, pemohon, DOC, signerNames, OPT } from "@/data/letterFields";
 
 const wilayah = (prefix) => [
   f.text(`${prefix}Village`, "Desa/Kelurahan"),
@@ -9,7 +9,7 @@ const wilayah = (prefix) => [
 ];
 
 export const sections = [
-  pemohon([f.text("education", "Pendidikan", { placeholder: "Contoh: SMA / S1" })]),
+  pemohon([f.select("education", "Pendidikan", OPT.education)]),
 
   {
     title: "Alamat Asal",

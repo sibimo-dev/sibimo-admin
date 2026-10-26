@@ -4,7 +4,7 @@
 // Template PDF: letters/bussiness-permit-letter.blade.php
 // 1 file = 1 surat. Isi `sections` (langkah 1) dan `documents` (langkah 2).
 // Langkah 3 (cek ulang, ceklis dokumen asli, kirim, pop-up hasil) sudah ditangani LetterWizard.
-import { f, DOC } from "@/data/letterFields";
+import { f, DOC, OPT } from "@/data/letterFields";
 
 // Langkah 1: isian disesuaikan urut dengan template surat
 export const sections = [
@@ -15,9 +15,9 @@ export const sections = [
       f.text("name", "Nama", { from: "fullName" }),
       f.text("birthPlaceDate", "Tempat/Tgl. Lahir", { from: "birthPlaceDate", placeholder: "Contoh: Sleman, 17 Agustus 1990" }),
       f.nik("nik", "NIK", { from: "nik" }),
-      f.text("gender", "Jenis Kelamin", { from: "gender", placeholder: "Laki-laki / Perempuan" }),
-      f.text("maritalStatus", "Status Perkawinan", { from: "maritalStatus", placeholder: "Belum Kawin / Kawin / Cerai Hidup / Cerai Mati" }),
-      f.text("occupation", "Pekerjaan", { from: "occupation" }),
+      f.select("gender", "Jenis Kelamin", OPT.gender, { from: "gender" }),
+      f.select("maritalStatus", "Status Perkawinan", OPT.marital, { from: "maritalStatus" }),
+      f.occupation("occupation", "Pekerjaan", { from: "occupation" }),
       f.area("address", "Alamat", { from: "address", span: 2 }),
     ],
   },

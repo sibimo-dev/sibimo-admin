@@ -78,6 +78,20 @@ function toResidentPerson(c) {
     previousAddress: c.previous_address ?? '',
     passportNumber: c.passport_number ?? '',
     passportExpiryDate: toDate(c.passport_expiry_date),
+    // Data tambahan per anggota (dipakai autofill "Daftar anggota keluarga" pada Biodata Penduduk)
+    birthCertificateStatus: c.birth_certificate_status ?? '',
+    birthCertificateNumber: c.birth_certificate_number ?? '',
+    bloodType: c.blood_type ?? '',
+    marriageCertificateStatus: c.marriage_certificate_status ?? '',
+    marriageCertificateNumber: c.marriage_certificate_number ?? '',
+    marriageDate: toDate(c.marriage_date),
+    divorceCertificateStatus: c.divorce_certificate_status ?? '',
+    divorceCertificateNumber: c.divorce_certificate_number ?? '',
+    divorceDate: toDate(c.divorce_date),
+    disabilityStatus: c.disability_status ?? '',
+    disabilityType: c.disability_type ?? '',
+    motherNationalId: normNik(c.mother_national_id),
+    fatherNationalId: normNik(c.father_national_id),
   }
 }
 
@@ -182,6 +196,7 @@ export function toResident(c, citizens = []) {
     province: c.province ?? c.provinsi ?? 'Daerah Istimewa Yogyakarta',
     postalCode: c.postal_code ?? c.post_code ?? c.kode_pos ?? '',
     household,
+    householdCount: household.length ? String(household.length) : '',
   }
 }
 
