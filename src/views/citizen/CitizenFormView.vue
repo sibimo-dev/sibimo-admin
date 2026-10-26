@@ -2,8 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
-import { useToast } from 'primevue/usetoast'
-import { createCitizen, deleteCitizen as removeCitizen, getCitizen, getCitizens, getRecordEventCounters, updateCitizen } from '@/services/citizen.service'
+import { createCitizen, deleteCitizen as removeCitizen, getCitizen, getRecordEventCounters, updateCitizen } from '@/services/citizen.service'
 import { updateListCache } from '@/services/list-cache'
 
 import Card from 'primevue/card'
@@ -19,7 +18,6 @@ import CitizenDocumentsPanel from '@/components/citizen/CitizenDocumentsPanel.vu
 const route = useRoute()
 const router = useRouter()
 const confirm = useConfirm()
-const toast = useToast()
 
 const citizenId = computed(() => route.params.id ?? null)
 const isEditMode = computed(() => citizenId.value !== null)
@@ -61,9 +59,19 @@ const certificateOptions = [
   { value: 'Belum Ada', label: '1. Tidak Ada' },
   { value: 'Ada', label: '2. Ada' },
 ]
+// No. 25 formulir: Kelainan Fisik dan Mental
 const disabilityOptions = [
   { value: 'Tidak Ada', label: '1. Tidak Ada' },
   { value: 'Ada', label: '2. Ada' },
+]
+// No. 26 formulir: Penyandang Cacat (muncul bila no. 25 = Ada)
+const disabilityTypeOptions = [
+  { value: 'Cacat Fisik', label: '1. Cacat Fisik' },
+  { value: 'Cacat Netra/Buta', label: '2. Cacat Netra/Buta' },
+  { value: 'Cacat Rungu/Wicara', label: '3. Cacat Rungu/Wicara' },
+  { value: 'Cacat Mental/Jiwa', label: '4. Cacat Mental/Jiwa' },
+  { value: 'Cacat Fisik dan Mental', label: '5. Cacat Fisik dan Mental' },
+  { value: 'Cacat Lainnya', label: '6. Cacat Lainnya' },
 ]
 const nationalityOptions = ['WNI', 'WNA']
 const educationOptions = [
@@ -132,8 +140,9 @@ const divorceCertificateStatus = ref('')
 const divorceCertificateNumber = ref('')
 const divorceDate = ref(null)
 const familyRelationship = ref('')
-const physicalDisability = ref('')
-const disabilityStatus = ref('')
+const physicalDisability = ref('') // keterangan, hanya untuk "Cacat Lainnya"
+const disabilityStatus = ref('')   // no. 25
+const disabilityType = ref('')     // no. 26
 const religion = ref('Islam')
 const beliefOrganization = ref('')
 const motherNationalId = ref('')
@@ -242,15 +251,8 @@ function searchOccupation(event) {
   occupationSuggestions.value = occupationCatalog.filter(option => !query || option.toLowerCase().includes(query))
 }
 
-function lookupParent(kind) {
-  const id = kind === 'mother' ? motherNationalId.value : fatherNationalId.value
-  const match = citizenLookup.value.find((citizen) => String(citizen.national_id ?? '') === String(id ?? '').trim())
-  if (!match) return
-  if (kind === 'mother') motherName.value = match.full_name ?? ''
-  else fatherName.value = match.full_name ?? ''
-}
-
 const hasValid16Digits = value => /^\d{16}$/.test(String(value ?? ''))
+
 const nationalIdInvalid = computed(() => nationalId.value !== '' && !hasValid16Digits(nationalId.value))
 const familyCardInvalid = computed(() => familyCardNumber.value !== '' && !hasValid16Digits(familyCardNumber.value))
 const birthCertificateNumberDisabled = computed(() => birthCertificateStatus.value !== 'Ada')
@@ -276,8 +278,17 @@ watch(birthCertificateStatus, (value) => {
   if (value !== 'Ada') birthCertificateNumber.value = ''
 })
 
+// No. 25 bukan "Ada" -> no. 26 dan keterangan dikosongkan
 watch(disabilityStatus, (value) => {
-  if (value !== 'Ada') physicalDisability.value = ''
+  if (value !== 'Ada') {
+    disabilityType.value = ''
+    physicalDisability.value = ''
+  }
+})
+
+// No. 26 bukan "Cacat Lainnya" -> keterangan dikosongkan
+watch(disabilityType, (value) => {
+  if (value !== 'Cacat Lainnya') physicalDisability.value = ''
 })
 
 const statusLabelMap = {
@@ -343,7 +354,7 @@ function calculateAge(date) {
   return Math.max(years, 0)
 }
 
-// GANTI: dari hardcode dummy -> fetch data asli dari API
+// Ambil data asli dari API
 async function fetchCitizenDetail() {
   loading.value = true
   errorMessage.value = ''
@@ -382,6 +393,7 @@ async function fetchCitizenDetail() {
     familyRelationship.value = data.family_relationship ?? ''
     physicalDisability.value = data.physical_disability ?? ''
     disabilityStatus.value = data.disability_status ?? ''
+    disabilityType.value = data.disability_type ?? ''
     religion.value = data.religion ?? 'Islam'
     beliefOrganization.value = data.belief_organization ?? ''
     motherNationalId.value = data.mother_national_id ?? ''
@@ -423,7 +435,7 @@ function goBack() {
   router.push({ name: 'citizen-list' })
 }
 
-// GANTI: beneran kirim ke API (POST buat tambah baru, PUT buat update)
+// Kirim ke API (POST buat tambah baru, PUT buat update)
 async function saveCitizen() {
   saving.value = true
   errorMessage.value = ''
@@ -473,6 +485,7 @@ async function saveCitizen() {
     family_relationship: familyRelationship.value,
     physical_disability: physicalDisability.value,
     disability_status: disabilityStatus.value,
+    disability_type: disabilityType.value,
     religion: religion.value,
     belief_organization: beliefOrganization.value,
     mother_national_id: motherNationalId.value,
@@ -501,15 +514,15 @@ async function saveCitizen() {
 
       return [saved, ...items]
     })
-    toast.add({
-      severity: 'success',
-      summary: isEditMode.value ? 'Data warga diperbarui' : 'Data warga berhasil disimpan',
+
+    // Pop up di tengah layar; pindah halaman baru setelah pengguna menekan OK
+    successInfo.value = {
+      title: isEditMode.value ? 'Data warga berhasil diperbarui' : 'Data warga berhasil disimpan',
       detail: isEditMode.value
         ? `${fullName.value} berhasil diperbarui.`
         : `${fullName.value} berhasil ditambahkan ke data warga.`,
-      life: 3000,
-    })
-    router.push({ name: 'citizen-list' })
+    }
+    successDialog.value = true
   } catch (err) {
     errorMessage.value = err.response?.data?.message || 'Gagal menyimpan data warga.'
   } finally {
@@ -517,7 +530,7 @@ async function saveCitizen() {
   }
 }
 
-// GANTI: beneran hapus lewat API
+// Hapus lewat API
 function deleteCitizen() {
   confirm.require({
     message: `Hapus data warga "${fullName.value}" dengan NIK "${nationalId.value}"?`,
@@ -675,8 +688,8 @@ function deleteCitizen() {
                     id="gender"
                     v-model="gender"
                     :options="genderOptions"
-                  optionLabel="label"
-                  optionValue="value"
+                    optionLabel="label"
+                    optionValue="value"
                     class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
                     :pt="{ label: { class: 'px-3 py-2.5' } }"
                   />
@@ -729,7 +742,7 @@ function deleteCitizen() {
                 </div>
                 <div class="flex flex-col gap-2">
                   <label class="text-[13px] font-semibold text-neutral-700" for="bloodType">Golongan Darah</label>
-                <Select id="bloodType" v-model="bloodType" :options="bloodTypeOptions" optionLabel="label" optionValue="value" placeholder="Pilih golongan darah" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ label: { class: 'px-3 py-2.5' } }" />
+                  <Select id="bloodType" v-model="bloodType" :options="bloodTypeOptions" optionLabel="label" optionValue="value" placeholder="Pilih golongan darah" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ label: { class: 'px-3 py-2.5' } }" />
                 </div>
                 <div class="flex flex-col gap-2">
                   <label class="text-[13px] font-semibold text-neutral-700" for="religion">Agama</label>
@@ -921,12 +934,12 @@ function deleteCitizen() {
                 <label class="text-[13px] font-semibold text-neutral-700" for="maritalStatus">
                   Status Pernikahan
                 </label>
-                  <Select
+                <Select
                   id="maritalStatus"
                   v-model="maritalStatus"
                   :options="maritalStatusOptions"
-                    optionLabel="label"
-                    optionValue="value"
+                  optionLabel="label"
+                  optionValue="value"
                   class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-100"
                   :pt="{ label: { class: 'px-3 py-2.5' } }"
                 />
@@ -991,7 +1004,7 @@ function deleteCitizen() {
                 </div>
                 <div class="flex flex-col gap-2">
                   <label class="text-[13px] font-semibold text-neutral-700" for="motherNationalId">NIK Ibu</label>
-                  <InputText id="motherNationalId" v-model="motherNationalId" maxlength="16" inputmode="numeric" placeholder="NIK ibu" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" @blur="lookupParent('mother')" />
+                  <InputText id="motherNationalId" v-model="motherNationalId" maxlength="16" inputmode="numeric" placeholder="NIK ibu" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
                 </div>
                 <div class="flex flex-col gap-2">
                   <label class="text-[13px] font-semibold text-neutral-700" for="fatherName">Nama Lengkap Ayah</label>
@@ -999,7 +1012,7 @@ function deleteCitizen() {
                 </div>
                 <div class="flex flex-col gap-2">
                   <label class="text-[13px] font-semibold text-neutral-700" for="fatherNationalId">NIK Ayah</label>
-                  <InputText id="fatherNationalId" v-model="fatherNationalId" maxlength="16" inputmode="numeric" placeholder="NIK ayah" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" @blur="lookupParent('father')" />
+                  <InputText id="fatherNationalId" v-model="fatherNationalId" maxlength="16" inputmode="numeric" placeholder="NIK ayah" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
                 </div>
               </div>
 
@@ -1016,14 +1029,23 @@ function deleteCitizen() {
             </div>
           </template>
           <template #content>
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div class="flex flex-col gap-5">
+              <!-- No. 25 -->
               <div class="flex flex-col gap-2">
-                <label class="text-[13px] font-semibold text-neutral-700" for="disabilityStatus">Kesehatan</label>
+                <label class="text-[13px] font-semibold text-neutral-700" for="disabilityStatus">Kelainan Fisik dan Mental</label>
                 <Select id="disabilityStatus" v-model="disabilityStatus" :options="disabilityOptions" optionLabel="label" optionValue="value" placeholder="Pilih status" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ label: { class: 'px-3 py-2.5' } }" />
               </div>
-              <div v-if="disabilityStatus === 'Ada'" class="flex flex-col gap-2 sm:col-span-2">
+
+              <!-- No. 26: muncul bila no. 25 = Ada -->
+              <div v-if="disabilityStatus === 'Ada'" class="flex flex-col gap-2">
+                <label class="text-[13px] font-semibold text-neutral-700" for="disabilityType">Penyandang Cacat</label>
+                <Select id="disabilityType" v-model="disabilityType" :options="disabilityTypeOptions" optionLabel="label" optionValue="value" placeholder="Pilih jenis cacat" class="w-full rounded-lg border border-neutral-300 bg-white text-[13px]" :pt="{ label: { class: 'px-3 py-2.5' } }" />
+              </div>
+
+              <!-- Keterangan: muncul bila no. 26 = Cacat Lainnya -->
+              <div v-if="disabilityType === 'Cacat Lainnya'" class="flex flex-col gap-2">
                 <label class="text-[13px] font-semibold text-neutral-700" for="physicalDisability">Keterangan</label>
-                <InputText id="physicalDisability" v-model="physicalDisability" placeholder="Jelaskan kondisi kesehatan" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
+                <InputText id="physicalDisability" v-model="physicalDisability" placeholder="Sebutkan jenis cacat lainnya" class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]" />
               </div>
             </div>
           </template>
@@ -1104,5 +1126,30 @@ function deleteCitizen() {
 
       </aside>
     </div>
+
+    <!-- ============ POP UP BERHASIL SIMPAN ============ -->
+    <Dialog
+      v-model:visible="successDialog"
+      modal
+      :closable="false"
+      :draggable="false"
+      :dismissableMask="false"
+      :style="{ width: '26rem' }"
+      :pt="{ header: { class: 'hidden' }, content: { class: 'p-8' } }"
+    >
+      <div class="flex flex-col items-center gap-4 text-center">
+        <div class="flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
+          <i class="pi pi-check-circle text-5xl text-green-600" />
+        </div>
+        <h2 class="m-0 text-xl font-bold text-neutral-800">{{ successInfo.title }}</h2>
+        <p class="m-0 text-sm text-neutral-600">{{ successInfo.detail }}</p>
+        <Button
+          label="OK"
+          class="mt-2 w-full rounded-lg border border-primary-500 bg-primary-500 px-3.5 py-2.5 text-[13px] font-medium text-white hover:bg-primary-600"
+          autofocus
+          @click="closeSuccessDialog"
+        />
+      </div>
+    </Dialog>
   </div>
 </template>

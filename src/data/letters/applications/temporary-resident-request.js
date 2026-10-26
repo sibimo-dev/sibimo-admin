@@ -1,5 +1,3 @@
-// Disalin dari public: views/services/letters/applications/temporary-resident-request.vue (hanya bagian isian & dokumen).
-// Isian di sini harus tetap sama dengan di public. Tampilan wizard ada di views/letter/create/.
 // Surat Permohonan Menjadi Penduduk Sementara / SKTS
 import { f, pemohon, DOC, signerNames } from "@/data/letterFields";
 
@@ -60,4 +58,4 @@ export const documents = [
   "Fotokopi KK keluarga yang dituju",
 ];
 
-export const meta = {"title": "Surat Permohonan Menjadi Penduduk Sementara / SKTS", "code": "PPS"};
+export const meta = { "title": "Surat Permohonan Menjadi Penduduk Sementara / SKTS", "code": "PPS" };
