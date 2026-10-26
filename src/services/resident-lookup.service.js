@@ -49,6 +49,7 @@ function toResidentPerson(c) {
   if (!c) return null
   const birthDate = toDate(c.birth_date)
   return {
+    citizenId: c.citizen_id ?? c.citizenId ?? null,
     fullName: c.full_name ?? '',
     nik: normNik(c.national_id),
     titleCode: c.title_code ?? '',
@@ -139,6 +140,7 @@ export function toResident(c, citizens = []) {
     /kepala\s+keluarga/i.test(String(c.family_relationship ?? '')) ? c.full_name : '',
   )
   return {
+    citizenId: c.citizen_id ?? c.citizenId ?? null,
     fullName: c.full_name ?? '',
     nik: normNik(c.national_id),
     titleCode: c.title_code ?? '',

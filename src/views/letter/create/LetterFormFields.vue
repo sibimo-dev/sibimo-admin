@@ -20,7 +20,7 @@ const props = defineProps({
   autoFilled: { type: Object, default: () => ({}) }, // { [key]: true } → tampilkan penanda "terisi otomatis"
   idPrefix: { type: String, default: "f" },
 });
-const emit = defineEmits(["edit"]);
+const emit = defineEmits(["edit", "resident-found", "resident-cleared"]);
 
 const hueFor = (i) => HUES[SECTION_HUES[i % SECTION_HUES.length]];
 const edit = (key) => emit("edit", key);
@@ -49,6 +49,7 @@ async function searchCatin(section) {
   state.nik = digits;
   if (digits.length !== 16) {
     Object.assign(state, { status: "invalid", message: "NIK harus tepat 16 digit angka." });
+    emit("resident-cleared", section.lookupKey);
     return;
   }
 
@@ -58,11 +59,13 @@ async function searchCatin(section) {
     const resident = await findResidentByNik(digits);
     if (!resident) {
       Object.assign(state, { status: "notfound", name: "", filled: 0, message: "NIK belum terdaftar di data warga." });
+      emit("resident-cleared", section.lookupKey);
       return;
     }
     const parentSections = props.sections.filter((candidate) => candidate.parentOf === section.lookupKey);
     const filled = applyResidentToSections(props.form, section, parentSections, resident, props.autoFilled);
     Object.assign(state, { status: "found", name: resident.fullName, filled: filled.length, message: "" });
+    emit("resident-found", { lookupKey: section.lookupKey, resident });
   } catch (error) {
     Object.assign(state, { status: "error", message: error?.response?.data?.message || "Gagal mencari data warga. Coba lagi." });
   }
@@ -79,6 +82,7 @@ function onCatinNikInput(section, event) {
 
   if (!digits) {
     Object.assign(state, { status: "idle", name: "", filled: 0, message: "" });
+    emit("resident-cleared", section.lookupKey);
     return;
   }
   if (digits.length !== 16) {
