@@ -12,7 +12,6 @@ import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import AppDataTable from '@/components/common/AppDataTable.vue'
 import AppButton from '@/components/common/AppButton.vue'
-import AppInput from '@/components/common/AppInput.vue'
 import { useLetterStore } from '@/stores/useLetterStore'
 
 const router = useRouter()
@@ -74,9 +73,10 @@ const filteredRows = computed(() => {
   if (query) {
     result = result.filter(
       (r) =>
-        r.requestId.toLowerCase().includes(query) ||
-        r.citizenId.toLowerCase().includes(query) ||
-        r.purpose.toLowerCase().includes(query),
+        String(r.purpose ?? '').toLowerCase().includes(query) ||
+        String(r.citizenName ?? '').toLowerCase().includes(query) ||
+        String(r.requestId ?? '').toLowerCase().includes(query) ||
+        String(r.citizenId ?? '').toLowerCase().includes(query),
     )
   }
 
@@ -475,12 +475,16 @@ function downloadExcel() {
           />
         </div>
 
-        <AppInput
-          v-model="searchQuery"
-          placeholder="Cari Ticket ID atau Nama..."
-          icon="pi pi-search"
-          class="w-72"
-        />
+        <div class="relative w-72">
+          <i class="pi pi-search absolute left-3 top-1/2 z-10 -translate-y-1/2 text-slate-400" />
+          <input
+            v-model="searchQuery"
+            type="search"
+            placeholder="Cari nama surat/nama pemohon"
+            aria-label="Cari nama surat atau nama pemohon"
+            class="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+          />
+        </div>
       </div>
 
       <div class="rounded-xl border border-slate-100 overflow-hidden">

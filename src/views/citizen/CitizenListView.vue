@@ -1,6 +1,6 @@
 <script setup>
 
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import * as XLSX from 'xlsx'
 import { FilterMatchMode } from '@primevue/core/api'
@@ -36,6 +36,25 @@ const loadError = ref('')
 const detailDialogVisible = ref(false)
 const selectedDetailResident = ref(null)
 
+const familyMembers = computed(() => {
+  const selected = selectedDetailResident.value
+  const familyCardNumber = String(selected?.familyCardNumber ?? '').trim()
+
+  if (!familyCardNumber) return []
+
+  return residents.value
+    .filter((resident) => (
+      String(resident.familyCardNumber ?? '').trim() === familyCardNumber
+      && resident.status !== 'Pindah'
+    ))
+    .sort((a, b) => {
+      const aIsHead = /kepala\s+keluarga/i.test(String(a.familyRelationship ?? ''))
+      const bIsHead = /kepala\s+keluarga/i.test(String(b.familyRelationship ?? ''))
+      if (aIsHead !== bIsHead) return aIsHead ? -1 : 1
+      return String(a.name ?? '').localeCompare(String(b.name ?? ''), 'id')
+    })
+})
+
 function viewDetail(data) {
   selectedDetailResident.value = data
   detailDialogVisible.value = true
@@ -58,6 +77,8 @@ function mapCitizenFromApi(item) {
     recordYear: item.record_year,
     titleCode: item.title_code,
     name: item.full_name,
+    fullName: item.full_name,
+    full_name: item.full_name,
     nationalId: item.national_id, 
     familyCardNumber: item.family_card_number,
     dusun: item.dusun,
@@ -98,6 +119,8 @@ function mapCitizenFromApi(item) {
     previousAddress: item.previous_address,
     passportNumber: item.passport_number,
     passportExpiryDate: item.passport_expiry_date,
+    createdAt: item.created_at,
+    updatedAt: item.updated_at,
   }
 }
 
@@ -109,9 +132,11 @@ async function fetchCitizens({ background = false } = {}) {
     const normalized = Array.isArray(data) ? data : []
     setListCache('citizens', normalized)
     residents.value = normalized.map(mapCitizenFromApi)
+    return true
   } catch (err) {
     loadError.value = err.response?.data?.message || 'Gagal memuat data warga.'
     if (!background) residents.value = []
+    return false
   } finally {
     if (!background) loading.value = false
   }
@@ -129,6 +154,15 @@ const filters = ref({
 
 const importError = ref('')
 const importSuccess = ref('')
+const importProgress = ref('')
+const importing = ref(false)
+const importCancelled = ref(false)
+
+function cancelImport() {
+  if (!importing.value) return
+  importCancelled.value = true
+  importProgress.value = 'Membatalkan import setelah data yang sedang diproses selesai...'
+}
 
 function statusSeverity(status) {
   return status === 'Active' ? 'success' : 'warn'
@@ -251,8 +285,8 @@ function mapRowToResident(row) {
     normalized[normalizeKey(key)] = row[key]
   })
 
-  const record_type = normalized['tulispendudukmatipindahorangluar'] ?? 'PENDUDUK'
-  const record_event = normalized['tulislahir01dstdatang01dstpindah01dstmati01dst'] ?? 'Lahir01'
+  const record_type = normalized['tulispendudukmatipindahorangluar'] ?? normalized['jenisdata'] ?? normalized['recordtype'] ?? 'PENDUDUK'
+  const record_event = normalized['tulislahir01dstdatang01dstpindah01dstmati01dst'] ?? normalized['peristiwa'] ?? normalized['recordevent'] ?? 'Lahir01'
   const title_code = normalized['gelar'] ?? normalized['kodegelar'] ?? ''
   const full_name = normalized['namalengkap'] ?? normalized['nama'] ?? normalized['name'] ?? ''
   const national_id = normalized['nik'] ?? normalized['nationalid'] ?? ''
@@ -280,17 +314,17 @@ function mapRowToResident(row) {
   const divorce_certificate_status = normalized['aktacerai'] ?? ''
   const divorce_certificate_number = normalized['nomoraktacerai'] ?? ''
   const divorce_date = excelDateToIso(normalized['tanggalcerai'] ?? null)
-  const family_relationship = normalized['statushubdlmkeluarga'] ?? ''
+  const family_relationship = normalized['statushubdlmkeluarga'] ?? normalized['hubungankeluarga'] ?? ''
   const physical_disability = normalized['kelainanfisik'] ?? ''
-  const disability_status = normalized['penyandangcacat'] ?? ''
+  const disability_status = normalized['penyandangcacat'] ?? normalized['statuspenyandangcacat'] ?? ''
   const religion = normalizeReligion(normalized['agama'] ?? '')
   const belief_organization = normalized['organisasikepercayaan'] ?? normalized['namaorganisasikepercayaan'] ?? ''
   const mother_national_id = normalized['nikibu'] ?? ''
-  const mother_name = normalized['namalengkapibu'] ?? ''
+  const mother_name = normalized['namalengkapibu'] ?? normalized['namaibu'] ?? ''
   const father_national_id = normalized['nikayah'] ?? ''
-  const father_name = normalized['namalengkapayah'] ?? ''
+  const father_name = normalized['namalengkapayah'] ?? normalized['namaayah'] ?? ''
   const nationality = normalized['kewarganegaraan'] ?? ''
-  const ktp_address = address
+  const ktp_address = normalized['alamatsesuaiktp'] ?? normalized['ktpaddress'] ?? address
   const previous_address = normalized['alamatsebelumnya'] ?? normalized['alamatsebelum'] ?? ''
   const passport_number = normalized['nomorpaspor'] ?? normalized['paspor'] ?? ''
   const passport_expiry_date = excelDateToIso(normalized['tanggalberakhirpaspor'] ?? normalized['tanggalakhirpaspor'] ?? null)
@@ -356,7 +390,7 @@ function readCitizenRows(workbook) {
     })
     const headerIndex = matrix.findIndex(row => {
       const keys = row.map(normalizeKey)
-      return keys.includes('nik') && keys.includes('namalengkap')
+      return keys.includes('nik') && (keys.includes('namalengkap') || keys.includes('nama') || keys.includes('name'))
     })
     if (headerIndex < 0) continue
 
@@ -376,6 +410,9 @@ async function handleFileSelect(event) {
 
   importError.value = ''
   importSuccess.value = ''
+  importProgress.value = 'Membaca file Excel...'
+  importing.value = true
+  importCancelled.value = false
 
   const reader = new FileReader()
 
@@ -390,34 +427,70 @@ async function handleFileSelect(event) {
         return
       }
 
-      const payloads = rows.map(row => mapRowToResident(row)).filter(p => p !== null)
+      const mappedRows = rows
+        .map((row, index) => ({ rowNumber: index + 2, payload: mapRowToResident(row) }))
+        .filter(item => item.payload !== null)
 
-      if (payloads.length === 0) {
+      if (mappedRows.length === 0) {
         importError.value = 'Tidak ada baris valid ditemukan. Pastikan kolom Nama Lengkap dan NIK terisi.'
         return
       }
 
       let successCount = 0
       let failCount = 0
+      const failures = []
+      const successfulNiks = []
 
-      for (const payload of payloads) {
+      for (const [index, { payload, rowNumber }] of mappedRows.entries()) {
+        if (importCancelled.value) break
+        importProgress.value = `Mengimpor data ${index + 1} dari ${mappedRows.length}...`
         try {
           await createCitizen(payload)
           successCount++
-        } catch {
+          successfulNiks.push(payload.national_id)
+        } catch (err) {
           failCount++
+          if (failures.length < 5) {
+            const validationErrors = err.response?.data?.errors
+            const validationMessage = validationErrors
+              ? Object.entries(validationErrors)
+                .flatMap(([field, messages]) => `${field}: ${messages.join(', ')}`)
+                .join('; ')
+              : err.response?.data?.message || 'Data ditolak server.'
+            failures.push(`Baris ${rowNumber} (${payload.full_name || payload.national_id}): ${validationMessage}`)
+          }
         }
       }
 
-      await fetchCitizens()
+      importProgress.value = 'Memverifikasi data ke database...'
+      const refreshed = await fetchCitizens()
+      const wasCancelled = importCancelled.value
 
-      if (failCount === 0) {
-        importSuccess.value = `${successCount} data warga berhasil diimpor.`
+      if (wasCancelled) {
+        const processedCount = successCount + failCount
+        const remainingCount = Math.max(mappedRows.length - processedCount, 0)
+        importSuccess.value = successCount > 0
+          ? `${successCount} data warga berhasil diimpor sebelum proses dibatalkan.`
+          : ''
+        importError.value = `Import dibatalkan. ${remainingCount} data belum diproses.`
+      } else if (!refreshed && successCount > 0) {
+        importError.value = `${successCount} data berhasil dikirim, tetapi daftar warga gagal dimuat ulang dari database. Periksa koneksi lalu refresh halaman.`
+      } else if (successCount > 0) {
+        const savedNiks = new Set(residents.value.map(resident => String(resident.nationalId ?? '').trim()))
+        const verifiedCount = successfulNiks.filter(nik => savedNiks.has(String(nik).trim())).length
+        importSuccess.value = `${verifiedCount} dari ${successCount} data berhasil diimpor dan terverifikasi tersimpan di database.`
+
+        if (verifiedCount < successCount) {
+          importError.value = `${successCount - verifiedCount} data berhasil dikirim tetapi belum terbaca saat verifikasi ulang.`
+        }
       } else {
-        importSuccess.value = `${successCount} data berhasil diimpor, ${failCount} gagal (kemungkinan NIK duplikat/tidak valid).`
+        importError.value = `${failCount} data gagal diimpor. ${failures.join(' | ')}`
       }
     } catch (err) {
       importError.value = 'Gagal membaca file. Pastikan format file adalah .xlsx, .xls, atau .csv.'
+    } finally {
+      importing.value = false
+      importProgress.value = ''
     }
   }
 
@@ -861,10 +934,11 @@ function buildDemographicReport(sourceResidents) {
   return rows
 }
 
-// Catatan: data warga saat ini tidak menyimpan tanggal pencatatan (createdAt),
+// Catatan: laporan periodik belum memfilter berdasarkan createdAt,
 // sehingga "Laporan Bulanan" dan "Laporan Tahunan" merekap seluruh data warga
-// yang aktif sebagai gambaran populasi terkini, dengan judul mengikuti periode
-// (bulan/tahun) yang dipilih pengguna.
+// sebagai gambaran populasi terkini, dengan judul mengikuti periode
+// (bulan/tahun) yang dipilih pengguna. Export Excel Lengkap di bawah mengambil
+// seluruh baris data warga tanpa filter periode.
 function getResidentsForPeriod() {
   return residents.value
 }
@@ -922,6 +996,75 @@ function exportReportToExcel() {
     : `Tahunan-${selectedDate.getFullYear()}`
 
   XLSX.writeFile(workbook, `Data-Warga-${fileLabel}.xlsx`)
+}
+
+function exportAllCitizensToExcel() {
+  const columns = [
+    ['ID Warga', 'id'],
+    ['Jenis Data', 'recordType'],
+    ['Peristiwa', 'recordEvent'],
+    ['Tahun Peristiwa', 'recordYear'],
+    ['Kode Gelar', 'titleCode'],
+    ['Nama Lengkap', 'name'],
+    ['NIK', 'nationalId'],
+    ['Nomor KK', 'familyCardNumber'],
+    ['Dusun', 'dusun'],
+    ['RT', 'rt'],
+    ['RW', 'rw'],
+    ['Nama Ketua RT', 'rtHeadName'],
+    ['Nama Ketua RW', 'rwHeadName'],
+    ['Tempat Lahir', 'birthPlace'],
+    ['Tanggal Lahir', 'birthDate'],
+    ['Umur', 'age'],
+    ['Jenis Kelamin', 'gender'],
+    ['Alamat', 'address'],
+    ['Alamat sesuai KTP', 'ktpAddress'],
+    ['Nomor Telepon', 'phoneNumber'],
+    ['Status Akta Lahir', 'birthCertificateStatus'],
+    ['Nomor Akta Lahir', 'birthCertificateNumber'],
+    ['Golongan Darah', 'bloodType'],
+    ['Pekerjaan', 'occupation'],
+    ['Pendidikan', 'education'],
+    ['Status Perkawinan', 'maritalStatus'],
+    ['Status Akta Kawin', 'marriageCertificateStatus'],
+    ['Nomor Akta Kawin', 'marriageCertificateNumber'],
+    ['Tanggal Kawin', 'marriageDate'],
+    ['Status Akta Cerai', 'divorceCertificateStatus'],
+    ['Nomor Akta Cerai', 'divorceCertificateNumber'],
+    ['Tanggal Cerai', 'divorceDate'],
+    ['Hubungan Keluarga', 'familyRelationship'],
+    ['Kelainan Fisik', 'physicalDisability'],
+    ['Status Penyandang Cacat', 'disabilityStatus'],
+    ['Agama', 'religion'],
+    ['Organisasi Kepercayaan', 'beliefOrganization'],
+    ['NIK Ibu', 'motherNationalId'],
+    ['Nama Ibu', 'motherName'],
+    ['NIK Ayah', 'fatherNationalId'],
+    ['Nama Ayah', 'fatherName'],
+    ['Kewarganegaraan', 'nationality'],
+    ['Alamat Sebelumnya', 'previousAddress'],
+    ['Nomor Paspor', 'passportNumber'],
+    ['Tanggal Berakhir Paspor', 'passportExpiryDate'],
+    ['Status', 'status'],
+    ['Dibuat Pada', 'createdAt'],
+    ['Diperbarui Pada', 'updatedAt'],
+  ]
+
+  const rows = [
+    columns.map(([label]) => label),
+    ...residents.value.map((resident) => columns.map(([, key]) => resident[key] ?? '')),
+  ]
+
+  const worksheet = XLSX.utils.aoa_to_sheet(rows)
+  worksheet['!cols'] = columns.map(([label]) => ({ wch: Math.min(Math.max(label.length + 3, 14), 28) }))
+  worksheet['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(columns.length - 1)}${rows.length}` }
+
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Data Warga Lengkap')
+
+  const dateLabel = new Date().toISOString().slice(0, 10)
+  XLSX.writeFile(workbook, `Data-Warga-Lengkap-${dateLabel}.xlsx`)
+  downloadDialogVisible.value = false
 }
 
 function exportReportToPdf() {
@@ -1053,6 +1196,7 @@ function exportReportToPdf() {
               chooseLabel="Import Data Warga"
               chooseIcon="pi pi-upload"
               :auto="false"
+              :disabled="importing"
               customUpload
               :pt="{
                 root: { class: 'inline-flex' },
@@ -1066,7 +1210,23 @@ function exportReportToPdf() {
           </div>
         </div>
 
-        <div v-if="importError || importSuccess" class="mb-4">
+        <div v-if="importError || importSuccess || importProgress" class="mb-4">
+          <Message v-if="importProgress" severity="info" :closable="false" class="mb-2 text-[13px]">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <span>{{ importProgress }}</span>
+              <Button
+                v-if="importing"
+                label="Batalkan Import"
+                icon="pi pi-times"
+                severity="danger"
+                outlined
+                size="small"
+                class="shrink-0"
+                @click="cancelImport"
+              />
+            </div>
+          </Message>
+
           <Message v-if="importError" severity="error" :closable="false" class="text-[13px]">
             {{ importError }}
           </Message>
@@ -1081,7 +1241,7 @@ function exportReportToPdf() {
           :value="residents"
           :loading="loading"
           :filters="filters"
-          :globalFilterFields="['name', 'nationalId', 'familyCardNumber', 'address', 'occupation', 'dusun']"
+          :globalFilterFields="['name', 'fullName', 'full_name', 'nationalId', 'familyCardNumber', 'address', 'occupation', 'dusun']"
           :paginator="true"
           :rows="rowsPerPage"
           :rowsPerPageOptions="[10, 25, 50]"
@@ -1216,6 +1376,14 @@ function exportReportToPdf() {
           outlined
           class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
           @click="downloadDialogVisible = false"
+        />
+        <Button
+          label="Download Excel Lengkap"
+          icon="pi pi-file-excel"
+          severity="success"
+          outlined
+          class="rounded-lg border border-green-600 bg-white px-3.5 py-2 text-[13px] font-medium text-green-700 hover:bg-green-50"
+          @click="exportAllCitizensToExcel"
         />
         <Button
           label="Lihat Preview"
@@ -1490,6 +1658,47 @@ function exportReportToPdf() {
             <div class="flex flex-col gap-1">
               <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">NIK Ayah</span>
               <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.fatherNationalId || '-' }}</span>
+            </div>
+          </div>
+
+          <div class="mt-1 flex flex-col gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div class="text-[12px] font-semibold text-neutral-700">Anggota dalam KK</div>
+                <div class="text-[11px] text-neutral-500">
+                  {{ familyMembers.length ? `${familyMembers.length} anggota terdaftar pada KK ini` : 'Belum ada anggota lain yang terdaftar pada KK ini' }}
+                </div>
+              </div>
+              <span class="rounded-full bg-white px-2 py-1 text-[11px] font-medium text-neutral-500">
+                KK {{ selectedDetailResident.familyCardNumber || '-' }}
+              </span>
+            </div>
+
+            <div v-if="familyMembers.length" class="flex flex-col gap-2">
+              <button
+                v-for="(member, index) in familyMembers"
+                :key="member.id"
+                type="button"
+                class="flex w-full items-center justify-between gap-3 rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-left transition hover:border-primary-300 hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-200"
+                @click="viewDetail(member)"
+              >
+                <span class="flex min-w-0 items-center gap-3">
+                  <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-100 text-[11px] font-semibold text-primary-700">
+                    {{ index + 1 }}
+                  </span>
+                  <span class="min-w-0">
+                    <span class="block truncate text-[13px] font-semibold text-neutral-800">{{ member.name || '-' }}</span>
+                    <span class="mt-0.5 block truncate text-[11px] text-neutral-500">
+                      {{ member.nationalId || '-' }} · {{ member.familyRelationship || 'Hubungan belum diisi' }}
+                    </span>
+                  </span>
+                </span>
+                <i class="pi pi-chevron-right shrink-0 text-xs text-neutral-400" />
+              </button>
+            </div>
+
+            <div v-else class="rounded-lg border border-dashed border-neutral-300 bg-white px-3 py-3 text-[12px] text-neutral-500">
+              Nomor KK warga ini belum memiliki anggota lain yang bisa ditampilkan.
             </div>
           </div>
         </div>

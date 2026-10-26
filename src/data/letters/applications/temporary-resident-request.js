@@ -46,7 +46,8 @@ export const sections = [
     ],
   },
 
-  signerNames(["hamletHead", "districtHead"], "Opsional. Tanda tangan Pemohon memakai Nama Lengkap di atas. Isi nama Dukuh dan Camat bila ingin dicetak; kosongkan bila ditulis tangan."),
+  // TTD: Dukuh, Panewu/Camat, dan Pemohon (= Nama Lengkap pemohon di atas)
+  signerNames(["hamletHead", "districtHead"], "Opsional. Tanda tangan Pemohon memakai Nama Lengkap di atas. Isi nama Dukuh dan Panewu/Camat bila ingin dicetak; kosongkan bila ditulis tangan."),
 ];
 
 export const documents = [
@@ -57,4 +58,4 @@ export const documents = [
   "Fotokopi KK keluarga yang dituju",
 ];
 
-export const meta = {"title": "Surat Permohonan Menjadi Penduduk Sementara / SKTS", "code": "PPS"};
+export const meta = { "title": "Surat Permohonan Menjadi Penduduk Sementara / SKTS", "code": "PPS" };
