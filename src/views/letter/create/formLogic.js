@@ -71,6 +71,8 @@ export function fillForm(form, sections, lookup = () => undefined) {
 /* ---------- Isian dari data warga (pencarian NIK) ----------
    `resident` = hasil services/resident-lookup.service.js. Kunci `from` biasa (fullName, nik, address, ...) membaca langsung;
    `asFather:x` / `asMother:x` hanya terisi bila jenis kelamin warga cocok (laki-laki → blok Ayah, perempuan → blok Ibu).
+   `asGroom:x` / `asBride:x` dipakai untuk blok calon pengantin, sedangkan `parentFather:x` /
+   `parentMother:x` membaca data ayah/ibu yang terhubung ke NIK warga.
    Jenis kelamin dibandingkan secara longgar (huruf besar/kecil, "L"/"P", "Male"/"Female", dst.). */
 const MALE = ["laki-laki", "laki laki", "l", "male", "pria"];
 const FEMALE = ["perempuan", "p", "female", "wanita"];
@@ -78,11 +80,17 @@ const FEMALE = ["perempuan", "p", "female", "wanita"];
 export function makeResidentLookup(resident) {
   return (key) => {
     if (!resident) return undefined;
-    const m = /^as(Father|Mother):(.+)$/.exec(key);
+    const m = /^(asFather|asMother|asGroom|asBride|parentFather|parentMother|spouse):(.+)$/.exec(key);
     if (!m) return resident[key];
+    const [, relation, property] = m;
     const g = String(resident.gender ?? "").trim().toLowerCase();
+    if (relation === "parentFather") return resident.father?.[property];
+    if (relation === "parentMother") return resident.mother?.[property];
+    if (relation === "spouse") return resident.spouse?.[property];
     const role = MALE.includes(g) ? "Father" : FEMALE.includes(g) ? "Mother" : null;
-    return role === m[1] ? resident[m[2]] : undefined;
+    const coupleRole = MALE.includes(g) ? "asGroom" : FEMALE.includes(g) ? "asBride" : null;
+    if (relation === "asFather" || relation === "asMother") return relation === `as${role}` ? resident[property] : undefined;
+    return relation === coupleRole ? resident[property] : undefined;
   };
 }
 
@@ -94,9 +102,9 @@ const matchOption = (field, raw) =>
     : raw;
 
 /* Isi semua field yang punya `from` dari data warga. Isian yang sudah diketik manual TIDAK ditimpa; isian yang sebelumnya
-   terisi otomatis (autoFilled) boleh diganti saat NIK diganti. Field `reporter*` (Data Pelapor) sengaja dilewati:
-   pelapor diisi petugas, bukan otomatis dari data pemohon. Mengembalikan daftar kunci yang terisi. */
-export function applyResident(form, sections, resident, autoFilled = {}) {
+   terisi otomatis (autoFilled) boleh diganti saat NIK diganti. Blok reporter lama yang tidak memiliki `from` tetap
+   manual, sedangkan Data Pelapor kematian yang secara eksplisit memiliki `from` mengikuti NIK pemohon. */
+export function applyResident(form, sections, resident, autoFilled = {}, options = {}) {
   const lookup = makeResidentLookup(resident);
   const filled = [];
   const norm = (v) => String(v ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
@@ -113,16 +121,68 @@ export function applyResident(form, sections, resident, autoFilled = {}) {
     { from: "occupation", keys: ["occupation", "pekerjaan"], labels: ["pekerjaan"] },
     { from: "phoneNumber", keys: ["phoneNumber", "phone", "whatsapp", "nomorTelepon", "noHp"], labels: ["nomor telepon", "telepon", "nomor hp", "whatsapp"] },
   ];
-  for (const section of sections) {
+  // Label "Nama Lengkap" muncul di banyak blok (calon pengantin, orang tua, saksi, dst.).
+  // Hanya field pemohon/root yang boleh memakai fallback label; blok orang lain harus memakai
+  // `field.from` eksplisit agar tidak ikut terisi dengan nama pemohon.
+  const directIdentityKeys = new Set([
+    "name", "nik", "address", "birthPlace", "birthDate", "gender", "maritalStatus", "religion", "occupation",
+    "applicantName", "applicantNik", "applicantAddress", "applicantPhone", "fullName", "phoneNumber",
+  ]);
+  const residentGender = String(resident?.gender ?? "").trim().toLowerCase();
+  const residentRole = MALE.includes(residentGender) ? "groom" : FEMALE.includes(residentGender) ? "bride" : null;
+  const clearAutoFilledSection = (section) => {
     for (const field of section.fields) {
-      if (field.type === "rows" || field.type === "checks" || /^reporter/i.test(field.key)) continue;
-      const alias = identityAliases.find(a => a.keys.includes(field.key) || a.labels.some(l => norm(l) === norm(field.label)));
+      if (!autoFilled[field.key]) continue;
+      if (field.type === "rows") {
+        form[field.key] = Array.from({ length: field.min ?? (field.optional ? 0 : 1) }, () => emptyRow(field.columns));
+      } else if (field.type === "checks") {
+        form[field.key] = [];
+      } else {
+        form[field.key] = field.default ?? "";
+      }
+      delete autoFilled[field.key];
+    }
+  };
+  for (const section of sections) {
+    // Data orang tua catin hanya boleh mengikuti catin yang sedang dicari.
+    // Jangan mengisi orang tua catin wanita dari NIK catin pria, atau sebaliknya.
+    if (section.parentOf && residentRole && section.parentOf !== residentRole) {
+      // Bila sebelumnya terisi otomatis dari pencarian catin lain, jangan biarkan
+      // data lama terlihat seperti data orang tua pasangan yang baru dicari.
+      clearAutoFilledSection(section);
+      continue;
+    }
+    for (const field of section.fields) {
+      if (field.type === "rows") {
+        if (field.key === "familyMembers" && Array.isArray(resident.household)) {
+          const current = form[field.key];
+          const manual = Array.isArray(current)
+            && current.some((row) => Object.values(row).some(isFilled))
+            && !autoFilled[field.key];
+          if (!manual && resident.household.length) {
+            form[field.key] = resident.household.map((person) => ({
+              nik: person.nik ?? "",
+              name: person.fullName ?? "",
+              validUntil: "",
+              shdk: person.familyRelationship ?? "",
+            }));
+            autoFilled[field.key] = true;
+            filled.push(field.key);
+          }
+        }
+        continue;
+      }
+      if (field.type === "checks" || (/^reporter/i.test(field.key) && !field.from)) continue;
+      const alias = identityAliases.find(a => a.keys.includes(field.key) || (directIdentityKeys.has(field.key) && a.labels.some(l => norm(l) === norm(field.label))));
       const source = field.from || alias?.from;
       if (!source) continue;
       const raw = lookup(source);
       if (!isFilled(raw)) continue;
       const current = form[field.key];
-      const manual = isFilled(current) && !autoFilled[field.key] && (field.default === undefined || current !== field.default);
+      // Pencarian catin adalah perintah eksplisit untuk mengganti isi blok catin
+      // dan orang tuanya dengan hasil NIK yang baru dicari. Pencarian pemohon
+      // biasa tetap memakai perilaku aman: isian manual tidak ditimpa.
+      const manual = !options.force && isFilled(current) && !autoFilled[field.key] && (field.default === undefined || current !== field.default);
       if (manual) continue;
       form[field.key] = field.type === "date" ? toDate(raw) : matchOption(field, raw);
       autoFilled[field.key] = true;
@@ -130,6 +190,25 @@ export function applyResident(form, sections, resident, autoFilled = {}) {
     }
   }
   return filled;
+}
+
+/* Pencarian khusus calon pengantin: section calon suami/istri memakai `from` berbentuk
+   asGroom:* atau asBride:* agar bisa terisi dari NIK pemohon utama. Saat NIK pasangan
+   dicari langsung, blok yang dipilih harus menerima data warga tanpa bergantung gendernya. */
+export function applyResidentToSection(form, section, resident, autoFilled = {}) {
+  const directSection = {
+    ...section,
+    fields: section.fields.map((field) => ({
+      ...field,
+      from: field.from?.includes(":") ? field.from.split(":").slice(1).join(":") : field.from,
+    })),
+  };
+  return applyResident(form, [directSection], resident, autoFilled, { force: true });
+}
+
+export function applyResidentToSections(form, section, parentSections, resident, autoFilled = {}) {
+  const filled = applyResidentToSection(form, section, resident, autoFilled);
+  return [...filled, ...applyResident(form, parentSections, resident, autoFilled, { force: true }).filter((key) => !filled.includes(key))];
 }
 
 /* Lokasi halaman Verifikasi + Otorisasi setelah surat disimpan: LetterDetailView (route `letter-detail`).
@@ -250,7 +329,15 @@ const APPLICANT_LABELS = {
 };
 const normalizeApplicantText = (v) => String(v ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
 export function applicantOf(sections, values) {
-  const fields = sections.flatMap((s) => s.fields ?? []);
+  // Pada form nikah dua catin, tidak ada lagi satu pencarian pemohon umum.
+  // Ambil metadata pemohon dari blok catin utama agar payload tetap punya
+  // identitas, bukan salah mengambil nama ayah/ibu dari section sebelumnya.
+  const primaryCatin = sections.find((section) => section.lookupKey === "groom")
+    ?? sections.find((section) => section.lookupKey === "bride");
+  const fields = [
+    ...(primaryCatin?.fields ?? []),
+    ...sections.filter((section) => section !== primaryCatin).flatMap((section) => section.fields ?? []),
+  ];
   const pick = (kind, from) => {
     let f = fields.find((x) => x.from === from && String(values[x.key] ?? "").trim());
     if (!f) f = fields.find((x) => (APPLICANT_LABELS[kind] || []).some(label => normalizeApplicantText(label) === normalizeApplicantText(x.label)) && String(values[x.key] ?? "").trim());

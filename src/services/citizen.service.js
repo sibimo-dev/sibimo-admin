@@ -10,6 +10,11 @@ export async function getCitizen(id) {
   return response.data.data
 }
 
+export async function getRecordEventCounters(year) {
+  const response = await api.get('/citizens/record-event-counters', { params: year ? { year } : undefined })
+  return response.data.data
+}
+
 export async function createCitizen(payload) {
   const response = await api.post('/citizens', payload)
   return response.data.data
@@ -23,4 +28,31 @@ export async function updateCitizen(id, payload) {
 export async function deleteCitizen(id) {
   const response = await api.delete(`/citizens/${id}`)
   return response.data.data
+}
+
+export async function getCitizenDocuments(citizenId, params = {}) {
+  const response = await api.get(`/citizens/${citizenId}/documents`, { params })
+  return response.data.data
+}
+
+export async function uploadCitizenDocument(citizenId, formData) {
+  const response = await api.post(`/citizens/${citizenId}/documents`, formData)
+  return response.data.data
+}
+
+export async function updateCitizenDocument(citizenId, documentId, formData) {
+  const response = await api.post(`/citizens/${citizenId}/documents/${documentId}`, formData)
+  return response.data.data
+}
+
+export async function deleteCitizenDocument(citizenId, documentId) {
+  const response = await api.delete(`/citizens/${citizenId}/documents/${documentId}`)
+  return response.data.data
+}
+
+export async function downloadCitizenDocument(citizenId, documentId) {
+  const response = await api.get(`/citizens/${citizenId}/documents/${documentId}/download`, {
+    responseType: 'blob',
+  })
+  return response.data
 }

@@ -14,6 +14,7 @@ import Message from "primevue/message";
 import LetterFormFields from "./LetterFormFields.vue";
 import WizardStepper from "./WizardStepper.vue";
 import ApplicantLookup from "./ApplicantLookup.vue";
+import CitizenDocumentsPanel from "@/components/citizen/CitizenDocumentsPanel.vue";
 import { useApplicantLookup } from "./useApplicantLookup";
 import { applicantOf, fillForm, reviewLocation, scrollTop, validateFields } from "./formLogic";
 import { hue as getHue } from "./pastel";
@@ -34,6 +35,13 @@ const STEPS = ["Isian Surat"];
 const h = computed(() => getHue(props.hue));
 const router = useRouter();
 
+// Formulir pernikahan yang memuat dua blok catin tidak memakai satu NIK pemohon
+// bersama. Masing-masing catin dicari dari kotak NIK-nya sendiri di blok form.
+const requiresDualCatinLookup = computed(() => {
+  const lookupKeys = new Set(props.sections.filter((section) => section.lookupKey).map((section) => section.lookupKey));
+  return lookupKeys.has("groom") && lookupKeys.has("bride");
+});
+
 /* ---------- Data ---------- */
 // Kontak pemohon opsional di semua surat (admin: pemohon datang sendiri, tanpa notifikasi WhatsApp).
 const allSections = computed(() => [
@@ -53,6 +61,24 @@ fillForm(form, allSections.value);
 const autoFilled = reactive({}); // { [fieldKey]: true } — penanda "terisi otomatis" (dari pencarian NIK)
 const onEdit = (key) => delete autoFilled[key];
 const lookup = useApplicantLookup();
+const catinResidents = reactive({});
+const applicantCitizenId = computed(() => lookup.state.resident?.citizenId ?? null);
+const catinDocumentResidents = computed(() => props.sections
+  .filter((section) => section.lookupKey)
+  .map((section) => ({
+    key: section.lookupKey,
+    name: section.lookupKey === "groom" ? "Catin Pria" : "Catin Wanita",
+    citizenId: catinResidents[section.lookupKey]?.citizenId ?? null,
+  }))
+  .filter((item) => item.citizenId));
+
+function onCatinFound({ lookupKey, resident }) {
+  catinResidents[lookupKey] = resident;
+}
+
+function onCatinCleared(lookupKey) {
+  delete catinResidents[lookupKey];
+}
 
 const errors = ref({});
 
@@ -139,8 +165,28 @@ async function submit() {
       <!-- ============ STEP 1: ISIAN SURAT ============ -->
       <div v-if="current === 0" class="flex flex-col gap-5">
         <!-- Langkah pertama: NIK pemohon → data warga mengisi formulir otomatis (surat internal tidak punya pemohon) -->
-        <ApplicantLookup v-if="!internal" :state="lookup.state" @search="lookup.search(allSections, form, autoFilled)" />
-        <LetterFormFields :sections="allSections" :form="form" :errors="errors" :autoFilled="autoFilled" @edit="onEdit" />
+        <ApplicantLookup v-if="!internal && !requiresDualCatinLookup" :state="lookup.state" @search="lookup.search(allSections, form, autoFilled)" />
+        <LetterFormFields
+          :sections="allSections"
+          :form="form"
+          :errors="errors"
+          :autoFilled="autoFilled"
+          @edit="onEdit"
+          @resident-found="onCatinFound"
+          @resident-cleared="onCatinCleared"
+        />
+        <CitizenDocumentsPanel
+          v-if="!internal && !requiresDualCatinLookup && applicantCitizenId"
+          :citizen-id="applicantCitizenId"
+          :letter-type-code="code"
+        />
+        <CitizenDocumentsPanel
+          v-for="person in catinDocumentResidents"
+          :key="person.key"
+          :citizen-id="person.citizenId"
+          :letter-type-code="code"
+          :title="`Dokumen ${person.name}`"
+        />
       </div>
 
       <!-- Pernyataan dipindahkan langsung ke bawah isian surat. -->

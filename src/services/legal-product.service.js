@@ -3,6 +3,7 @@ import api from './api'
 const unwrap = (request) => request.then((response) => response.data.data)
 const multipart = { headers: { 'Content-Type': 'multipart/form-data' } }
 
+// `category` berisi slug kategori.
 const buildFormData = (payload) => {
   const data = new FormData()
   data.append('title', payload.title)
@@ -15,6 +16,7 @@ const buildFormData = (payload) => {
   return data
 }
 
+/* ============ Produk hukum ============ */
 export const getLegalProducts = () => unwrap(api.get('/legal-products'))
 export const getLegalProduct = (id) => unwrap(api.get(`/legal-products/${id}`))
 export const createLegalProduct = (payload) =>
@@ -25,3 +27,13 @@ export const updateLegalProduct = (id, payload) => {
   return unwrap(api.post(`/legal-products/${id}`, data, multipart))
 }
 export const deleteLegalProduct = (id) => unwrap(api.delete(`/legal-products/${id}`))
+
+/* ============ Kategori produk hukum ============
+   Endpoint diasumsikan /legal-product-categories; sesuaikan dengan backend. */
+export const getLegalProductCategories = () => unwrap(api.get('/legal-product-categories'))
+export const createLegalProductCategory = (payload) =>
+  unwrap(api.post('/legal-product-categories', payload))
+export const updateLegalProductCategory = (id, payload) =>
+  unwrap(api.put(`/legal-product-categories/${id}`, payload))
+export const deleteLegalProductCategory = (id) =>
+  unwrap(api.delete(`/legal-product-categories/${id}`))

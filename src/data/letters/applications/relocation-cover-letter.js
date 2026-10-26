@@ -9,16 +9,41 @@
 // Langkah 3 (cek ulang, ceklis dokumen asli, kirim, pop-up hasil) sudah ditangani LetterWizard.
 import { f, OPT, DOC, opt, alamat } from "@/data/letterFields";
 
+const ORIGIN_WILAYAH = {
+  village: "Bimomartani",
+  district: "Ngemplak",
+  regency: "Sleman",
+  province: "Daerah Istimewa Yogyakarta",
+};
+
 // Langkah 1: urutan mengikuti formulir PDF
 export const sections = [
   // DATA DAERAH ASAL: 1. Nomor KK, 2. Nama Kepala Keluarga
   {
     title: "Data Daerah Asal",
-    fields: [f.kk("kkNumber", "Nomor Kartu Keluarga"), f.text("headOfFamily", "Nama Kepala Keluarga")],
+    fields: [
+      f.kk("kkNumber", "Nomor Kartu Keluarga", { from: "familyCardNumber" }),
+      f.text("headOfFamily", "Nama Kepala Keluarga", { from: "headOfFamilyName" }),
+    ],
   },
   // 3. Alamat (RT, RW, Dusun, Desa, Kecamatan, Kab/Kota, Provinsi, Kode Pos, Telepon)
   //    Alamat asal = alamat pemohon → terisi otomatis dari data warga & dibaca sebagai applicant.address
-  alamat("origin", "Alamat Daerah Asal", { from: "address", phoneFrom: "phoneNumber" }),
+  alamat("origin", "Alamat Daerah Asal", {
+    from: "address",
+    phoneFrom: "phoneNumber",
+    fieldFrom: {
+      rt: "rt",
+      rw: "rw",
+      hamlet: "dusun",
+      village: "village",
+      district: "district",
+      regency: "regency",
+      province: "province",
+      postalCode: "postalCode",
+      phone: "phoneNumber",
+    },
+    defaults: ORIGIN_WILAYAH,
+  }),
   // 4. NIK Pemohon, 5. Tempat/Tanggal Lahir, 6. Nama Lengkap
   {
     title: "Data Pemohon",

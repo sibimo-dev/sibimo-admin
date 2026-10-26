@@ -1,0 +1,1 @@
+import{K as e,Q as t,W as n,q as r,s as i}from"./letterFields-QLi17aVQ.js";var a=[t([n.kk(`kkNumber`,`Nomor KK`),n.text(`phone`,`Nomor telepon`,{placeholder:`Contoh: 081234567890`})]),e(`Tujuan perjalanan`,`Tempat tujuan`)],o=[i.ktp,i.kk,i.rt,r(`Surat tugas/undangan dari instansi`)],s={title:`Surat Keterangan Jalan`,code:`IPI`};export{o as documents,s as meta,a as sections};

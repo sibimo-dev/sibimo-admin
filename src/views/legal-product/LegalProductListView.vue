@@ -14,16 +14,15 @@ import Column from 'primevue/column'
 import AppButton from '@/components/common/AppButton.vue'
 
 import AppPagination from '@/components/common/AppPagination.vue'
-import {
-  useLegalProductStore,
-  getLegalProductCategory,
-  getLegalProductStatus,
-} from '@/stores/legal-product.store'
+import { useLegalProductStore, getLegalProductStatus } from '@/stores/legal-product.store'
 
 const router = useRouter()
 const confirm = useConfirm()
 const toast = useToast()
 const legalProductStore = useLegalProductStore()
+
+// Kategori kini dinamis (dari backend), bukan konstanta di kode.
+const getCategory = (value) => legalProductStore.getCategory(value)
 
 const loading = ref(legalProductStore.legalProducts.length === 0)
 const search = ref('')
@@ -40,7 +39,7 @@ onMounted(async () => {
   try {
     // If the store already has data from a previous visit, show it right away
     // and refresh from the API in the background.
-    const refresh = legalProductStore.fetchAll()
+    const refresh = Promise.all([legalProductStore.fetchAll(), legalProductStore.fetchCategories()])
     if (hasCachedData) {
       loading.value = false
       await refresh
@@ -69,7 +68,7 @@ const filtered = computed(() => {
       item.title,
       item.number,
       item.description,
-      getLegalProductCategory(item.category).label,
+      getCategory(item.category).label,
       getLegalProductStatus(item.status).label,
       item.year,
     ].some((value) => String(value ?? '').toLowerCase().includes(q)),
@@ -78,7 +77,7 @@ const filtered = computed(() => {
 
 const sortAccessors = {
   title: (item) => item.title.toLowerCase(),
-  category: (item) => getLegalProductCategory(item.category).label.toLowerCase(),
+  category: (item) => getCategory(item.category).label.toLowerCase(),
   year: (item) => Number(item.year) || 0,
   status: (item) => getLegalProductStatus(item.status).label.toLowerCase(),
 }
@@ -134,8 +133,26 @@ function handleDelete(item) {
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
     accept: async () => {
-      await legalProductStore.remove(item.legal_product_id)
-      toast.add({ severity: 'success', summary: 'Produk hukum berhasil dihapus', life: 2000 })
+      try {
+        await legalProductStore.remove(item.legal_product_id)
+        toast.add({
+          severity: 'success',
+          summary: 'Produk hukum berhasil dihapus',
+          detail: `"${item.title}" sudah dihapus.`,
+          life: 2500,
+        })
+        // Jika halaman terakhir jadi kosong setelah hapus, mundur satu halaman.
+        if (first.value > 0 && first.value >= filtered.value.length) {
+          first.value = Math.max(0, first.value - rowsPerPage)
+        }
+      } catch (error) {
+        toast.add({
+          severity: 'error',
+          summary: 'Produk hukum gagal dihapus',
+          detail: error.response?.data?.message ?? 'Periksa koneksi atau coba lagi.',
+          life: 4500,
+        })
+      }
     },
   })
 }
@@ -148,7 +165,7 @@ function handleDelete(item) {
     </h1>
 
     <p class="mb-5 text-sm text-slate-500">
-      Kelola dokumen produk hukum kalurahan seperti Perkal dan SK Lurah.
+      Kelola dokumen produk hukum kalurahan seperti Perkal, SK Lurah, dan Laporan.
     </p>
 
     <Card>
@@ -217,9 +234,9 @@ function handleDelete(item) {
               <template #body="{ data }">
                 <span
                   class="inline-flex rounded-full border px-3 py-1 text-xs font-semibold"
-                  :class="getLegalProductCategory(data.category).badgeClass"
+                  :class="getCategory(data.category).badgeClass"
                 >
-                  {{ getLegalProductCategory(data.category).label }}
+                  {{ getCategory(data.category).label }}
                 </span>
               </template>
             </Column>

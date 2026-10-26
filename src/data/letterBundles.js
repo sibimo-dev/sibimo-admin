@@ -188,8 +188,14 @@ export const BUNDLE_SERVICES = BUNDLES.map((b) => ({
 const norm = (x) => String(x ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 const BUNDLED_TITLES = new Set(BUNDLES.flatMap((b) => b.letters.filter((l) => !l.slug).map((l) => norm(l.title))));
 const BUNDLED_SLUGS = new Set(BUNDLES.flatMap((b) => b.letters.map((l) => l.slug).filter(Boolean)));
-/* Surat dari folder-folder ini selalu masuk paket (nikah/kelahiran/kematian/Letter C), apa pun judulnya. */
-const BUNDLED_GROUPS = new Set(["birth", "death", "letter-c", "married-man", "marriage-women"]);
+/* Surat dari folder-folder ini selalu masuk paket (nikah/kelahiran/kematian);
+   KHT dikecualikan karena juga tersedia sebagai layanan mandiri. */
+// KHT juga tersedia sebagai surat mandiri untuk keperluan umum, tetapi tetap
+// dipertahankan di dalam paket Letter C.
+const STANDALONE_LETTER_C = new Set(["land-price-certificate-letter"]);
+const BUNDLED_GROUPS = new Set(["birth", "death", "married-man", "marriage-women"]);
 export const isBundledLetter = (service) =>
-  BUNDLED_GROUPS.has(service.group) || BUNDLED_SLUGS.has(service.slug) || BUNDLED_TITLES.has(norm(service.title));
+  (BUNDLED_GROUPS.has(service.group) && !STANDALONE_LETTER_C.has(service.slug))
+  || (BUNDLED_SLUGS.has(service.slug) && !STANDALONE_LETTER_C.has(service.slug))
+  || (BUNDLED_TITLES.has(norm(service.title)) && !STANDALONE_LETTER_C.has(service.slug));
 export const isBundledTitle = (title) => BUNDLED_TITLES.has(norm(title));

@@ -14,7 +14,7 @@ export const sections = arrange(
     birthSpouseApplicant(),
     birthSpousePerson("husband", "Data Suami"),
     birthSpousePerson("wife", "Data Istri"),
-    { title: "Saksi", fields: [f.rows("marriageWitnesses", "Saksi", [{ key: "name", label: "Nama" }, { key: "nik", label: "NIK" }], { min: 2, max: 2 })] },
+    { title: "Saksi", hint: "Opsional. Lewati bila data saksi belum tersedia.", fields: [f.rows("marriageWitnesses", "Saksi", [{ key: "name", label: "Nama" }, { key: "nik", label: "NIK" }], { optional: true, max: 2 })] },
   ],
   {
     // Urutan blok (judul). Pindahkan baris untuk mengubah urutan.
