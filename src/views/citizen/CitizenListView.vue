@@ -77,6 +77,8 @@ function mapCitizenFromApi(item) {
     recordYear: item.record_year,
     titleCode: item.title_code,
     name: item.full_name,
+    fullName: item.full_name,
+    full_name: item.full_name,
     nationalId: item.national_id, 
     familyCardNumber: item.family_card_number,
     dusun: item.dusun,
@@ -130,9 +132,11 @@ async function fetchCitizens({ background = false } = {}) {
     const normalized = Array.isArray(data) ? data : []
     setListCache('citizens', normalized)
     residents.value = normalized.map(mapCitizenFromApi)
+    return true
   } catch (err) {
     loadError.value = err.response?.data?.message || 'Gagal memuat data warga.'
     if (!background) residents.value = []
+    return false
   } finally {
     if (!background) loading.value = false
   }
@@ -150,6 +154,15 @@ const filters = ref({
 
 const importError = ref('')
 const importSuccess = ref('')
+const importProgress = ref('')
+const importing = ref(false)
+const importCancelled = ref(false)
+
+function cancelImport() {
+  if (!importing.value) return
+  importCancelled.value = true
+  importProgress.value = 'Membatalkan import setelah data yang sedang diproses selesai...'
+}
 
 function statusSeverity(status) {
   return status === 'Active' ? 'success' : 'warn'
@@ -272,8 +285,8 @@ function mapRowToResident(row) {
     normalized[normalizeKey(key)] = row[key]
   })
 
-  const record_type = normalized['tulispendudukmatipindahorangluar'] ?? 'PENDUDUK'
-  const record_event = normalized['tulislahir01dstdatang01dstpindah01dstmati01dst'] ?? 'Lahir01'
+  const record_type = normalized['tulispendudukmatipindahorangluar'] ?? normalized['jenisdata'] ?? normalized['recordtype'] ?? 'PENDUDUK'
+  const record_event = normalized['tulislahir01dstdatang01dstpindah01dstmati01dst'] ?? normalized['peristiwa'] ?? normalized['recordevent'] ?? 'Lahir01'
   const title_code = normalized['gelar'] ?? normalized['kodegelar'] ?? ''
   const full_name = normalized['namalengkap'] ?? normalized['nama'] ?? normalized['name'] ?? ''
   const national_id = normalized['nik'] ?? normalized['nationalid'] ?? ''
@@ -301,17 +314,17 @@ function mapRowToResident(row) {
   const divorce_certificate_status = normalized['aktacerai'] ?? ''
   const divorce_certificate_number = normalized['nomoraktacerai'] ?? ''
   const divorce_date = excelDateToIso(normalized['tanggalcerai'] ?? null)
-  const family_relationship = normalized['statushubdlmkeluarga'] ?? ''
+  const family_relationship = normalized['statushubdlmkeluarga'] ?? normalized['hubungankeluarga'] ?? ''
   const physical_disability = normalized['kelainanfisik'] ?? ''
-  const disability_status = normalized['penyandangcacat'] ?? ''
+  const disability_status = normalized['penyandangcacat'] ?? normalized['statuspenyandangcacat'] ?? ''
   const religion = normalizeReligion(normalized['agama'] ?? '')
   const belief_organization = normalized['organisasikepercayaan'] ?? normalized['namaorganisasikepercayaan'] ?? ''
   const mother_national_id = normalized['nikibu'] ?? ''
-  const mother_name = normalized['namalengkapibu'] ?? ''
+  const mother_name = normalized['namalengkapibu'] ?? normalized['namaibu'] ?? ''
   const father_national_id = normalized['nikayah'] ?? ''
-  const father_name = normalized['namalengkapayah'] ?? ''
+  const father_name = normalized['namalengkapayah'] ?? normalized['namaayah'] ?? ''
   const nationality = normalized['kewarganegaraan'] ?? ''
-  const ktp_address = address
+  const ktp_address = normalized['alamatsesuaiktp'] ?? normalized['ktpaddress'] ?? address
   const previous_address = normalized['alamatsebelumnya'] ?? normalized['alamatsebelum'] ?? ''
   const passport_number = normalized['nomorpaspor'] ?? normalized['paspor'] ?? ''
   const passport_expiry_date = excelDateToIso(normalized['tanggalberakhirpaspor'] ?? normalized['tanggalakhirpaspor'] ?? null)
@@ -377,7 +390,7 @@ function readCitizenRows(workbook) {
     })
     const headerIndex = matrix.findIndex(row => {
       const keys = row.map(normalizeKey)
-      return keys.includes('nik') && keys.includes('namalengkap')
+      return keys.includes('nik') && (keys.includes('namalengkap') || keys.includes('nama') || keys.includes('name'))
     })
     if (headerIndex < 0) continue
 
@@ -397,6 +410,9 @@ async function handleFileSelect(event) {
 
   importError.value = ''
   importSuccess.value = ''
+  importProgress.value = 'Membaca file Excel...'
+  importing.value = true
+  importCancelled.value = false
 
   const reader = new FileReader()
 
@@ -411,34 +427,70 @@ async function handleFileSelect(event) {
         return
       }
 
-      const payloads = rows.map(row => mapRowToResident(row)).filter(p => p !== null)
+      const mappedRows = rows
+        .map((row, index) => ({ rowNumber: index + 2, payload: mapRowToResident(row) }))
+        .filter(item => item.payload !== null)
 
-      if (payloads.length === 0) {
+      if (mappedRows.length === 0) {
         importError.value = 'Tidak ada baris valid ditemukan. Pastikan kolom Nama Lengkap dan NIK terisi.'
         return
       }
 
       let successCount = 0
       let failCount = 0
+      const failures = []
+      const successfulNiks = []
 
-      for (const payload of payloads) {
+      for (const [index, { payload, rowNumber }] of mappedRows.entries()) {
+        if (importCancelled.value) break
+        importProgress.value = `Mengimpor data ${index + 1} dari ${mappedRows.length}...`
         try {
           await createCitizen(payload)
           successCount++
-        } catch {
+          successfulNiks.push(payload.national_id)
+        } catch (err) {
           failCount++
+          if (failures.length < 5) {
+            const validationErrors = err.response?.data?.errors
+            const validationMessage = validationErrors
+              ? Object.entries(validationErrors)
+                .flatMap(([field, messages]) => `${field}: ${messages.join(', ')}`)
+                .join('; ')
+              : err.response?.data?.message || 'Data ditolak server.'
+            failures.push(`Baris ${rowNumber} (${payload.full_name || payload.national_id}): ${validationMessage}`)
+          }
         }
       }
 
-      await fetchCitizens()
+      importProgress.value = 'Memverifikasi data ke database...'
+      const refreshed = await fetchCitizens()
+      const wasCancelled = importCancelled.value
 
-      if (failCount === 0) {
-        importSuccess.value = `${successCount} data warga berhasil diimpor.`
+      if (wasCancelled) {
+        const processedCount = successCount + failCount
+        const remainingCount = Math.max(mappedRows.length - processedCount, 0)
+        importSuccess.value = successCount > 0
+          ? `${successCount} data warga berhasil diimpor sebelum proses dibatalkan.`
+          : ''
+        importError.value = `Import dibatalkan. ${remainingCount} data belum diproses.`
+      } else if (!refreshed && successCount > 0) {
+        importError.value = `${successCount} data berhasil dikirim, tetapi daftar warga gagal dimuat ulang dari database. Periksa koneksi lalu refresh halaman.`
+      } else if (successCount > 0) {
+        const savedNiks = new Set(residents.value.map(resident => String(resident.nationalId ?? '').trim()))
+        const verifiedCount = successfulNiks.filter(nik => savedNiks.has(String(nik).trim())).length
+        importSuccess.value = `${verifiedCount} dari ${successCount} data berhasil diimpor dan terverifikasi tersimpan di database.`
+
+        if (verifiedCount < successCount) {
+          importError.value = `${successCount - verifiedCount} data berhasil dikirim tetapi belum terbaca saat verifikasi ulang.`
+        }
       } else {
-        importSuccess.value = `${successCount} data berhasil diimpor, ${failCount} gagal (kemungkinan NIK duplikat/tidak valid).`
+        importError.value = `${failCount} data gagal diimpor. ${failures.join(' | ')}`
       }
     } catch (err) {
       importError.value = 'Gagal membaca file. Pastikan format file adalah .xlsx, .xls, atau .csv.'
+    } finally {
+      importing.value = false
+      importProgress.value = ''
     }
   }
 
@@ -1144,6 +1196,7 @@ function exportReportToPdf() {
               chooseLabel="Import Data Warga"
               chooseIcon="pi pi-upload"
               :auto="false"
+              :disabled="importing"
               customUpload
               :pt="{
                 root: { class: 'inline-flex' },
@@ -1157,7 +1210,23 @@ function exportReportToPdf() {
           </div>
         </div>
 
-        <div v-if="importError || importSuccess" class="mb-4">
+        <div v-if="importError || importSuccess || importProgress" class="mb-4">
+          <Message v-if="importProgress" severity="info" :closable="false" class="mb-2 text-[13px]">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <span>{{ importProgress }}</span>
+              <Button
+                v-if="importing"
+                label="Batalkan Import"
+                icon="pi pi-times"
+                severity="danger"
+                outlined
+                size="small"
+                class="shrink-0"
+                @click="cancelImport"
+              />
+            </div>
+          </Message>
+
           <Message v-if="importError" severity="error" :closable="false" class="text-[13px]">
             {{ importError }}
           </Message>
@@ -1172,7 +1241,7 @@ function exportReportToPdf() {
           :value="residents"
           :loading="loading"
           :filters="filters"
-          :globalFilterFields="['name', 'nationalId', 'familyCardNumber', 'address', 'occupation', 'dusun']"
+          :globalFilterFields="['name', 'fullName', 'full_name', 'nationalId', 'familyCardNumber', 'address', 'occupation', 'dusun']"
           :paginator="true"
           :rows="rowsPerPage"
           :rowsPerPageOptions="[10, 25, 50]"
