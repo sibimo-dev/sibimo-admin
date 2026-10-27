@@ -1,8 +1,8 @@
 <script setup>
-
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
+import { useConfirm } from 'primevue/useconfirm'
 import { useAuthStore } from '@/stores/auth.store'
 import { useGalleryStore } from '@/stores/gallery.store'
 import { getGallery } from '@/services/gallery.service'
@@ -14,11 +14,13 @@ import FileUpload from 'primevue/fileupload'
 import Editor from 'primevue/editor'
 import AppInput from '@/components/common/AppInput.vue'
 import Select from 'primevue/select'
+import InputText from 'primevue/inputtext'
 import DatePicker from 'primevue/datepicker'
 
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+const confirm = useConfirm()
 const authStore = useAuthStore()
 const galleryStore = useGalleryStore()
 
@@ -37,25 +39,98 @@ const form = reactive({
   uploaded_at: null,
 })
 
-const categoryOptions = [
-  { label: 'Musyawarah', value: 'musyawarah' },
-  { label: 'Kegiatan Sosial', value: 'kegiatan-sosial' },
-  { label: 'Pembangunan', value: 'pembangunan' },
-  { label: 'Budaya', value: 'budaya' },
-]
+const errors = reactive({ title: '', category: '' })
 
-const errors = reactive({ title: '' })
+/* ---------- Kelola Kategori ---------- */
+const categoryOptions = computed(() => galleryStore.categoryOptions)
+const newCategory = ref('')
+const editingCategoryId = ref(null)
+const editingCategoryLabel = ref('')
+
+function errorToast(summary, error) {
+  toast.add({
+    severity: 'error',
+    summary,
+    detail: error.response?.data?.errors?.name?.[0] ?? error.response?.data?.message,
+    life: 3000,
+  })
+}
+
+async function addCategory() {
+  const name = newCategory.value.trim()
+  if (!name) return
+  try {
+    const created = await galleryStore.createCategory({ name })
+    form.category = created.slug
+    errors.category = ''
+    newCategory.value = ''
+  } catch (error) {
+    errorToast('Gagal menambah kategori', error)
+  }
+}
+
+function startEditCategory(category) {
+  editingCategoryId.value = category.id
+  editingCategoryLabel.value = category.label
+}
+
+function cancelEditCategory() {
+  editingCategoryId.value = null
+  editingCategoryLabel.value = ''
+}
+
+async function saveEditCategory(category) {
+  const name = editingCategoryLabel.value.trim()
+  if (!name) return
+  try {
+    await galleryStore.updateCategory(category.id, { name })
+    cancelEditCategory()
+  } catch (error) {
+    errorToast('Gagal memperbarui kategori', error)
+  }
+}
+
+function removeCategory(category) {
+  confirm.require({
+    message: `Hapus kategori "${category.label}"?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      try {
+        await galleryStore.removeCategory(category.id)
+        if (form.category === category.value) form.category = null
+      } catch (error) {
+        errorToast('Gagal menghapus kategori', error)
+      }
+    },
+  })
+}
+/* ---------- /Kelola Kategori ---------- */
 
 const pageTitle = computed(() => (isEdit.value ? 'Edit Foto' : 'Tambah Foto'))
 const mainButtonLabel = computed(() => (isEdit.value ? 'Perbarui' : 'Tambah Foto'))
 
 onMounted(async () => {
+  try {
+    await galleryStore.fetchCategories()
+  } catch (error) {
+    errorToast('Gagal memuat kategori', error)
+  }
+
+  // Default 'kegiatan-sosial' bisa saja sudah dihapus
+  if (!categoryOptions.value.some((c) => c.value === form.category)) {
+    form.category = null
+  }
+
   if (isEdit.value) {
     const existing = await getGallery(route.params.id)
     if (existing) {
       form.title = existing.title
       form.description = existing.description
-      form.category = existing.category ?? 'kegiatan-sosial'
+      form.category = existing.category ?? null
       form.location = existing.location ?? ''
       form.uploaded_at = existing.uploaded_at
       preview.value = existing.image ? mediaUrl(existing.image) : null
@@ -78,10 +153,10 @@ function handleFileSelect(event) {
 }
 
 function toDateInputValue(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function handleValidationError(event) {
@@ -104,14 +179,14 @@ function removeImage(removeFileCallback) {
 
 function validate() {
   errors.title = form.title.trim() ? '' : 'Judul foto wajib diisi'
-  return !errors.title
+  errors.category = form.category ? '' : 'Kategori wajib dipilih'
+  return !errors.title && !errors.category
 }
 
 async function handleSubmit() {
   if (!validate()) return
   saving.value = true
   try {
-
     const payload = {
       title: form.title,
       description: form.description,
@@ -120,7 +195,7 @@ async function handleSubmit() {
       event_date: toDateInputValue(form.event_date),
       uploaded_by: authStore.user?.id ?? '',
       image_file: form.image_file,
-    } 
+    }
 
     if (isEdit.value) {
       await galleryStore.update(route.params.id, payload)
@@ -236,7 +311,7 @@ function handleCancel() {
 
             <div class="flex flex-col gap-2">
               <label for="category" class="text-[13px] font-semibold text-slate-700">
-                Kategori
+                Kategori <span class="text-danger-500">*</span>
               </label>
               <Select
                 id="category"
@@ -245,8 +320,13 @@ function handleCancel() {
                 optionLabel="label"
                 optionValue="value"
                 placeholder="Pilih kategori"
+                :invalid="!!errors.category"
                 class="w-full"
               />
+              <small v-if="errors.category" class="text-danger-500">{{ errors.category }}</small>
+              <small class="text-xs text-slate-400">
+                Ingin kategori baru? Tambahkan lewat "Kelola Kategori" di samping.
+              </small>
             </div>
 
             <div class="flex flex-col gap-2">
@@ -258,21 +338,21 @@ function handleCancel() {
                 v-model="form.location"
                 placeholder="Contoh: Balai Kalurahan Bimomartani"
               />
-          </div>
+            </div>
 
-          <div class="flex flex-col gap-2">
-            <label for="event_date" class="text-[13px] font-semibold text-slate-700">
-              Tanggal Kegiatan
-            </label>
-            <DatePicker
-              id="event_date"
-              v-model="form.event_date"
-              dateFormat="dd/mm/yy"
-              showIcon
-              iconDisplay="input"
-              class="w-full"
-            />
-          </div>
+            <div class="flex flex-col gap-2">
+              <label for="event_date" class="text-[13px] font-semibold text-slate-700">
+                Tanggal Kegiatan
+              </label>
+              <DatePicker
+                id="event_date"
+                v-model="form.event_date"
+                dateFormat="dd/mm/yy"
+                showIcon
+                iconDisplay="input"
+                class="w-full"
+              />
+            </div>
 
             <div v-if="isEdit" class="flex flex-col gap-2">
               <label class="text-[13px] font-semibold text-slate-700">
@@ -318,6 +398,57 @@ function handleCancel() {
                 :loading="saving"
                 @click="handleSubmit"
               />
+            </div>
+          </template>
+        </Card>
+
+        <Card>
+          <template #content>
+            <div class="flex flex-col gap-3">
+              <label class="text-xs text-slate-500">Kelola Kategori</label>
+
+              <div class="flex gap-2">
+                <InputText
+                  v-model="newCategory"
+                  placeholder="Contoh: Laporan"
+                  class="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-[13px]"
+                  @keyup.enter="addCategory"
+                />
+                <Button label="Tambah" icon="pi pi-plus" class="rounded-lg" type="button" @click="addCategory" />
+              </div>
+
+              <div class="flex flex-col gap-1">
+                <div
+                  v-for="category in categoryOptions"
+                  :key="category.id"
+                  class="flex items-center justify-between gap-2 py-1.5"
+                >
+                  <template v-if="editingCategoryId === category.id">
+                    <InputText
+                      v-model="editingCategoryLabel"
+                      class="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]"
+                      @keyup.enter="saveEditCategory(category)"
+                      @keyup.esc="cancelEditCategory"
+                    />
+                    <div class="flex shrink-0 items-center">
+                      <Button icon="pi pi-check" text rounded size="small" type="button" aria-label="Simpan" @click="saveEditCategory(category)" />
+                      <Button icon="pi pi-times" text rounded size="small" severity="secondary" type="button" aria-label="Batal" @click="cancelEditCategory" />
+                    </div>
+                  </template>
+
+                  <template v-else>
+                    <span class="min-w-0 flex-1 truncate text-[13px] text-slate-700">{{ category.label }}</span>
+                    <div class="flex shrink-0 items-center">
+                      <Button icon="pi pi-pencil" text rounded size="small" severity="secondary" type="button" aria-label="Edit kategori" @click="startEditCategory(category)" />
+                      <Button icon="pi pi-trash" text rounded size="small" severity="danger" type="button" aria-label="Hapus kategori" @click="removeCategory(category)" />
+                    </div>
+                  </template>
+                </div>
+
+                <p v-if="!categoryOptions.length" class="m-0 text-xs text-slate-400">
+                  Belum ada kategori. Tambahkan di atas.
+                </p>
+              </div>
             </div>
           </template>
         </Card>

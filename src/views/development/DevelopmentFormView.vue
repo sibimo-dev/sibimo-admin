@@ -2,6 +2,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
+import { useConfirm } from 'primevue/useconfirm'
 import {
   useDevelopmentStore,
   DEVELOPMENT_CATEGORIES,
@@ -16,6 +17,7 @@ import Button from 'primevue/button'
 import InputNumber from 'primevue/inputnumber'
 import Textarea from 'primevue/textarea'
 import Select from 'primevue/select'
+import InputText from 'primevue/inputtext'
 import DatePicker from 'primevue/datepicker'
 import AppInput from '@/components/common/AppInput.vue'
 import AppLocationPicker from '@/components/common/AppLocationPicker.vue'
@@ -23,6 +25,7 @@ import AppLocationPicker from '@/components/common/AppLocationPicker.vue'
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+const confirm = useConfirm()
 const developmentStore = useDevelopmentStore()
 
 const isEdit = computed(() => !!route.params.id)
@@ -62,6 +65,85 @@ const errors = reactive({
 const pageTitle = computed(() => (isEdit.value ? 'Edit Pembangunan' : 'Tambah Pembangunan'))
 const mainButtonLabel = computed(() => (isEdit.value ? 'Perbarui' : 'Simpan'))
 
+/* ---------- Kelola Kategori (tersimpan di backend) ---------- */
+const categoryOptions = computed(() => developmentStore.categoryOptions)
+const newCategory = ref('')
+const editingCategoryId = ref(null)
+const editingCategoryLabel = ref('')
+
+function errorDetail(error, fallback) {
+  const errs = error.response?.data?.errors
+  return (errs && Object.values(errs).flat()[0]) ?? error.response?.data?.message ?? fallback
+}
+
+function isDuplicateCategory(label, ignoreId = null) {
+  return categoryOptions.value.some(
+    (c) => c.id !== ignoreId && c.label.toLowerCase() === label.toLowerCase()
+  )
+}
+
+async function addCategory() {
+  const label = newCategory.value.trim()
+  if (!label) return
+  if (isDuplicateCategory(label)) {
+    toast.add({ severity: 'warn', summary: 'Kategori sudah ada', life: 3000 })
+    return
+  }
+  try {
+    const created = await developmentStore.createCategory({ category_name: label })
+    form.category = created.slug
+    errors.category = ''
+    newCategory.value = ''
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Kategori gagal ditambahkan', detail: errorDetail(error, 'Coba lagi.'), life: 3500 })
+  }
+}
+
+function startEditCategory(category) {
+  editingCategoryId.value = category.id
+  editingCategoryLabel.value = category.label
+}
+
+function cancelEditCategory() {
+  editingCategoryId.value = null
+  editingCategoryLabel.value = ''
+}
+
+async function saveEditCategory(category) {
+  const label = editingCategoryLabel.value.trim()
+  if (!label) return
+  if (isDuplicateCategory(label, category.id)) {
+    toast.add({ severity: 'warn', summary: 'Kategori sudah ada', life: 3000 })
+    return
+  }
+  try {
+    await developmentStore.updateCategory(category.id, { category_name: label })
+    cancelEditCategory()
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Kategori gagal diperbarui', detail: errorDetail(error, 'Coba lagi.'), life: 3500 })
+  }
+}
+
+function removeCategory(category) {
+  confirm.require({
+    message: `Hapus kategori "${category.label}"?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      try {
+        await developmentStore.removeCategory(category.id)
+        if (form.category === category.value) form.category = null
+      } catch (error) {
+        toast.add({ severity: 'error', summary: 'Kategori gagal dihapus', detail: errorDetail(error, 'Kategori mungkin masih dipakai.'), life: 3500 })
+      }
+    },
+  })
+}
+/* ---------- /Kelola Kategori ---------- */
+
 /* --------------------------------- Helpers --------------------------------- */
 
 function toPoint(lat, lng) {
@@ -99,6 +181,12 @@ const PROGRESS_PERCENTAGES = [0, 50, 100]
 form.progress = PROGRESS_PERCENTAGES.map((percentage) => createProgressItem({ percentage }))
 
 onMounted(async () => {
+  try {
+    await developmentStore.fetchCategories()
+  } catch (error) {
+    toast.add({ severity: 'error', summary: 'Gagal memuat kategori', life: 3500 })
+  }
+
   if (!isEdit.value) return
 
   const existing = await getDevelopment(route.params.id)
@@ -276,7 +364,7 @@ function handleCancel() {
                   <Select
                     id="category"
                     v-model="form.category"
-                    :options="DEVELOPMENT_CATEGORIES"
+                    :options="categoryOptions"
                     optionLabel="label"
                     optionValue="value"
                     placeholder="Pilih kategori"
@@ -284,6 +372,9 @@ function handleCancel() {
                     class="w-full"
                   />
                   <small v-if="errors.category" class="text-danger-500">{{ errors.category }}</small>
+                  <small class="text-xs text-slate-400">
+                    Ingin kategori baru? Tambahkan lewat "Kelola Kategori" di samping.
+                  </small>
                 </div>
 
                 <div class="flex flex-col gap-2">
@@ -598,6 +689,57 @@ function handleCancel() {
                 :loading="saving"
                 @click="handleSubmit"
               />
+            </div>
+          </template>
+        </Card>
+
+        <Card>
+          <template #content>
+            <div class="flex flex-col gap-3">
+              <label class="text-xs text-slate-500">Kelola Kategori</label>
+
+              <div class="flex gap-2">
+                <InputText
+                  v-model="newCategory"
+                  placeholder="Contoh: Laporan"
+                  class="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-[13px]"
+                  @keyup.enter="addCategory"
+                />
+                <Button label="Tambah" icon="pi pi-plus" class="rounded-lg" type="button" @click="addCategory" />
+              </div>
+
+              <div class="flex flex-col gap-1">
+                <div
+                  v-for="category in categoryOptions"
+                  :key="category.id"
+                  class="flex items-center justify-between gap-2 py-1.5"
+                >
+                  <template v-if="editingCategoryId === category.id">
+                    <InputText
+                      v-model="editingCategoryLabel"
+                      class="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]"
+                      @keyup.enter="saveEditCategory(category)"
+                      @keyup.esc="cancelEditCategory"
+                    />
+                    <div class="flex shrink-0 items-center">
+                      <Button icon="pi pi-check" text rounded size="small" type="button" aria-label="Simpan" @click="saveEditCategory(category)" />
+                      <Button icon="pi pi-times" text rounded size="small" severity="secondary" type="button" aria-label="Batal" @click="cancelEditCategory" />
+                    </div>
+                  </template>
+
+                  <template v-else>
+                    <span class="min-w-0 flex-1 truncate text-[13px] text-slate-700">{{ category.label }}</span>
+                    <div class="flex shrink-0 items-center">
+                      <Button icon="pi pi-pencil" text rounded size="small" severity="secondary" type="button" aria-label="Edit kategori" @click="startEditCategory(category)" />
+                      <Button icon="pi pi-trash" text rounded size="small" severity="danger" type="button" aria-label="Hapus kategori" @click="removeCategory(category)" />
+                    </div>
+                  </template>
+                </div>
+
+                <p v-if="!categoryOptions.length" class="m-0 text-xs text-slate-400">
+                  Belum ada kategori. Tambahkan di atas.
+                </p>
+              </div>
             </div>
           </template>
         </Card>

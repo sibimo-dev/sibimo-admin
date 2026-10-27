@@ -49,3 +49,9 @@ export const updateDevelopment = (id, payload) => {
   return unwrap(api.post(`/developments/${id}`, data, multipart))
 }
 export const deleteDevelopment = (id) => unwrap(api.delete(`/developments/${id}`))
+
+/* ============ Kategori pembangunan ============ */
+export const getDevelopmentCategories = () => unwrap(api.get('/development-categories'))
+export const createDevelopmentCategory = (payload) => unwrap(api.post('/development-categories', payload))
+export const updateDevelopmentCategory = (id, payload) => unwrap(api.put(`/development-categories/${id}`, payload))
+export const deleteDevelopmentCategory = (id) => unwrap(api.delete(`/development-categories/${id}`))

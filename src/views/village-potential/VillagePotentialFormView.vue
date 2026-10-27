@@ -9,11 +9,10 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import DatePicker from 'primevue/datepicker'
 import RadioButton from 'primevue/radiobutton'
-import Checkbox from 'primevue/checkbox'
 import Button from 'primevue/button'
 import FileUpload from 'primevue/fileupload'
 import Editor from 'primevue/editor'
-import { potentialService } from '@/services/content.service'
+import { potentialService, potentialCategoryService } from '@/services/content.service'
 import { useAuthStore } from '@/stores/auth.store'
 import { updateListCache } from '@/services/list-cache'
 import { mediaUrl } from '@/services/media'
@@ -52,12 +51,88 @@ const publishDate = ref(new Date())
 const authorOptions = ref([])
 const author = ref(null)
 
-const categoryOptions = ref([
-  { id: 'pertanian', label: 'Pertanian', checked: false },
-  { id: 'bumdes', label: 'Bumdes', checked: false },
-  { id: 'pariwisata', label: 'Pariwisata', checked: false },
-  { id: 'umkm', label: 'UMKM', checked: false },
-])
+/* ---------- Kelola Kategori ---------- */
+const categoryOptions = ref([])
+const selectedCategoryId = ref(null)
+const newCategory = ref('')
+const editingCategoryId = ref(null)
+const editingCategoryLabel = ref('')
+
+// id = category_id (dipakai RadioButton), value = slug (dikirim ke backend)
+const toOption = (c) => ({ id: c.category_id, label: c.name, value: c.slug })
+
+function errorToast(summary, error) {
+  toast.add({
+    severity: 'error',
+    summary,
+    detail: error.response?.data?.errors?.name?.[0] ?? error.response?.data?.message,
+    life: 3000,
+  })
+}
+
+async function fetchCategories() {
+  try {
+    categoryOptions.value = (await potentialCategoryService.list()).map(toOption)
+  } catch (error) {
+    errorToast('Gagal memuat kategori', error)
+  }
+}
+
+async function addCategory() {
+  const name = newCategory.value.trim()
+  if (!name) return
+  try {
+    const created = toOption(await potentialCategoryService.create({ name }))
+    categoryOptions.value.push(created)
+    selectedCategoryId.value = created.id
+    newCategory.value = ''
+  } catch (error) {
+    errorToast('Gagal menambah kategori', error)
+  }
+}
+
+function startEditCategory(category) {
+  editingCategoryId.value = category.id
+  editingCategoryLabel.value = category.label
+}
+
+function cancelEditCategory() {
+  editingCategoryId.value = null
+  editingCategoryLabel.value = ''
+}
+
+async function saveEditCategory(category) {
+  const name = editingCategoryLabel.value.trim()
+  if (!name) return
+  try {
+    const updated = await potentialCategoryService.update(category.id, { name })
+    category.label = updated.name
+    cancelEditCategory()
+  } catch (error) {
+    errorToast('Gagal memperbarui kategori', error)
+  }
+}
+
+function removeCategory(category) {
+  confirm.require({
+    message: `Hapus kategori "${category.label}"?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      try {
+        await potentialCategoryService.remove(category.id)
+        categoryOptions.value = categoryOptions.value.filter((c) => c.id !== category.id)
+        if (selectedCategoryId.value === category.id) selectedCategoryId.value = null
+      } catch (error) {
+        errorToast('Gagal menghapus kategori', error)
+      }
+    },
+  })
+}
+/* ---------- /Kelola Kategori ---------- */
 
 const visibilityLabel = computed(() => (
   visibility.value === 'publik'
@@ -68,6 +143,8 @@ const visibilityLabel = computed(() => (
 ))
 
 onMounted(async () => {
+  await fetchCategories()
+
   if (authStore.user) { authorOptions.value = [{ label: authStore.user.full_name, value: authStore.user.user_id }]; author.value = authStore.user.user_id }
   if (!isEditMode.value) return
 
@@ -76,9 +153,10 @@ onMounted(async () => {
     title.value = existing.title ?? ''
     content.value = existing.description ?? ''
     photoPreview.value = mediaUrl(existing.image)
-    const categoryMap = { Agriculture: 'pertanian', BUMDes: 'bumdes', Tourism: 'pariwisata', UMKM: 'umkm' }
-    const selectedId = categoryMap[existing.category]
-    categoryOptions.value.forEach(category => { category.checked = category.id === selectedId })
+
+    selectedCategoryId.value =
+      categoryOptions.value.find((c) => c.value === existing.category)?.id ?? null
+
     status.value = existing.status ?? 'Published'
     visibility.value = 'publik'
     shortDesc.value = existing.short_desc ?? ''
@@ -140,17 +218,19 @@ function saveDraft() {
 async function saveMain() {
   if (saving.value) return
   status.value = 'Published'
-  const selectedCategory = categoryOptions.value.find(category => category.checked)
-  const categoryMap = { pertanian: 'Agriculture', bumdes: 'BUMDes', pariwisata: 'Tourism', umkm: 'UMKM' }
-  if (!selectedCategory) { toast.add({ severity: 'warn', summary: 'Pilih kategori potensi terlebih dahulu', life: 3000 }); return }
+  const selectedCategory = categoryOptions.value.find(c => c.id === selectedCategoryId.value)
+  if (!selectedCategory) {
+    toast.add({ severity: 'warn', summary: 'Pilih kategori potensi terlebih dahulu', life: 3000 })
+    return
+  }
   const extraInfoObject = Object.fromEntries(
-  extraFields.value.filter((f) => f.label.trim()).map((f) => [f.label, f.value]))
+    extraFields.value.filter((f) => f.label.trim()).map((f) => [f.label, f.value]))
   const payload = {
-    category: categoryMap[selectedCategory.id],
+    category: selectedCategory.value,
     title: title.value,
     short_desc: shortDesc.value,
     description: content.value,
-    location: location.value,     
+    location: location.value,
     contact: contact.value,
     extra_info: extraInfoObject,
     image: photoFile.value,
@@ -492,20 +572,60 @@ function moveToTrash() {
 
         <Card>
           <template #content>
-            <div class="flex flex-col gap-2.5">
-              <label class="text-xs text-neutral-500">
-                Kategori
-              </label>
+            <div class="flex flex-col gap-3">
+              <label class="text-xs text-neutral-500">Kelola Kategori</label>
 
-              <div class="flex flex-col gap-2">
-                <label
+              <div class="flex gap-2">
+                <InputText
+                  v-model="newCategory"
+                  placeholder="Contoh: Laporan"
+                  class="min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px]"
+                  @keyup.enter="addCategory"
+                />
+                <Button
+                  label="Tambah"
+                  icon="pi pi-plus"
+                  class="rounded-lg"
+                  @click="addCategory"
+                />
+              </div>
+
+              <div class="flex flex-col gap-1">
+                <div
                   v-for="category in categoryOptions"
                   :key="category.id"
-                  class="flex cursor-pointer items-center gap-2 text-[13px] text-neutral-700"
+                  class="flex items-center justify-between gap-2 py-1.5"
                 >
-                  <Checkbox v-model="category.checked" binary class="accent-primary-600" />
-                  {{ category.label }}
-                </label>
+                  <!-- Mode edit -->
+                  <template v-if="editingCategoryId === category.id">
+                    <InputText
+                      v-model="editingCategoryLabel"
+                      class="min-w-0 flex-1 rounded-lg border border-neutral-300 px-2 py-1.5 text-[13px]"
+                      @keyup.enter="saveEditCategory(category)"
+                      @keyup.esc="cancelEditCategory"
+                    />
+                    <div class="flex shrink-0 items-center">
+                      <Button icon="pi pi-check" text rounded size="small" aria-label="Simpan" @click="saveEditCategory(category)" />
+                      <Button icon="pi pi-times" text rounded size="small" severity="secondary" aria-label="Batal" @click="cancelEditCategory" />
+                    </div>
+                  </template>
+
+                  <!-- Mode tampil -->
+                  <template v-else>
+                    <label class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-[13px] text-neutral-700">
+                      <RadioButton v-model="selectedCategoryId" :value="category.id" />
+                      <span class="truncate">{{ category.label }}</span>
+                    </label>
+                    <div class="flex shrink-0 items-center">
+                      <Button icon="pi pi-pencil" text rounded size="small" severity="secondary" aria-label="Edit kategori" @click="startEditCategory(category)" />
+                      <Button icon="pi pi-trash" text rounded size="small" severity="danger" aria-label="Hapus kategori" @click="removeCategory(category)" />
+                    </div>
+                  </template>
+                </div>
+
+                <p v-if="!categoryOptions.length" class="m-0 text-xs text-neutral-400">
+                  Belum ada kategori. Tambahkan di atas.
+                </p>
               </div>
             </div>
           </template>

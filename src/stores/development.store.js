@@ -4,6 +4,10 @@ import {
   deleteDevelopment,
   getDevelopments,
   updateDevelopment,
+  getDevelopmentCategories,
+  createDevelopmentCategory,
+  updateDevelopmentCategory,
+  deleteDevelopmentCategory,
 } from '@/services/development.service'
 
 // Shared by the list filters and the form dropdowns.
@@ -39,10 +43,15 @@ export function getDevelopmentStatus(value) {
 }
 
 export const useDevelopmentStore = defineStore('development', {
-  state: () => ({ developments: [] }),
+  state: () => ({ developments: [], categories: [] }),
   getters: {
     getById: (state) => (id) =>
       state.developments.find((item) => item.development_id === Number(id)),
+    // bentuk {id, label, value} dipakai Select dan daftar "Kelola Kategori" di form
+    categoryOptions: (state) =>
+      state.categories.map((c) => ({ id: c.category_id, label: c.category_name, value: c.slug })),
+    getCategoryLabel: (state) => (slug) =>
+      state.categories.find((c) => c.slug === slug)?.category_name ?? getDevelopmentCategoryLabel(slug),
   },
   actions: {
     async fetchAll() {
@@ -63,6 +72,25 @@ export const useDevelopmentStore = defineStore('development', {
     async remove(id) {
       await deleteDevelopment(id)
       this.developments = this.developments.filter((item) => item.development_id !== Number(id))
+    },
+    async fetchCategories() {
+      this.categories = await getDevelopmentCategories()
+      return this.categories
+    },
+    async createCategory(payload) {
+      const item = await createDevelopmentCategory(payload)
+      this.categories.push(item)
+      return item
+    },
+    async updateCategory(id, payload) {
+      const item = await updateDevelopmentCategory(id, payload)
+      const index = this.categories.findIndex((c) => c.category_id === Number(id))
+      if (index !== -1) this.categories[index] = { ...this.categories[index], ...item }
+      return item
+    },
+    async removeCategory(id) {
+      await deleteDevelopmentCategory(id)
+      this.categories = this.categories.filter((c) => c.category_id !== Number(id))
     },
   },
 })
