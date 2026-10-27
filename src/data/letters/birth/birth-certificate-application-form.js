@@ -82,6 +82,6 @@ export const sections = arrange(
 );
 
 // Langkah 2: dokumen pendukung (opt(...) = tidak wajib)
-export const documents = [DOC_LAHIR, DOC.kk, "Fotokopi KTP ayah dan ibu/wali/pelapor", DOC.akta, DOC.ktpSaksi, opt("Surat kuasa dan fotokopi KTP penerima kuasa"), opt("Fotokopi paspor (bagi WNI bukan penduduk/orang asing)"), opt("SPTJM kebenaran data kelahiran"), opt("SPTJM kebenaran sebagai pasangan suami istri")];
+export const documents = [DOC_LAHIR, DOC.kk, "Fotokopi KTP ayah dan ibu/wali/pelapor", DOC.akta, opt(DOC.ktpSaksi), opt("Surat kuasa dan fotokopi KTP penerima kuasa"), opt("Fotokopi paspor (bagi WNI bukan penduduk/orang asing)"), opt("SPTJM kebenaran data kelahiran"), opt("SPTJM kebenaran sebagai pasangan suami istri")];
 
 export const meta = {"title": "Permohonan Akta Kelahiran", "code": "AKL"};
