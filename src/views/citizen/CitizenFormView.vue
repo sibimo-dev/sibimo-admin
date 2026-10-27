@@ -871,7 +871,7 @@ function deleteCitizen() {
 
               <div class="flex flex-col gap-2">
                 <label class="text-[13px] font-semibold text-neutral-700" for="phoneNumber">
-                  Nomor Telepon
+                  Nomor Telepon/WA
                 </label>
                 <InputText
                   id="phoneNumber"

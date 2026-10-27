@@ -61,7 +61,10 @@ const heading = computed(
       "register-type": ["Pendaftaran Warga Baru", "Pilih jenis pendaftaran, lalu isi formulir surat yang dibutuhkan."],
     })[view.value] ?? ["Tambah Surat", "Isi formulir sesuai surat yang dipilih."],
 );
-const headerBack = computed(() => (view.value === "groups" ? () => router.push("/letter") : view.value === "catalog" || view.value === "register-type" ? () => (view.value = "groups") : null));
+// Kembali di atas halaman: kelompok -> daftar surat; katalog/jenis pendaftaran -> kelompok;
+// di dalam form (surat satuan / paket / pendaftaran) -> langsung ke daftar layanan sebelum masuk form (bukan langkah form sebelumnya;
+// langkah sebelumnya untuk paket tetap lewat tombol Kembali di bawah form).
+const headerBack = computed(() => (view.value === "groups" ? () => router.push("/letter") : view.value === "catalog" || view.value === "register-type" ? () => (view.value = "groups") : () => backFromWizard()));
 
 /* ---------- Surat satuan / paket ---------- */
 const letterModules = import.meta.glob("@/data/letters/*/*.js");

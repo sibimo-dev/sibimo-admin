@@ -1,17 +1,24 @@
 // Disalin dari public: views/services/letters/applications/resident-arrival-form.vue (hanya bagian isian & dokumen).
 // Isian di sini harus tetap sama dengan di public. Tampilan wizard ada di views/letter/create/.
 // Formulir Permohonan Pindah Datang WNI
-import { f, OPT, pemohon, DOC, signerNames, kodeWilayahFields } from "@/data/letterFields";
-const alamatLengkap = (prefix, title, addressLabel = "Alamat") => ({
+import { f, OPT, pemohon, DOC, signerNames, kodeWilayahFields, wilayahByScope, wilayahDropdown, BIMOMARTANI } from "@/data/letterFields";
+
+// scopeKey (opsional): bila diisi, Desa/Kecamatan/Kab/Provinsi berupa dropdown yang boleh diketik manual.
+// Nilai awalnya ditentukan oleh wilayahDropdown (bukan lagi otomatis menurut Cakupan Kepindahan).
+const alamatLengkap = (prefix, title, addressLabel = "Alamat", scopeKey) => ({
   title,
   fields: [
     f.area(`${prefix}Address`, addressLabel, { span: 2 }),
     f.text(`${prefix}Rt`, "RT"),
     f.text(`${prefix}Rw`, "RW"),
-    f.text(`${prefix}Village`, "Desa/Kelurahan"),
-    f.text(`${prefix}District`, "Kecamatan"),
-    f.text(`${prefix}Regency`, "Kabupaten/Kota"),
-    f.text(`${prefix}Province`, "Provinsi"),
+    ...(scopeKey
+      ? wilayahByScope(prefix, scopeKey)
+      : [
+          f.text(`${prefix}Village`, "Desa/Kelurahan"),
+          f.text(`${prefix}District`, "Kecamatan"),
+          f.text(`${prefix}Regency`, "Kabupaten/Kota"),
+          f.text(`${prefix}Province`, "Provinsi"),
+        ]),
     f.text(`${prefix}PostalCode`, "Kode Pos", { optional: true }),
     f.text(`${prefix}Phone`, "Nomor Telepon", { optional: true }),
   ],
@@ -51,7 +58,21 @@ export const sections = [
     ],
   },
 
-  alamatLengkap("origin", "Alamat Asal"),
+  {
+    title: "Cakupan Kepindahan",
+    hint: "Dipakai untuk subjudul formulir. Alamat Asal dipilih dari dropdown atau diketik manual.",
+    fields: [
+      f.select("relocationTypeLabel", "Cakupan Kepindahan", OPT.relocationScope, { default: OPT.relocationScope[0], span: 2 }),
+    ],
+  },
+
+  // Alamat asal: dropdown (boleh diketik), kosong / dipilih sendiri
+  wilayahDropdown(
+    alamatLengkap("origin", "Alamat Asal", "Alamat", "relocationTypeLabel"),
+    "origin",
+    "relocationTypeLabel",
+    {},
+  ),
 
   {
     title: "Data Kepindahan",
@@ -76,7 +97,13 @@ export const sections = [
     ],
   },
 
-  alamatLengkap("destination", "Alamat Tujuan (di kalurahan ini)", "Alamat yang Dituju"),
+  // Alamat tujuan (di kalurahan ini): dropdown (boleh diketik), default Bimomartani/Ngemplak/Sleman/DIY
+  wilayahDropdown(
+    alamatLengkap("destination", "Alamat Tujuan (di kalurahan ini)", "Alamat yang Dituju", "relocationTypeLabel"),
+    "destination",
+    "relocationTypeLabel",
+    BIMOMARTANI,
+  ),
 
   {
     title: "Keluarga yang Datang",
@@ -85,7 +112,7 @@ export const sections = [
         { key: "nik", label: "NIK" },
         { key: "name", label: "Nama" },
         { key: "shdk", label: "Status Hubungan dalam Keluarga", type: "select", options: OPT.shdk },
-        { key: "validUntil", label: "Masa Berlaku KTP", type: "date", optional: true },
+        { key: "validUntil", label: "Masa Berlaku KTP", type: "date", optional: true, lifetime: true },
       ], { max: 6, autoByType: "relocationType" }),
     ],
   },
