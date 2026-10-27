@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
 import { useToast } from 'primevue/usetoast'
 import Card from 'primevue/card'
 import Select from 'primevue/select'
@@ -15,7 +17,7 @@ import { useLetterTypeStore } from '@/stores/useLetterTypeStore'
 
 const router = useRouter()
 const toast = useToast()
-const { rows, updateLetterType, fetchRows } = useLetterTypeStore()
+const { rows, updateLetterType, fetchRows, removeLetterType } = useLetterTypeStore()
 
 onMounted(async () => {
   try {
@@ -63,8 +65,8 @@ const filteredRows = computed(() => {
   return rows.value.filter((r) => {
     const matchSearch =
       !searchQuery.value ||
-      r.letter_name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      r.number_prefix.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      (r.letter_name ?? '').toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      (r.number_prefix ?? '').toLowerCase().includes(searchQuery.value.toLowerCase()) ||
       (r.classification_index ?? '').toLowerCase().includes(searchQuery.value.toLowerCase())
     const matchCategory = !selectedCategory.value || r.category === selectedCategory.value
     return matchSearch && matchCategory
@@ -99,77 +101,117 @@ async function toggleStatus(data) {
 function handleKelola(data) {
   router.push({ name: 'letter-type-manage', params: { id: data.letter_type_id } })
 }
-</script>
 
+function handleTambah() {
+  router.push({ name: 'letter-type-manage', params: { id: 'new' } })
+}
+
+// ====== Hapus tipe surat (selalu minta konfirmasi dulu) ======
+const isDeleteDialogVisible = ref(false)
+const isDeleting = ref(false)
+const typeToDelete = ref(null)
+
+function handleHapus(data) {
+  typeToDelete.value = data
+  isDeleteDialogVisible.value = true
+}
+
+async function confirmHapus() {
+  if (!typeToDelete.value) return
+  isDeleting.value = true
+  try {
+    await removeLetterType(typeToDelete.value.letter_type_id)
+    toast.add({ severity: 'success', summary: 'Tipe surat dihapus', life: 2000 })
+    isDeleteDialogVisible.value = false
+    typeToDelete.value = null
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal menghapus tipe surat',
+      detail: error.response?.data?.message ?? 'Tipe surat mungkin sudah dipakai surat lain.',
+      life: 3500,
+    })
+  } finally {
+    isDeleting.value = false
+  }
+}
+</script>
 <template>
   <div>
     <!-- Header -->
     <div class="mb-6">
-      <h1 class="text-2xl font-bold text-gray-800 m-0">Pengelolaan Tipe Surat</h1>
-      <p class="text-sm text-gray-500 mt-1 mb-0">
+      <h1 class="m-0 text-2xl font-bold text-primary-900">Pengelolaan Tipe Surat</h1>
+      <p class="m-0 mt-1 text-sm text-neutral-500">
         Kelola daftar tipe surat yang tersedia untuk layanan administrasi desa.
       </p>
     </div>
 
-    <!-- Stat Cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-      <Card>
-        <template #content>
-          <div class="text-sm text-gray-500 mb-2">Total Tipe Surat</div>
-          <div class="text-3xl font-bold text-gray-800">{{ stats.total }}</div>
-          <div class="text-xs text-gray-400 mt-1">Terdaftar di sistem</div>
-        </template>
-      </Card>
-
-      <Card>
-        <template #content>
-          <div class="flex items-center gap-1.5 text-sm text-gray-500 mb-2">
-            <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
-            Aktif
-          </div>
-          <div class="text-3xl font-bold text-gray-800">{{ stats.active }}</div>
-          <div class="text-xs text-gray-400 mt-1">Dapat diajukan warga</div>
-        </template>
-      </Card>
-
-      <Card>
-        <template #content>
-          <div class="flex items-center gap-1.5 text-sm text-gray-500 mb-2">
-            <span class="w-2 h-2 rounded-full bg-gray-400 inline-block"></span>
-            Nonaktif / Draft
-          </div>
-          <div class="text-3xl font-bold text-gray-800">{{ stats.inactive }}</div>
-          <div class="text-xs text-gray-400 mt-1">Belum lengkap konfigurasi</div>
-        </template>
-      </Card>
-
-      <Card>
-        <template #content>
-          <div class="text-sm text-gray-500 mb-2">Kategori Layanan</div>
-          <div class="text-3xl font-bold text-gray-800">{{ stats.categoryCount }}</div>
-          <div class="text-xs text-gray-400 mt-1">Keterangan, Pengantar, dll.</div>
-        </template>
-      </Card>
+    <!-- Ringkasan -->
+    <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+        <div class="text-[13px] text-neutral-500">Total Tipe Surat</div>
+        <div class="mt-1 text-3xl font-bold text-neutral-800">{{ stats.total }}</div>
+        <div class="mt-1 text-xs text-neutral-400">Terdaftar di sistem</div>
+      </div>
+      <div class="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center gap-1.5 text-[13px] text-neutral-500">
+          <span class="inline-block h-2 w-2 rounded-full bg-green-500"></span> Aktif
+        </div>
+        <div class="mt-1 text-3xl font-bold text-neutral-800">{{ stats.active }}</div>
+        <div class="mt-1 text-xs text-neutral-400">Dapat diajukan warga</div>
+      </div>
+      <div class="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center gap-1.5 text-[13px] text-neutral-500">
+          <span class="inline-block h-2 w-2 rounded-full bg-neutral-400"></span> Nonaktif / Draft
+        </div>
+        <div class="mt-1 text-3xl font-bold text-neutral-800">{{ stats.inactive }}</div>
+        <div class="mt-1 text-xs text-neutral-400">Belum lengkap konfigurasi</div>
+      </div>
+      <div class="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+        <div class="text-[13px] text-neutral-500">Kategori Layanan</div>
+        <div class="mt-1 text-3xl font-bold text-neutral-800">{{ stats.categoryCount }}</div>
+        <div class="mt-1 text-xs text-neutral-400">Keterangan, Pengantar, dll.</div>
+      </div>
     </div>
 
-    <!-- Table Content -->
-    <Card>
+    <Card
+      :pt="{
+        root: { class: 'rounded-lg border border-neutral-200 bg-white shadow-sm' },
+        body: { class: 'p-5' },
+        content: { class: 'p-0' },
+      }"
+    >
       <template #content>
-        <!-- Toolbar: search + filter -->
-        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4">
-          <IconField class="w-full sm:w-72">
-            <InputIcon class="pi pi-search" />
-            <InputText v-model="searchQuery" placeholder="Cari nama surat / kode..." class="w-full" />
-          </IconField>
+        <!-- Toolbar -->
+        <div class="mb-4 flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
+          <div class="flex flex-wrap items-center gap-2">
+            <Button
+              label="Tambah Tipe Surat"
+              icon="pi pi-plus"
+              class="rounded-lg border border-transparent bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
+              @click="handleTambah"
+            />
+          </div>
 
-          <Select
-            v-model="selectedCategory"
-            :options="categoryOptions"
-            option-label="label"
-            option-value="value"
-            placeholder="Semua Kategori"
-            class="w-full sm:w-52"
-          />
+          <div class="flex flex-wrap items-center gap-2">
+            <IconField class="w-full sm:w-72">
+              <InputIcon class="pi pi-search text-neutral-400" />
+              <InputText
+                v-model="searchQuery"
+                placeholder="Cari nama surat, prefix, atau indeks"
+                class="w-full rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
+              />
+            </IconField>
+
+            <Select
+              v-model="selectedCategory"
+              :options="categoryOptions"
+              option-label="label"
+              option-value="value"
+              placeholder="Semua Kategori"
+              class="w-full text-[13px] sm:w-52"
+            />
+          </div>
         </div>
 
         <DataTable
@@ -178,57 +220,90 @@ function handleKelola(data) {
           sort-field="created_at"
           :sort-order="-1"
           removable-sort
+          striped-rows
           paginator
           :rows="10"
-          :rows-per-page-options="[10, 20, 50]"
-          class="p-datatable-sm"
+          :rows-per-page-options="[10, 25, 50]"
+          current-page-report-template="Menampilkan {first}–{last} dari {totalRecords} tipe surat"
+          paginator-template="CurrentPageReport FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown"
           responsive-layout="scroll"
+          class="w-full overflow-hidden rounded-lg border border-neutral-200 text-[13px]"
+          :pt="{
+            headerRow: { class: 'bg-neutral-50' },
+            headerCell: { class: 'whitespace-nowrap border-b border-neutral-200 bg-neutral-50 px-3 py-2.5 text-left font-semibold text-neutral-500' },
+            bodyRow: { class: 'border-b border-neutral-100 last:border-b-0 hover:bg-neutral-50/70' },
+            bodyCell: { class: 'px-3 py-3 align-middle text-neutral-700' },
+            paginator: { root: { class: 'flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 px-3 py-3 text-[13px] text-neutral-500' } },
+          }"
         >
+          <template #empty>
+            <div class="px-3 py-8 text-center text-neutral-400">
+              Tidak ada tipe surat yang cocok dengan pencarian/filter.
+            </div>
+          </template>
+
+          <Column header="No." header-style="width: 4rem">
+            <template #body="{ index }">{{ index + 1 }}</template>
+          </Column>
+
           <Column field="letter_name" header="Nama Surat" sortable>
             <template #body="{ data }">
-              <span class="font-medium text-gray-800">{{ data.letter_name }}</span>
+              <span class="font-medium text-neutral-800">{{ data.letter_name }}</span>
             </template>
           </Column>
 
           <Column field="category" header="Kategori" sortable>
             <template #body="{ data }">
-              <Tag :value="data.category" :severity="severityFor(data.category)" rounded />
+              <Tag
+                :value="data.category"
+                :severity="severityFor(data.category)"
+                class="rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide"
+              />
             </template>
           </Column>
 
           <Column field="classification_index" header="Indeks Arsip" sortable>
             <template #body="{ data }">
-              <span class="font-medium text-gray-700">{{ data.classification_index || '-' }}</span>
+              <span
+                v-if="data.classification_index"
+                class="inline-flex rounded-md bg-neutral-100 px-2 py-1 text-[12px] font-medium text-neutral-600"
+              >{{ data.classification_index }}</span>
+              <span v-else class="text-neutral-400">-</span>
             </template>
           </Column>
 
-          <Column field="processing_time" header="Estimasi Proses" sortable></Column>
+          <Column field="processing_time" header="Estimasi Proses" sortable>
+            <template #body="{ data }">
+              <span class="flex items-center gap-2 text-neutral-600">
+                <i class="pi pi-clock text-neutral-400"></i>
+                {{ data.processing_time || '-' }}
+              </span>
+            </template>
+          </Column>
 
           <Column field="document_count" header="Dok. Syarat" sortable>
             <template #body="{ data }">
-              <span class="flex items-center gap-1.5 text-gray-600">
-                <i class="pi pi-file text-gray-400"></i>
+              <span class="inline-flex items-center gap-2 rounded-2xl bg-blue-50 px-3 py-1.5 text-[12px] font-medium leading-tight text-blue-600">
+                <i class="pi pi-file"></i>
                 {{ data.document_count }} dokumen
               </span>
             </template>
           </Column>
 
-          <Column field="signer_name" header="Penandatanganan" sortable>
-            <template #body="{ data }">
-              <span class="text-gray-700">{{ data.signer_name }}</span>
-            </template>
-          </Column>
+          <Column field="signer_name" header="Penandatangan" sortable />
 
           <Column field="signature_method" header="Metode TTD" sortable>
-            <template #body>
-              <Tag value="Digital" severity="contrast" rounded />
+            <template #body="{ data }">
+              <Tag
+                :value="data.signature_method === 'manual' ? 'Manual' : 'Digital'"
+                :severity="data.signature_method === 'manual' ? 'secondary' : 'contrast'"
+                class="rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide"
+              />
             </template>
           </Column>
 
           <Column field="created_at" header="Tanggal Dibuat" sortable>
-            <template #body="{ data }">
-              <span class="text-gray-600">{{ formatCreatedAt(data.created_at) }}</span>
-            </template>
+            <template #body="{ data }">{{ formatCreatedAt(data.created_at) }}</template>
           </Column>
 
           <Column field="is_active" header="Status" sortable>
@@ -237,24 +312,65 @@ function handleKelola(data) {
             </template>
           </Column>
 
-          <Column header="Aksi">
+          <Column
+            header="Aksi"
+            header-style="width: 7rem; text-align: center"
+            body-class="text-center"
+            :pt="{ columnHeaderContent: { class: 'justify-center' } }"
+          >
             <template #body="{ data }">
-              <button
-                class="text-sm font-medium text-gray-700 hover:text-gray-900 inline-flex items-center gap-1"
-                @click="handleKelola(data)"
-              >
-                Kelola <i class="pi pi-arrow-right text-xs"></i>
-              </button>
+              <!-- Edit di atas, Hapus di bawah; keduanya berlabel supaya jelas -->
+              <div class="mx-auto flex w-24 flex-col gap-1.5">
+                <Button
+                  label="Edit"
+                  icon="pi pi-pencil"
+                  size="small"
+                  outlined
+                  class="w-full justify-center border-primary-300 bg-primary-50 text-primary-700 hover:border-primary-700 hover:bg-primary-700 hover:text-white"
+                  aria-label="Edit tipe surat"
+                  @click="handleKelola(data)"
+                />
+                <Button
+                  label="Hapus"
+                  icon="pi pi-trash"
+                  size="small"
+                  outlined
+                  severity="danger"
+                  class="w-full justify-center"
+                  aria-label="Hapus tipe surat"
+                  @click="handleHapus(data)"
+                />
+              </div>
             </template>
           </Column>
-
-          <template #empty>
-            <p class="text-center text-gray-400 py-10 text-sm">
-              Tidak ada tipe surat yang cocok dengan pencarian/filter.
-            </p>
-          </template>
         </DataTable>
       </template>
     </Card>
+
+    <!-- Konfirmasi hapus -->
+    <Dialog
+      v-model:visible="isDeleteDialogVisible"
+      modal
+      header="Konfirmasi Hapus"
+      class="w-[26rem] max-w-[95vw]"
+      :draggable="false"
+      :closable="!isDeleting"
+    >
+      <div class="flex items-start gap-3">
+        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-500">
+          <i class="pi pi-exclamation-triangle text-lg"></i>
+        </div>
+        <p class="m-0 text-sm text-neutral-600">
+          Yakin ingin menghapus tipe surat
+          <span class="font-semibold text-neutral-800">{{ typeToDelete?.letter_name }}</span>?
+          Dokumen persyaratannya ikut terhapus dan tindakan ini tidak dapat dibatalkan.
+        </p>
+      </div>
+
+      <template #footer>
+        <Button label="Batal" severity="secondary" text :disabled="isDeleting" @click="isDeleteDialogVisible = false" />
+        <Button label="Ya, Hapus" icon="pi pi-trash" severity="danger" :loading="isDeleting" @click="confirmHapus" />
+      </template>
+    </Dialog>
   </div>
 </template>

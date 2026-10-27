@@ -1,0 +1,1 @@
+import{n as e}from"./rolldown-runtime-QTnfLwEv.js";import{F as t,L as n,c as r,f as i}from"./letterFields-CthlIQTA.js";var a=e({documents:()=>s,meta:()=>c,sections:()=>o}),o=[n(i),t(i)],s=[r.ktp,r.kk],c={title:`Persetujuan Calon Pengantin`,code:`N4`};export{a as t};

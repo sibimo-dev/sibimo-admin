@@ -16,3 +16,9 @@ export const getGallery = (id) => unwrap(api.get(`/galleries/${id}`))
 export const createGallery = (payload) => unwrap(api.post('/galleries', formData(payload), { headers: { 'Content-Type': 'multipart/form-data' } }))
 export const updateGallery = (id, payload) => { const data = formData(payload); data.append('_method', 'PUT'); return unwrap(api.post(`/galleries/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } })) }
 export const deleteGallery = (id) => unwrap(api.delete(`/galleries/${id}`))
+
+/* ============ Kategori galeri ============ */
+export const getGalleryCategories = () => unwrap(api.get('/gallery-categories'))
+export const createGalleryCategory = (payload) => unwrap(api.post('/gallery-categories', payload))
+export const updateGalleryCategory = (id, payload) => unwrap(api.put(`/gallery-categories/${id}`, payload))
+export const deleteGalleryCategory = (id) => unwrap(api.delete(`/gallery-categories/${id}`))

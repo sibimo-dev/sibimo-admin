@@ -67,7 +67,6 @@ export const FIELD_OVERRIDES = {
   },
   "death-certificate": {
     reporterReportDate: "tanggal_lapor",
-    deceasedChildOrder: "anak_ke_jenazah",
   },
   "death-certificate-application": {
     reportType: "jenis_pelaporan",
@@ -76,19 +75,16 @@ export const FIELD_OVERRIDES = {
     reporterApplicationDate: "tanggal_lapor",
   },
   "death-registration-report": {
-    deceasedChildOrder: "anak_ke_jenazah",
     deathDate: "meninggal_hari_tanggal",
     witness1BirthDate: "ttl_saksi_1",
     witness2BirthDate: "ttl_saksi_2",
     deathPlace: "kota_tempat_meninggal",
   },
   "death-report": {
-    deceasedChildOrder: "anak_ke_jenazah",
   },
   "death-report-form": {
     reportType: "jenis_pelaporan", // blok Data Administrasi (Jenis Pelaporan) kini ada di form ini; pastikan field-nya ada di backend
     reporterReportDate: "tanggal_lapor",
-    deceasedChildOrder: "anak_ke_jenazah",
     deathPlace: "kota_tempat_meninggal",
   },
   "domicile-certificate": {
