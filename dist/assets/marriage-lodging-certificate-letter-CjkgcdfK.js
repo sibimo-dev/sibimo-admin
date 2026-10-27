@@ -1,1 +1,0 @@
-import{n as e}from"./rolldown-runtime-QTnfLwEv.js";import{I as t,P as n,X as r,s as i}from"./letterFields-BzIiI9Di.js";var a=e({documents:()=>s,meta:()=>c,sections:()=>o}),o=[{...t(),title:`Data Catin Pria`},{...n(),title:`Data Catin Wanita`}],s=[i.ktp,i.kk,i.rt,r(`Fotokopi KTP calon pasangan`)],c={title:`Surat Keterangan Numpang Nikah`,code:`KNN`};export{a as t};
