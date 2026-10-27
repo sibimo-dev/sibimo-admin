@@ -2,7 +2,7 @@
 // Isian di sini harus tetap sama dengan di public. Tampilan wizard ada di views/letter/create/.
 // Surat Permohonan Cerai (Gugat Cerai)
 // Template PDF: letters/divorce-lawsuit-letter.blade.php
-import { f, DOC, opt } from "@/data/letterFields";
+import { f, DOC, opt, OPT } from "@/data/letterFields";
 
 // Helper: field biodata sesuai urutan di surat
 // Urutan: Nama, Tempat tgl lhr, [Agama], Pekerjaan, Alamat
@@ -25,7 +25,7 @@ export const sections = [
     title: "Data Orang yang Dihadapkan",
     fields: [
       f.nik("applicantNik", "NIK", { from: "nik" }),
-      f.select("applicantGender", "Jenis Kelamin", ["Laki-laki", "Perempuan"], { from: "gender" }),
+      f.select("applicantGender", "Jenis Kelamin", OPT.gender, { from: "gender" }),
       ...biodata("applicant", { resident: true }),
     ],
   },

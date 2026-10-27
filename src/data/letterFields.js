@@ -39,6 +39,8 @@ export const f = {
   select: (key, label, options, opts = {}) => ({ key, label, type: "select", options: normalizeOptions(options), ...opts }),
   date: make("date"),
   time: make("time"),
+  /** pekerjaan: pilih dari daftar bernomor (sama dengan Data Warga) atau ketik bebas. Yang disimpan = nama pekerjaan tanpa nomor. */
+  occupation: (key, label = "Pekerjaan", opts = {}) => ({ key, label, type: "occupation", options: OPT.occupation, ...opts }),
   /** checkbox banyak pilihan (nilai = array) */
   checks: (key, label, options, opts = {}) => ({ key, label, type: "checks", options, ...opts }),
   /** daftar baris berulang (anggota keluarga, saksi, dst). columns = [{ key, label, type?, options? }] */
@@ -48,6 +50,16 @@ export const f = {
 };
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/* Pilihan yang NILAI-nya angka kode di formulir cetak (mis. F-1.01 kolom 7, 13, 14, ...): dropdown tetap menampilkan
+   "1. Laki-laki", tetapi yang disimpan dan dicetak di pratinjau hanya angkanya ("1"). */
+export const codeOptions = (list) => list.map((o, i) => (typeof o === "string"
+  ? { value: String(i + 1), label: o, source: o.replace(/^\s*\d+\s*[.)\-:]\s*/, "") }
+  : { value: String(i + 1), label: o.label, source: o.value })); // source = nilai asli di Data Warga (dipakai autofill dari KK)
+
+/* Umur otomatis: field umur dengan `ageOf` = kunci tanggal lahir. Dihitung ulang tiap tanggal lahir berubah
+   (lihat LetterFormFields.vue). Bila tanggal lahir tidak ada di form surat itu, umur tetap diisi manual. */
+const AGE = { placeholder: "Otomatis dari tanggal lahir" };
 
 /* ---------- Data pemohon (terisi otomatis dari data warga yang sudah diverifikasi) ---------- */
 export const pemohon = (extra = []) => ({
@@ -61,7 +73,7 @@ export const pemohon = (extra = []) => ({
     f.select("gender", "Jenis Kelamin", OPT.gender, { from: "gender" }),
     f.select("maritalStatus", "Status Perkawinan", OPT.marital, { from: "maritalStatus" }),
     f.select("religion", "Agama", OPT.religion, { from: "religion" }),
-    f.select("occupation", "Pekerjaan", OPT.occupation, { from: "occupation", editable: true }),
+    f.occupation("occupation", "Pekerjaan", { from: "occupation" }),
     f.area("address", "Alamat", { from: "address", span: 2 }),
     ...extra,
   ],
@@ -88,7 +100,7 @@ const PART = {
   birth: (p) => [f.text(`${p}BirthPlace`, "Tempat Lahir"), f.date(`${p}BirthDate`, "Tanggal Lahir")],
   gender: (p) => [f.select(`${p}Gender`, "Jenis Kelamin", OPT.gender)],
   religion: (p) => [f.select(`${p}Religion`, "Agama", OPT.religion)],
-  occupation: (p) => [f.select(`${p}Occupation`, "Pekerjaan", OPT.occupation, { editable: true })],
+  occupation: (p) => [f.occupation(`${p}Occupation`, "Pekerjaan")],
   education: (p) => [f.select(`${p}Education`, "Pendidikan Terakhir", OPT.education)],
   nationality: (p) => [f.text(`${p}Nationality`, "Kewarganegaraan", { default: "WNI" })],
   marital: (p) => [f.select(`${p}Marital`, "Status Perkawinan", OPT.marital)],
@@ -174,7 +186,7 @@ export const almarhum = () => ({
     f.text("deceasedBirthPlace", "Tempat Lahir"),
     f.date("deceasedBirthDate", "Tanggal Lahir"),
     f.select("deceasedReligion", "Agama", OPT.religion),
-    f.select("deceasedOccupation", "Pekerjaan", OPT.occupation, { editable: true }),
+    f.occupation("deceasedOccupation", "Pekerjaan"),
     f.date("deathDate", "Tanggal Meninggal"),
     f.time("deathTime", "Jam Meninggal"),
     f.text("deathPlace", "Tempat Meninggal"),
@@ -254,14 +266,48 @@ export const ortuNikah = (prefix, title, binLabel) => {
   );
 };
 
+/* ---------- Kode wilayah "Diisi Oleh Petugas" (kop formulir Dukcapil: Kode-Nama Provinsi/Kab/Kecamatan/Desa, Nama Dusun, Nomor KK) ----------
+   Kode & nama wilayah terisi default Kalurahan Bimomartani (34 / 04 / 11 / 020) dan boleh diubah petugas.
+   Opsi: names  = sertakan kolom nama (Provinsi, Kab, Kecamatan, Desa). Matikan bila nama sudah ada di blok alamat surat itu.
+         hamlet = sertakan pilihan Nama Dusun (pilih dari data dusun/dukuh atau ketik); hamletCode = kolom kode dusun. hamletKey = kunci field dusun.
+         kk     = sertakan Nomor KK (terisi otomatis dari NIK pemohon) supaya ikut tampil di pratinjau. */
+export const WILAYAH_KODE = {
+  provinceCode: "34", provinceName: "Daerah Istimewa Yogyakarta",
+  regencyCode: "04", regencyName: "Sleman",
+  districtCode: "11", districtName: "Ngemplak",
+  villageCode: "020", villageName: "Bimomartani",
+};
+export const kodeWilayahFields = ({ names = true, hamlet = true, hamletCode = hamlet, hamletKey = "hamlet", hamletOptional = false, kk = false } = {}) => {
+  const pair = (key, label) => [
+    f.text(`${key}Code`, `Kode ${label}`, { default: WILAYAH_KODE[`${key}Code`], placeholder: "Kode" }),
+    ...(names ? [f.text(`${key}Name`, `Nama ${label}`, { default: WILAYAH_KODE[`${key}Name`] })] : []),
+  ];
+  return [
+    ...pair("province", "Provinsi"),
+    ...pair("regency", "Kabupaten/Kota"),
+    ...pair("district", "Kecamatan"),
+    ...pair("village", "Desa/Kalurahan"),
+    ...(hamletCode ? [f.text("hamletCode", "Kode Dusun", { optional: true, placeholder: "Contoh: 01" })] : []),
+    ...(hamlet ? [f.hamlet(hamletKey, "Dusun/Dukuh/Kampung", { from: "dusun", ...(hamletOptional ? { optional: true } : {}) })] : []),
+    ...(kk ? [f.kk("kkNumber", "Nomor KK", { from: "familyCardNumber" })] : []),
+  ];
+};
+export const kodeWilayah = (opts = {}, title = "Diisi Oleh Petugas (Kode Wilayah)") => ({
+  title,
+  hint: "Kode wilayah sudah terisi default Kalurahan Bimomartani; ubah bila perlu. Nama dusun dipilih dari data dusun/dukuh atau diketik.",
+  fields: kodeWilayahFields(opts),
+});
+
 /* ---------- Alamat lengkap (surat pindah/datang, dll) ----------
    Opsi (opsional):
      from      = kunci data warga untuk mengisi "Alamat (jalan/nomor)" otomatis (mis. "address").
                  Dipakai pada alamat asal surat pindah: alamat asal = alamat pemohon, sekaligus dibaca applicantOf()
                  sebagai applicant.address.
+     hamletFree = true → Dusun/Dukuh/Kampung berupa isian teks bebas (tanpa daftar dusun desa ini), mis. alamat tujuan pindah yang bisa di luar desa.
+     hamlet    = false → sembunyikan Dusun/Dukuh/Kampung dari blok alamat (dipindah ke blok Kode Wilayah).
      phoneFrom = kunci data warga untuk mengisi "Telepon" otomatis (mis. "phoneNumber").
    Pemanggilan lama alamat("origin", "Judul") tetap berjalan seperti biasa. */
-export const alamat = (prefix, title, { from, phoneFrom, fieldFrom = {}, defaults = {} } = {}) => {
+export const alamat = (prefix, title, { from, phoneFrom, fieldFrom = {}, defaults = {}, hamlet = true, hamletFree = false } = {}) => {
   const source = (suffix) => (fieldFrom[suffix] ? { from: fieldFrom[suffix] } : {});
   const fallback = (suffix) => (Object.prototype.hasOwnProperty.call(defaults, suffix) ? { default: defaults[suffix] } : {});
   const options = (suffix) => ({ ...source(suffix), ...fallback(suffix) });
@@ -271,7 +317,7 @@ export const alamat = (prefix, title, { from, phoneFrom, fieldFrom = {}, default
     f.area(`${prefix}Address`, "Alamat (jalan/nomor)", { span: 2, ...(from ? { from } : {}) }),
     f.text(`${prefix}Rt`, "RT", options("rt")),
     f.text(`${prefix}Rw`, "RW", options("rw")),
-    f.text(`${prefix}Hamlet`, "Dusun/Dukuh/Kampung", { optional: true, ...options("hamlet") }),
+    ...(hamlet ? [hamletFree ? f.text(`${prefix}Hamlet`, "Dusun/Dukuh/Kampung", { placeholder: "Ketik nama dusun/dukuh/kampung", ...options("hamlet") }) : f.hamlet(`${prefix}Hamlet`, "Dusun/Dukuh/Kampung", { optional: true, ...options("hamlet") })] : []),
     f.text(`${prefix}Village`, "Desa/Kelurahan", options("village")),
     f.text(`${prefix}District`, "Kecamatan", options("district")),
     f.text(`${prefix}Regency`, "Kabupaten/Kota", options("regency")),
@@ -404,8 +450,8 @@ const BIRTH_PARENT = {
   name: (p) => f.text(`${p}Name`, "Nama Lengkap", { from: `${roleKey(p)}:fullName` }),
   birthPlace: (p) => f.text(`${p}BirthPlace`, "Tempat Lahir", { from: `${roleKey(p)}:birthPlace` }),
   birthDate: (p) => f.date(`${p}BirthDate`, "Tanggal Lahir", { from: `${roleKey(p)}:birthDate` }),
-  age: (p) => f.text(`${p}Age`, "Umur (tahun)", { placeholder: "Contoh: 30" }),
-  occupation: (p) => f.select(`${p}Occupation`, "Pekerjaan", OPT.occupation, { from: `${roleKey(p)}:occupation`, editable: true }),
+  age: (p) => f.text(`${p}Age`, "Umur (tahun)", { ...AGE, ageOf: `${p}BirthDate` }),
+  occupation: (p) => f.occupation(`${p}Occupation`, "Pekerjaan", { from: `${roleKey(p)}:occupation` }),
   address: (p) => f.area(`${p}Address`, "Alamat", { from: `${roleKey(p)}:address`, span: 2 }),
   rtRw: (p) => [f.text(`${p}Rt`, "RT", { placeholder: "Contoh: 3" }), f.text(`${p}Rw`, "RW", { placeholder: "Contoh: 5" })], // 2 isian terpisah: ${p}Rt dan ${p}Rw
   nationality: (p) => f.text(`${p}Nationality`, "Kewarganegaraan", { default: "WNI" }),
@@ -454,8 +500,8 @@ const REPORTER = {
   name: () => f.text("reporterName", "Nama Lengkap"),
   birthPlace: () => f.text("reporterBirthPlace", "Tempat Lahir"),
   birthDate: () => f.date("reporterBirthDate", "Tanggal Lahir"),
-  age: () => f.text("reporterAge", "Umur (tahun)", { placeholder: "Contoh: 35" }),
-  occupation: () => f.select("reporterOccupation", "Pekerjaan", OPT.occupation, { editable: true }),
+  age: () => f.text("reporterAge", "Umur (tahun)", { ...AGE, ageOf: "reporterBirthDate" }),
+  occupation: () => f.occupation("reporterOccupation", "Pekerjaan"),
   address: () => f.area("reporterAddress", "Alamat", { span: 2 }),
   addressKtp: () => f.area("reporterAddress", "Alamat (sesuai KTP)", { span: 2 }),
   phone: () => f.text("reporterPhone", "No HP / Telepon / Email Aktif", { optional: true }),
@@ -565,7 +611,7 @@ export const birthSpouseApplicant = () => ({
     f.nik("nik", "NIK", { from: "nik" }),
     f.text("birthPlace", "Tempat Lahir", { from: "birthPlace" }),
     f.date("birthDate", "Tanggal Lahir", { from: "birthDate" }),
-    f.select("occupation", "Pekerjaan", OPT.occupation, { from: "occupation", editable: true }),
+    f.occupation("occupation", "Pekerjaan", { from: "occupation" }),
     f.area("address", "Alamat", { from: "address", span: 2 }),
     f.kk("kkNumber", "Nomor KK"),
     f.select("familyRelationship", "Status hubungan keluarga", ["Suami", "Istri", "Anak"]),
@@ -579,7 +625,7 @@ export const birthSpousePerson = (prefix, title) => ({
     f.nik(`${prefix}Nik`),
     f.text(`${prefix}BirthPlace`, "Tempat Lahir"),
     f.date(`${prefix}BirthDate`, "Tanggal Lahir"),
-    f.select(`${prefix}Occupation`, "Pekerjaan", OPT.occupation, { editable: true }),
+    f.occupation(`${prefix}Occupation`, "Pekerjaan"),
     f.area(`${prefix}Address`, "Alamat", { span: 2 }),
   ],
 });
@@ -629,9 +675,9 @@ const DEATH_DECEASED = {
   gender: () => [f.select("deceasedGender", "Jenis Kelamin", OPT.gender)],
   birthPlace: () => [f.text("deceasedBirthPlace", "Tempat Kelahiran")],
   birthDate: () => [f.date("deceasedBirthDate", "Tanggal Lahir")],
-  age: () => [f.text("deceasedAge", "Umur (tahun)", { optional: true, placeholder: "Isi bila tanggal lahir tidak diketahui" })],
+  age: () => [f.text("deceasedAge", "Umur (tahun)", { optional: true, placeholder: "Otomatis dari tanggal lahir; isi manual bila tanggal lahir tidak diketahui", ageOf: "deceasedBirthDate" })],
   religion: () => [f.select("deceasedReligion", "Agama", OPT.religion)],
-  occupation: () => [f.select("deceasedOccupation", "Pekerjaan", OPT.occupation, { editable: true })],
+  occupation: () => [f.occupation("deceasedOccupation", "Pekerjaan")],
   address: () => [f.area("deceasedAddress", "Alamat", { span: 2 })],
   childOrder: () => [f.text("deceasedChildOrder", "Anak ke- (dengan huruf)", { placeholder: "Contoh: Kedua" })],
   deathDate: () => [f.date("deathDate", "Tanggal Meninggal", { dayKey: "deathDay" })],
@@ -662,8 +708,8 @@ const DEATH_PARENT = {
   name: (p) => [f.text(`${p}Name`, "Nama Lengkap")],
   birthPlace: (p) => [f.text(`${p}BirthPlace`, "Tempat Lahir")],
   birthDate: (p) => [f.date(`${p}BirthDate`, "Tanggal Lahir")],
-  age: (p) => [f.text(`${p}Age`, "Umur (tahun)", { optional: true, placeholder: "Isi bila tanggal lahir tidak diketahui" })],
-  occupation: (p) => [f.select(`${p}Occupation`, "Pekerjaan", OPT.occupation, { editable: true })],
+  age: (p) => [f.text(`${p}Age`, "Umur (tahun)", { optional: true, placeholder: "Otomatis dari tanggal lahir; isi manual bila tanggal lahir tidak diketahui", ageOf: `${p}BirthDate` })],
+  occupation: (p) => [f.occupation(`${p}Occupation`, "Pekerjaan")],
   address: (p) => [f.area(`${p}Address`, "Alamat", { span: 2 })],
   addressKtp: (p) => [f.area(`${p}Address`, "Alamat (sesuai KTP)", { span: 2 })],
   nationality: (p) => [f.text(`${p}Nationality`, "Kewarganegaraan", { default: "WNI" })],
@@ -676,7 +722,7 @@ const DEATH_WITNESS = {
   name: (n) => [f.text(`witness${n}Name`, "Nama Lengkap")],
   birthDate: (n) => [f.date(`witness${n}BirthDate`, "Tanggal Lahir")],
   age: (n) => [f.text(`witness${n}Age`, "Umur (tahun)", { placeholder: "Contoh: 40" })],
-  ageOptional: (n) => [f.text(`witness${n}Age`, "Umur (tahun)", { optional: true, placeholder: "Isi bila tanggal lahir tidak diketahui" })],
+  ageOptional: (n) => [f.text(`witness${n}Age`, "Umur (tahun)", { optional: true, placeholder: "Otomatis dari tanggal lahir; isi manual bila tanggal lahir tidak diketahui", ageOf: `witness${n}BirthDate` })],
   address: (n) => [f.area(`witness${n}Address`, "Alamat", { span: 2 })],
 };
 export const deathWitness = (n, parts = ["nik", "name", "age", "address"]) => ({ title: `Data Saksi ${n}`, fields: parts.flatMap((p) => DEATH_WITNESS[p](n)) });
@@ -687,7 +733,7 @@ const DEATH_SIGNER = {
   name: () => [f.text("name", "Nama Lengkap", { from: "fullName" })],
   birthPlace: () => [f.text("birthPlace", "Tempat Lahir", { from: "birthPlace" })],
   birthDate: () => [f.date("birthDate", "Tanggal Lahir", { from: "birthDate" })],
-  occupation: () => [f.select("occupation", "Pekerjaan", OPT.occupation, { from: "occupation", editable: true })],
+  occupation: () => [f.occupation("occupation", "Pekerjaan", { from: "occupation" })],
   address: () => [f.area("address", "Alamat", { from: "address", span: 2 })],
   relation: () => [f.text("deceasedRelation", "Hubungan dengan yang meninggal", { placeholder: "Contoh: Anak, Istri, Saudara" })],
 };

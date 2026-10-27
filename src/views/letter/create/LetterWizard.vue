@@ -16,7 +16,7 @@ import WizardStepper from "./WizardStepper.vue";
 import ApplicantLookup from "./ApplicantLookup.vue";
 import CitizenDocumentsPanel from "@/components/citizen/CitizenDocumentsPanel.vue";
 import { useApplicantLookup } from "./useApplicantLookup";
-import { applicantOf, fillForm, reviewLocation, scrollTop, validateFields } from "./formLogic";
+import { applicantOf, fillForm, reviewLocation, scrollTop, validateFields, focusFirstInvalid } from "./formLogic";
 import { hue as getHue } from "./pastel";
 import { LETTER_SOURCE, getLetterRequestError, submitSingleLetter } from "@/services/letter-create.service";
 
@@ -101,7 +101,7 @@ function back() {
 
 function next() {
   errors.value = validateFields(allSections.value, form);
-  if (Object.keys(errors.value).length) return;
+  if (Object.keys(errors.value).length) return focusFirstInvalid(Object.keys(errors.value));
 
   if (!isOriginal.value) {
     confirmError.value = true;

@@ -20,7 +20,7 @@ export const sections = [
       f.nik("nik", "NIK", { from: "nik" }),
       f.text("birthPlace", "Tempat Lahir", { from: "birthPlace" }),
       f.date("birthDate", "Tanggal Lahir", { from: "birthDate" }),
-      f.select("occupation", "Pekerjaan", OPT.occupation, { from: "occupation", editable: true }),
+      f.occupation("occupation", "Pekerjaan", { from: "occupation" }),
       f.area("address", "Alamat", { from: "address", span: 2 }),
     ],
   },

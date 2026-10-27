@@ -33,7 +33,7 @@ function metaOf(sections) {
 }
 const defsOf = (sections) => Object.fromEntries(sections.flatMap((s) => s.fields).map((f) => [f.key, f]))
 const snakeKey = (v) => String(v ?? '').replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '').toLowerCase()
-const bareOption = (o) => String(o ?? '').replace(/^\s*\d+\s*[.)\-:]\s*/, '').trim()
+const bareOption = (o) => String(o && typeof o === 'object' ? (o.label ?? o.value) : o ?? '').replace(/^\s*\d+\s*[.)\-:]\s*/, '').trim()
 
 async function checkOne(entry, types) {
   const [slug, group, , title, code] = entry

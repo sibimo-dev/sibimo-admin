@@ -42,7 +42,7 @@ export const sections = arrange(
         f.text("name", "Nama Lengkap", { from: "fullName" }),
         f.text("birthPlace", "Tempat Lahir", { from: "birthPlace" }),
         f.date("birthDate", "Tanggal Lahir", { from: "birthDate" }),
-        f.select("occupation", "Pekerjaan", OPT.occupation, { from: "occupation", editable: true }),
+        f.occupation("occupation", "Pekerjaan", { from: "occupation" }),
         f.area("address", "Alamat", { from: "address", span: 2 }),
       ],
     },
@@ -52,7 +52,7 @@ export const sections = arrange(
       hint: "Anak yang dinyatakan sebagai anak kandung dari ibu dan ayah di bawah.",
       fields: [
         ...anak.fields, // childName, childNik (opsional), childBirthPlace, childBirthDate
-        f.select("childOccupation", "Pekerjaan", OPT.occupation, { default: "Belum/Tidak Bekerja", editable: true }),
+        f.occupation("childOccupation", "Pekerjaan", { default: "Belum/Tidak Bekerja" }),
         f.area("childAddress", "Alamat", { span: 2 }),
       ],
     },
