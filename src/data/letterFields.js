@@ -714,7 +714,6 @@ const DEATH_DECEASED = {
   religion: () => [f.select("deceasedReligion", "Agama", OPT.religion)],
   occupation: () => [f.occupation("deceasedOccupation", "Pekerjaan")],
   address: () => [f.area("deceasedAddress", "Alamat", { span: 2 })],
-  childOrder: () => [f.text("deceasedChildOrder", "Anak ke- (dengan huruf)", { placeholder: "Contoh: Kedua" })],
   deathDate: () => [f.date("deathDate", "Tanggal Meninggal", { dayKey: "deathDay" })],
   deathDay: () => [f.text("deathDay", "Hari Meninggal", { placeholder: "Terisi otomatis dari tanggal" })],
   deathTime: () => [f.time("deathTime", "Jam Meninggal")],
@@ -732,14 +731,14 @@ export const deathDeceased = (parts, title = "Data Jenazah", labels = {}) => ({
 });
 
 /* Urutan SAMA di Formulir Pelaporan Kematian & Surat Keterangan Kematian */
-export const DEATH_JENAZAH_FORM = ["nik", "name", "gender", "birthPlace", "birthDate", "age", "religion", "occupation", "address", "childOrder", "deathDate", "deathDay", "deathTime", "deathCause", "deathPlace", "informant"];
+export const DEATH_JENAZAH_FORM = ["nik", "name", "gender", "birthPlace", "birthDate", "age", "religion", "occupation", "address", "deathDate", "deathDay", "deathTime", "deathCause", "deathPlace", "informant"];
 
 /* Surat Keterangan Kematian: sama seperti di atas, ditambah "Tempat Meninggal" (no. 11 di xlsx) setelah Hari/Tanggal */
-export const DEATH_JENAZAH_SKK = ["nik", "name", "gender", "birthPlace", "birthDate", "age", "religion", "occupation", "address", "childOrder", "deathDate", "deathDay", "deathLocation", "deathTime", "deathCause", "deathPlace", "informant"];
+export const DEATH_JENAZAH_SKK = ["nik", "name", "gender", "birthPlace", "birthDate", "age", "religion", "occupation", "address", "deathDate", "deathDay", "deathLocation", "deathTime", "deathCause", "deathPlace", "informant"];
 
 /* ---------- Ibu / Ayah jenazah ---------- */
 const DEATH_PARENT = {
-  nik: (p) => [f.nik(`${p}Nik`)],
+  nik: (p) => [f.nik(`${p}Nik`, "NIK", { optional: true, placeholder: "16 digit NIK (opsional)" })],  
   name: (p) => [f.text(`${p}Name`, "Nama Lengkap")],
   birthPlace: (p) => [f.text(`${p}BirthPlace`, "Tempat Lahir")],
   birthDate: (p) => [f.date(`${p}BirthDate`, "Tanggal Lahir")],
