@@ -117,10 +117,31 @@ export function makeResidentLookup(resident) {
 
 /* Untuk field `select`: samakan nilai dari data warga dengan pilihan di form (tanpa peduli huruf besar/kecil),
    supaya "ISLAM" cocok dengan opsi "Islam". Bila tidak ada yang cocok, nilai aslinya dipakai apa adanya. */
-const matchOption = (field, raw) =>
-  field.type === "select" && Array.isArray(field.options)
-    ? field.options.find((o) => String(o).toLowerCase() === String(raw).trim().toLowerCase()) ?? raw
-    : raw;
+const bareOption = (value) => String(value ?? "")
+  .replace(/^\s*\d+\s*[.)\-:]\s*/, "")
+  .trim()
+  .toLowerCase();
+const numberedGender = (value) => {
+  const bare = bareOption(value);
+  if (bare === "laki-laki") return "1. Laki-laki";
+  if (bare === "perempuan") return "2. Perempuan";
+  return value;
+};
+const isGenderField = (field) => {
+  const key = String(field.key ?? "").toLowerCase();
+  const label = String(field.label ?? "").toLowerCase();
+  return field.from === "gender" || key.includes("gender") || key.includes("jeniskelamin") || label.includes("jenis kelamin");
+};
+const matchOption = (field, raw) => {
+  if (field.type !== "select" || !Array.isArray(field.options)) return isGenderField(field) ? numberedGender(raw) : raw;
+  const text = String(raw ?? "").trim().toLowerCase();
+  const hit = field.options.find((option) => {
+    const value = option && typeof option === "object" ? option.value ?? option.label : option;
+    return String(value).trim().toLowerCase() === text || bareOption(value) === bareOption(raw);
+  });
+  if (hit === undefined) return raw;
+  return hit && typeof hit === "object" ? hit.value ?? hit.label : hit;
+};
 
 /* Isi semua field yang punya `from` dari data warga. Isian yang sudah diketik manual TIDAK ditimpa; isian yang sebelumnya
    terisi otomatis (autoFilled) boleh diganti saat NIK diganti. Blok reporter lama yang tidak memiliki `from` tetap

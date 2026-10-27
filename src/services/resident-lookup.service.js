@@ -66,6 +66,7 @@ function toResidentPerson(c) {
     nationality: c.nationality ?? 'WNI',
     address: c.address ?? c.ktp_address ?? '',
     phoneNumber: c.phone_number ?? '',
+    marriageCertificateNumber: c.marriage_certificate_number ?? '',
     familyCardNumber: normNik(firstFilled(c.family_card_number, c.familyCardNumber, c.kk_number, c.nomor_kk)),
     familyRelationship: c.family_relationship ?? '',
     fatherName: c.father_name ?? '',

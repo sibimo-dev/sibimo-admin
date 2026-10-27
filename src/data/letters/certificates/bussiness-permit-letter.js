@@ -15,7 +15,7 @@ export const sections = [
       f.text("name", "Nama", { from: "fullName" }),
       f.text("birthPlaceDate", "Tempat/Tgl. Lahir", { from: "birthPlaceDate", placeholder: "Contoh: Sleman, 17 Agustus 1990" }),
       f.nik("nik", "NIK", { from: "nik" }),
-      f.text("gender", "Jenis Kelamin", { from: "gender", placeholder: "Laki-laki / Perempuan" }),
+      f.text("gender", "Jenis Kelamin", { from: "gender", placeholder: "1. Laki-laki / 2. Perempuan" }),
       f.text("maritalStatus", "Status Perkawinan", { from: "maritalStatus", placeholder: "Belum Kawin / Kawin / Cerai Hidup / Cerai Mati" }),
       f.text("occupation", "Pekerjaan", { from: "occupation" }),
       f.area("address", "Alamat", { from: "address", span: 2 }),

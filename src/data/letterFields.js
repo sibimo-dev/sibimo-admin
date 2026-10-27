@@ -2,8 +2,13 @@
    Satu surat = satu file .vue yang menyusun `sections` + `documents` dari sini. */
 
 /* ---------- Pilihan dropdown ---------- */
+export const GENDER_OPTIONS = [
+  "1. Laki-laki",
+  "2. Perempuan",
+];
+
 export const OPT = {
-  gender: ["Laki-laki", "Perempuan"],
+  gender: GENDER_OPTIONS,
   religion: ["Islam", "Kristen", "Katolik", "Hindu", "Buddha", "Khonghucu"],
   marital: ["Belum Kawin", "Kawin", "Kawin Tercatat", "Kawin Belum Tercatat", "Cerai Hidup", "Cerai Mati"],
   education: ["Tidak/Belum Sekolah", "SD", "SMP", "SMA/SMK", "D1/D2/D3", "D4/S1", "S2", "S3"],
@@ -22,11 +27,16 @@ export const OPT = {
 
 /* ---------- Pembuat field ---------- */
 const make = (type) => (key, label, opts = {}) => ({ key, label, type, ...opts });
+const isGenderOptions = (options) => Array.isArray(options)
+  && options.length === 2
+  && options.every((option) => typeof option === "string")
+  && options.map((option) => option.trim().toLowerCase()).sort().join("|") === "laki-laki|perempuan";
+const normalizeOptions = (options) => isGenderOptions(options) ? GENDER_OPTIONS : options;
 export const f = {
   text: make("text"),
   hamlet: (key, label = "Dusun/Dukuh/Kampung", opts = {}) => ({ key, label, type: "hamlet", ...opts }),
   area: make("textarea"),
-  select: (key, label, options, opts = {}) => ({ key, label, type: "select", options, ...opts }),
+  select: (key, label, options, opts = {}) => ({ key, label, type: "select", options: normalizeOptions(options), ...opts }),
   date: make("date"),
   time: make("time"),
   /** checkbox banyak pilihan (nilai = array) */
