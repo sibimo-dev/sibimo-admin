@@ -76,17 +76,38 @@ export function fillForm(form, sections, lookup = () => undefined) {
    Jenis kelamin dibandingkan secara longgar (huruf besar/kecil, "L"/"P", "Male"/"Female", dst.). */
 const MALE = ["laki-laki", "laki laki", "l", "male", "pria"];
 const FEMALE = ["perempuan", "p", "female", "wanita"];
+const normGender = (value) => {
+  const gender = String(value ?? "").trim().toLowerCase();
+  if (MALE.includes(gender)) return "Laki-laki";
+  if (FEMALE.includes(gender)) return "Perempuan";
+  return String(value ?? "").trim();
+};
 
 export function makeResidentLookup(resident) {
   return (key) => {
     if (!resident) return undefined;
-    const m = /^(asFather|asMother|asGroom|asBride|parentFather|parentMother|spouse):(.+)$/.exec(key);
+    const m = /^(asFather|asMother|asGroom|asBride|asHusband|asWife|parentFather|parentMother|spouse):(.+)$/.exec(key);
     if (!m) return resident[key];
     const [, relation, property] = m;
     const g = String(resident.gender ?? "").trim().toLowerCase();
     if (relation === "parentFather") return resident.father?.[property];
     if (relation === "parentMother") return resident.mother?.[property];
     if (relation === "spouse") return resident.spouse?.[property];
+    if (relation === "asHusband" || relation === "asWife") {
+      const status = String(resident.maritalStatus ?? "").trim().toLowerCase();
+      const familyRelation = String(resident.familyRelationship ?? "").trim().toLowerCase();
+      const eligible = resident.spouse
+        && status
+        && !/belum|cerai|janda|duda|jejaka|perawan/i.test(status)
+        && /kawin|menikah/i.test(status)
+        && familyRelation
+        && !/anak|menantu|cucu|orang ?tua|saudara|famili/i.test(familyRelation)
+        && /suami|istri|kepala|\bkk\b/i.test(familyRelation);
+      if (!eligible) return undefined;
+      const requestedGender = relation === "asHusband" ? "Laki-laki" : "Perempuan";
+      const source = normGender(resident.gender) === requestedGender ? resident : resident.spouse;
+      return source?.[property];
+    }
     const role = MALE.includes(g) ? "Father" : FEMALE.includes(g) ? "Mother" : null;
     const coupleRole = MALE.includes(g) ? "asGroom" : FEMALE.includes(g) ? "asBride" : null;
     if (relation === "asFather" || relation === "asMother") return relation === `as${role}` ? resident[property] : undefined;
@@ -177,7 +198,15 @@ export function applyResident(form, sections, resident, autoFilled = {}, options
       const source = field.from || alias?.from;
       if (!source) continue;
       const raw = lookup(source);
-      if (!isFilled(raw)) continue;
+      if (!isFilled(raw)) {
+        // Bila NIK diganti ke warga yang belum menikah/tidak memiliki pasangan,
+        // jangan tinggalkan data pasangan otomatis dari pencarian sebelumnya.
+        if (/^(spouse|asHusband|asWife):/.test(String(field.from ?? "")) && autoFilled[field.key]) {
+          form[field.key] = field.default ?? "";
+          delete autoFilled[field.key];
+        }
+        continue;
+      }
       const current = form[field.key];
       // Pencarian catin adalah perintah eksplisit untuk mengganti isi blok catin
       // dan orang tuanya dengan hasil NIK yang baru dicari. Pencarian pemohon

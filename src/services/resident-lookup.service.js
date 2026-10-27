@@ -83,25 +83,35 @@ function toResidentPerson(c) {
 
 function spouseOf(c, citizens) {
   const familyCard = normNik(c?.family_card_number)
-  if (!familyCard || !/kawin|menikah/i.test(String(c?.marital_status ?? ''))) return null
+  if (!familyCard || !isMarriedStatus(c?.marital_status)) return null
+  const allowedRelations = spouseRelationsFor(c)
+  if (!allowedRelations) return null
   const ownGender = normGender(c.gender)
   const opposite = ownGender === 'Laki-laki' ? 'Perempuan' : ownGender === 'Perempuan' ? 'Laki-laki' : ''
   if (!opposite) return null
   const candidates = citizens
     .filter((item) => normNik(item.family_card_number) === familyCard)
     .filter((item) => normNik(item.national_id) !== normNik(c.national_id))
+    .filter((item) => isMarriedStatus(item.marital_status))
     .filter((item) => normGender(item.gender) === opposite)
+    .filter((item) => allowedRelations.some((allowed) => String(item.family_relationship ?? '').toLowerCase().includes(allowed)))
   if (!candidates.length) return null
-  const relation = (item) => String(item.family_relationship ?? '').toLowerCase()
-  candidates.sort((a, b) => {
-    const score = (item) => {
-      const value = relation(item)
-      if (ownGender === 'Laki-laki') return value === 'istri' ? 0 : 1
-      return value === 'suami' || value === 'kepala keluarga' ? 0 : 1
-    }
-    return score(a) - score(b)
-  })
   return toResidentPerson(candidates[0])
+}
+
+function isMarriedStatus(status) {
+  const value = String(status ?? '').trim().toLowerCase()
+  if (!value || /belum|cerai|janda|duda|jejaka|perawan/i.test(value)) return false
+  return /kawin|menikah/i.test(value)
+}
+
+function spouseRelationsFor(c) {
+  const relation = String(c?.family_relationship ?? '').trim().toLowerCase()
+  if (!relation || /anak|menantu|cucu|orang ?tua|saudara|famili/i.test(relation)) return null
+  if (relation.includes('istri')) return ['suami', 'kepala']
+  if (relation.includes('suami')) return ['istri', 'kepala']
+  if (/kepala|\bkk\b/i.test(relation)) return normGender(c.gender) === 'Laki-laki' ? ['istri'] : ['suami']
+  return null
 }
 
 export function toResident(c, citizens = []) {
