@@ -1,59 +1,19 @@
 /* Kumpulan "cetakan" isian yang dipakai berulang oleh file-file surat.
    Satu surat = satu file .vue yang menyusun `sections` + `documents` dari sini. */
 
-/* ---------- Pilihan dropdown ----------
-   Pilihan bernomor MENGIKUTI form Data Warga (views/citizen/CitizenFormView.vue):
-   `value` = nilai yang disimpan (sama dengan di data warga), `label` = teks bernomor yang tampil di dropdown.
-   Jangan ubah `value` tanpa mengubah Data Warga, karena autofill dari NIK mencocokkan lewat nilai ini. */
-const opts = (list) => list.map(([value, name], i) => ({ value, label: `${i + 1}. ${name ?? value}` }));
-
-const OCCUPATION_CATALOG = [
-  '1. Belum/Tidak Bekerja', '2. Mengurus Rumah Tangga', '3. Pelajar/Mahasiswa', '4. Pensiunan',
-  '5. Pegawai Negeri Sipil (PNS)', '6. Tentara Nasional Indonesia (TNI)', '7. Kepolisian RI (POLRI)',
-  '8. Perdagangan', '9. Petani/Pekebun', '10. Peternak', '11. Nelayan/Perikanan', '12. Industri',
-  '13. Konstruksi', '14. Transportasi', '15. Karyawan Swasta', '16. Karyawan BUMN', '17. Karyawan BUMD',
-  '18. Karyawan Honorer', '19. Buruh Harian Lepas', '20. Buruh Tani/Perkebunan', '21. Buruh Nelayan/Perikanan',
-  '22. Buruh Peternakan', '23. Pembantu Rumah Tangga', '24. Tukang Cukur', '25. Tukang Listrik',
-  '26. Tukang Batu', '27. Tukang Kayu', '28. Tukang Sol Sepatu', '29. Tukang Las/Pandai Besi',
-  '30. Tukang Jahit', '31. Tukang Gigi', '32. Penata Rias', '33. Penata Busana', '34. Penata Rambut',
-  '35. Mekanik', '36. Seniman', '37. Tabib', '38. Paraji', '39. Perancang Busana', '40. Penterjemah',
-  '41. Imam Masjid', '42. Pendeta', '43. Pastor', '44. Wartawan', '45. Ustadz/Mubaligh', '46. Juru Masak',
-  '47. Promotor Acara', '48. Anggota DPR-RI', '49. Anggota DPD', '50. Anggota BPK', '51. Presiden',
-  '52. Wakil Presiden', '53. Anggota Mahkamah Konstitusi', '54. Anggota Kabinet/Kementrian', '55. Duta Besar',
-  '56. Gubernur', '57. Wakil Gubernur', '58. Bupati', '59. Wakil Bupati', '60. Walikota', '61. Wakil walikota',
-  '62. Anggota DPRD Prov.', '63. Anggota DPRD Kab./Kota', '64. Dosen', '65. Guru', '66. Pilot', '67. Pengacara',
-  '68. Notaris', '69. Arsitek', '70. Akuntan', '71. Konsultan', '72. Dokter', '73. Bidan', '74. Perawat',
-  '75. Apoteker', '76. Psikiater/Psikolog', '77. Penyiar Televisi', '78. Penyiar Radio', '79. Pelaut',
-  '80. Peneliti', '81. Sopir', '82. Pialang', '83. Paranormal', '84. Pedagang', '85. Perangkat Desa',
-  '86. Kepala desa', '87. Biarawati', '88. Wiraswasta', '89. Lainnya, Sebutkan', '90. Hakim', '91. Biarawan',
+/* ---------- Pilihan dropdown ---------- */
+export const GENDER_OPTIONS = [
+  "1. Laki-laki",
+  "2. Perempuan",
 ];
 
 export const OPT = {
-  gender: opts([['Laki-laki'], ['Perempuan']]),
-  religion: opts([['Islam'], ['Kristen'], ['Katolik'], ['Hindu'], ['Buddha', 'Budha'], ['Konghucu', 'Kong Hu Cu'], ['Kepercayaan Terhadap Tuhan Yang Maha Esa']]),
-  marital: opts([['Belum Menikah', 'Belum Kawin'], ['Menikah', 'Kawin'], ['Cerai Hidup'], ['Cerai Mati']]),
-  education: opts([
-    ['Tidak Sekolah', 'Tidak/Belum Sekolah'], ['Belum Tamat SD/Sederajat'], ['Tamat SD/Sederajat'], ['SMP', 'SLTP/Sederajat'],
-    ['SMA/SMK', 'SLTA/Sederajat'], ['D1/D2', 'Diploma I/II'], ['D3', 'Akademi/Diploma III/Sarjana Muda'],
-    ['S1', 'Diploma IV/Strata I'], ['S2', 'Strata II'], ['S3', 'Strata III'],
-  ]),
-  // Pekerjaan: daftar bernomor (string). Dipakai field bertipe "occupation" (cari + ketik bebas), lihat f.occupation.
-  occupation: OCCUPATION_CATALOG,
-  shdk: opts([
-    ['Kepala Keluarga'], ['Suami'], ['Istri'], ['Anak'], ['Menantu'], ['Cucu'], ['Orang Tua'], ['Mertua'],
-    ['Famili Lain'], ['Pembantu'], ['Lainnya'],
-  ]),
-  bloodType: opts([
-    ['A'], ['B'], ['AB'], ['O'], ['A-'], ['A+'], ['B+'], ['B-'], ['AB+'], ['AB-'], ['O+'], ['O-'], ['Tidak Tahu'],
-  ]),
-  // Akta lahir / kawin / cerai (di Data Warga: nilai "Belum Ada" / "Ada")
-  certificate: opts([['Belum Ada', 'Tidak Ada'], ['Ada']]),
-  // No. 25 formulir F-1.01: Kelainan Fisik dan Mental
-  disability: opts([['Tidak Ada'], ['Ada']]),
-  // No. 26 formulir F-1.01: Penyandang Cacat (dipilih bila no. 25 = Ada)
-  disabilityType: opts([
-    ['Cacat Fisik'], ['Cacat Netra/Buta'], ['Cacat Rungu/Wicara'], ['Cacat Mental/Jiwa'], ['Cacat Fisik dan Mental'], ['Cacat Lainnya'],
-  ]),
+  gender: GENDER_OPTIONS,
+  religion: ["Islam", "Kristen", "Katolik", "Hindu", "Buddha", "Khonghucu"],
+  marital: ["Belum Kawin", "Kawin", "Kawin Tercatat", "Kawin Belum Tercatat", "Cerai Hidup", "Cerai Mati"],
+  education: ["Tidak/Belum Sekolah", "SD", "SMP", "SMA/SMK", "D1/D2/D3", "D4/S1", "S2", "S3"],
+  occupation: ["Belum/Tidak Bekerja", "Pelajar/Mahasiswa", "Ibu Rumah Tangga", "Petani", "Buruh", "Wiraswasta", "Karyawan Swasta", "PNS/ASN", "TNI/Polri", "Pensiunan"],
+  shdk: ["Kepala Keluarga", "Suami", "Istri", "Anak", "Menantu", "Cucu", "Orang Tua", "Mertua", "Famili Lain", "Pembantu", "Lainnya"],
   kkStatus: ["Numpang KK", "Membuat KK Baru", "Nomor KK Tetap"],
   // Opsi bernomor mengikuti formulir cetak: angka di depan = angka yang dicetak di kotak pilihan pada PDF.
   kkStatusNo: ["1. Numpang KK", "2. Membuat KK Baru", "3. Nomor KK Tetap"],
@@ -67,6 +27,11 @@ export const OPT = {
 
 /* ---------- Pembuat field ---------- */
 const make = (type) => (key, label, opts = {}) => ({ key, label, type, ...opts });
+const isGenderOptions = (options) => Array.isArray(options)
+  && options.length === 2
+  && options.every((option) => typeof option === "string")
+  && options.map((option) => option.trim().toLowerCase()).sort().join("|") === "laki-laki|perempuan";
+const normalizeOptions = (options) => isGenderOptions(options) ? GENDER_OPTIONS : options;
 export const f = {
   text: make("text"),
   hamlet: (key, label = "Dusun/Dukuh/Kampung", opts = {}) => ({ key, label, type: "hamlet", ...opts }),

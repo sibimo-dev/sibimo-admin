@@ -184,17 +184,38 @@ export function fillForm(form, sections, lookup = () => undefined) {
    Jenis kelamin dibandingkan secara longgar (huruf besar/kecil, "L"/"P", "Male"/"Female", dst.). */
 const MALE = ["laki-laki", "laki laki", "l", "male", "pria"];
 const FEMALE = ["perempuan", "p", "female", "wanita"];
+const normGender = (value) => {
+  const gender = String(value ?? "").trim().toLowerCase();
+  if (MALE.includes(gender)) return "Laki-laki";
+  if (FEMALE.includes(gender)) return "Perempuan";
+  return String(value ?? "").trim();
+};
 
 export function makeResidentLookup(resident) {
   return (key) => {
     if (!resident) return undefined;
-    const m = /^(asFather|asMother|asGroom|asBride|parentFather|parentMother|spouse):(.+)$/.exec(key);
+    const m = /^(asFather|asMother|asGroom|asBride|asHusband|asWife|parentFather|parentMother|spouse):(.+)$/.exec(key);
     if (!m) return resident[key];
     const [, relation, property] = m;
     const g = String(resident.gender ?? "").trim().toLowerCase();
     if (relation === "parentFather") return resident.father?.[property];
     if (relation === "parentMother") return resident.mother?.[property];
     if (relation === "spouse") return resident.spouse?.[property];
+    if (relation === "asHusband" || relation === "asWife") {
+      const status = String(resident.maritalStatus ?? "").trim().toLowerCase();
+      const familyRelation = String(resident.familyRelationship ?? "").trim().toLowerCase();
+      const eligible = resident.spouse
+        && status
+        && !/belum|cerai|janda|duda|jejaka|perawan/i.test(status)
+        && /kawin|menikah/i.test(status)
+        && familyRelation
+        && !/anak|menantu|cucu|orang ?tua|saudara|famili/i.test(familyRelation)
+        && /suami|istri|kepala|\bkk\b/i.test(familyRelation);
+      if (!eligible) return undefined;
+      const requestedGender = relation === "asHusband" ? "Laki-laki" : "Perempuan";
+      const source = normGender(resident.gender) === requestedGender ? resident : resident.spouse;
+      return source?.[property];
+    }
     const role = MALE.includes(g) ? "Father" : FEMALE.includes(g) ? "Mother" : null;
     const coupleRole = MALE.includes(g) ? "asGroom" : FEMALE.includes(g) ? "asBride" : null;
     if (relation === "asFather" || relation === "asMother") return relation === `as${role}` ? resident[property] : undefined;
@@ -202,29 +223,32 @@ export function makeResidentLookup(resident) {
   };
 }
 
-/* Untuk field `select` / `occupation`: samakan nilai dari data warga dengan pilihan di form (tanpa peduli huruf besar/kecil,
-   nomor di depan, atau penulisan lama), supaya "ISLAM" cocok dengan opsi "Islam" dan "5. Pegawai Negeri Sipil (PNS)" cocok
-   dengan "Pegawai Negeri Sipil (PNS)". Pilihan boleh teks biasa atau { value, label }. Bila tidak ada yang cocok, nilai aslinya
-   dipakai apa adanya. */
-const bareNumber = (v) => String(v ?? "").replace(/^\s*\d+\s*[.)\-:]\s*/, "").trim();
-const keyOf = (v) => bareNumber(v).toLowerCase().replace(/[^a-z0-9]+/g, "");
-// Penulisan lama / ejaan lain yang artinya sama dengan nilai di Data Warga.
-const OLD_VALUE = { belumkawin: "belummenikah", kawin: "menikah", khonghucu: "konghucu", konghucu: "konghucu", budha: "buddha" };
-const canon = (v) => OLD_VALUE[keyOf(v)] ?? keyOf(v);
+/* Untuk field `select`: samakan nilai dari data warga dengan pilihan di form (tanpa peduli huruf besar/kecil),
+   supaya "ISLAM" cocok dengan opsi "Islam". Bila tidak ada yang cocok, nilai aslinya dipakai apa adanya. */
+const bareOption = (value) => String(value ?? "")
+  .replace(/^\s*\d+\s*[.)\-:]\s*/, "")
+  .trim()
+  .toLowerCase();
+const numberedGender = (value) => {
+  const bare = bareOption(value);
+  if (bare === "laki-laki") return "1. Laki-laki";
+  if (bare === "perempuan") return "2. Perempuan";
+  return value;
+};
+const isGenderField = (field) => {
+  const key = String(field.key ?? "").toLowerCase();
+  const label = String(field.label ?? "").toLowerCase();
+  return field.from === "gender" || key.includes("gender") || key.includes("jeniskelamin") || label.includes("jenis kelamin");
+};
 const matchOption = (field, raw) => {
-  const text = String(raw ?? "").trim();
-  if (field.type === "occupation") {
-    const hit = (field.options ?? []).find((o) => keyOf(o) === keyOf(text));
-    return hit ? bareNumber(hit) : bareNumber(text) || text;
-  }
-  if (field.type !== "select" || !Array.isArray(field.options)) return raw;
-  const want = canon(text);
-  const hit = field.options.find((o) => {
-    const value = o && typeof o === "object" ? o.value : o;
-    const label = o && typeof o === "object" ? o.label : o;
-    return canon(value) === want || canon(label) === want;
+  if (field.type !== "select" || !Array.isArray(field.options)) return isGenderField(field) ? numberedGender(raw) : raw;
+  const text = String(raw ?? "").trim().toLowerCase();
+  const hit = field.options.find((option) => {
+    const value = option && typeof option === "object" ? option.value ?? option.label : option;
+    return String(value).trim().toLowerCase() === text || bareOption(value) === bareOption(raw);
   });
-  return hit === undefined ? raw : (hit && typeof hit === "object" ? hit.value : hit);
+  if (hit === undefined) return raw;
+  return hit && typeof hit === "object" ? hit.value ?? hit.label : hit;
 };
 
 /* Isi semua field yang punya `from` dari data warga. Isian yang sudah diketik manual TIDAK ditimpa; isian yang sebelumnya
@@ -325,7 +349,15 @@ export function applyResident(form, sections, resident, autoFilled = {}, options
       const source = field.from || alias?.from;
       if (!source) continue;
       const raw = lookup(source);
-      if (!isFilled(raw)) continue;
+      if (!isFilled(raw)) {
+        // Bila NIK diganti ke warga yang belum menikah/tidak memiliki pasangan,
+        // jangan tinggalkan data pasangan otomatis dari pencarian sebelumnya.
+        if (/^(spouse|asHusband|asWife):/.test(String(field.from ?? "")) && autoFilled[field.key]) {
+          form[field.key] = field.default ?? "";
+          delete autoFilled[field.key];
+        }
+        continue;
+      }
       const current = form[field.key];
       // Pencarian catin adalah perintah eksplisit untuk mengganti isi blok catin
       // dan orang tuanya dengan hasil NIK yang baru dicari. Pencarian pemohon

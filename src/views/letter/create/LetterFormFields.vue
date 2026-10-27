@@ -26,6 +26,7 @@ const emit = defineEmits(["edit", "resident-found", "resident-cleared"]);
 
 const hueFor = (i) => HUES[SECTION_HUES[i % SECTION_HUES.length]];
 const edit = (key) => emit("edit", key);
+const hasObjectOptions = (options) => Array.isArray(options) && options.some((option) => option && typeof option === "object");
 
 const catinLookups = reactive({});
 const catinState = (lookupKey) => {
@@ -420,7 +421,7 @@ onMounted(resyncFamily);
               </span>
             </label>
 
-            <Select v-if="field.type === 'select'" :id="`${idPrefix}-${field.key}`" v-model="form[field.key]" :options="field.options" v-bind="selectBind(field.options)" :editable="field.editable" :disabled="field.readonly || field.disabled" placeholder="Pilih" :invalid="fieldInvalid(field, form[field.key])" class="w-full" @update:modelValue="edit(field.key)" />
+            <Select v-if="field.type === 'select'" :id="`${idPrefix}-${field.key}`" v-model="form[field.key]" :options="field.options" :optionLabel="hasObjectOptions(field.options) ? 'label' : undefined" :optionValue="hasObjectOptions(field.options) ? 'value' : undefined" :editable="field.editable" :disabled="field.readonly || field.disabled" placeholder="Pilih" :invalid="fieldInvalid(field, form[field.key])" class="w-full" @update:modelValue="edit(field.key)" />
             <DatePicker v-else-if="field.type === 'date'" :id="`${idPrefix}-${field.key}`" v-model="form[field.key]" showIcon iconDisplay="input" dateFormat="dd/mm/yy" placeholder="dd/mm/yyyy" :disabled="field.readonly || field.disabled" :invalid="!!errors[field.key]" @update:modelValue="edit(field.key)" />
             <AutoComplete v-else-if="field.type === 'occupation'" :inputId="`${idPrefix}-${field.key}`" :modelValue="form[field.key]" :suggestions="jobSuggestions" dropdown :forceSelection="false" :disabled="field.readonly || field.disabled" :invalid="!!errors[field.key]" placeholder="Cari atau ketik pekerjaan" class="w-full" inputClass="w-full" @complete="searchJobs($event, field.options)" @item-select="setJob(form, field.key, bareJob($event.value)); edit(field.key)" @update:modelValue="setJob(form, field.key, $event); edit(field.key)" />
             <AutoComplete v-else-if="field.type === 'hamlet'" :id="`${idPrefix}-${field.key}`" v-model="form[field.key]" :suggestions="hamletSuggestions" dropdown placeholder="Pilih atau ketik nama dusun" :disabled="field.readonly || field.disabled" :invalid="!!errors[field.key]" class="w-full" inputClass="w-full" @complete="searchHamlets" @update:modelValue="edit(field.key)" />
@@ -453,16 +454,9 @@ onMounted(resyncFamily);
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
                   <div v-for="c in field.columns" :key="c.key" class="flex flex-col gap-1">
                     <label class="text-xs text-slate-800">{{ c.label }}</label>
-                    <div v-if="isLocked(field, row) && c.type !== 'date'" class="flex min-h-[2.5rem] items-center rounded-lg border border-slate-200 bg-slate-100 px-3 text-sm text-slate-700">{{ cellText(c, row[c.key]) }}</div>
-                    <Select v-else-if="c.type === 'select'" v-model="row[c.key]" :options="c.options" v-bind="selectBind(c.options)" :filter="c.filter" placeholder="Pilih" class="w-full" :disabled="colDisabled(c, row)" :invalid="rowInvalid(field, row, c) || nikInvalid(c, row[c.key])" @update:modelValue="syncRow(field, row)" />
-                    <AutoComplete v-else-if="c.type === 'occupation'" :modelValue="row[c.key]" :suggestions="jobSuggestions" dropdown :forceSelection="false" :invalid="rowInvalid(field, row, c)" placeholder="Cari atau ketik pekerjaan" class="w-full" inputClass="w-full" @complete="searchJobs($event, c.options)" @item-select="setJob(row, c.key, bareJob($event.value))" @update:modelValue="setJob(row, c.key, $event)" />
-                    <div v-else-if="c.type === 'date' && c.lifetime && isLifetime(row[c.key])" class="flex min-h-[2.5rem] items-center rounded-lg border border-slate-200 bg-slate-100 px-3 text-sm font-medium text-slate-700">{{ LIFETIME }}</div>
-                    <DatePicker v-else-if="c.type === 'date'" v-model="row[c.key]" showIcon iconDisplay="input" dateFormat="dd/mm/yy" :disabled="colDisabled(c, row)" :invalid="rowInvalid(field, row, c)" />
-                    <InputText v-else v-model="row[c.key]" :disabled="colDisabled(c, row)" :maxlength="isNikField(c) ? 16 : undefined" :inputmode="isNikField(c) ? 'numeric' : undefined" :invalid="rowInvalid(field, row, c) || nikInvalid(c, row[c.key])" @update:modelValue="onRowInput(field, row, c)" />
-                    <label v-if="c.type === 'date' && c.lifetime" class="mt-1 flex w-fit cursor-pointer items-center gap-2 text-xs text-slate-700">
-                      <Checkbox :modelValue="isLifetime(row[c.key])" binary :disabled="colDisabled(c, row)" @update:modelValue="setLifetime(row, c, $event)" />
-                      <span>Seumur hidup</span>
-                    </label>
+                    <Select v-if="c.type === 'select'" v-model="row[c.key]" :options="c.options" :optionLabel="hasObjectOptions(c.options) ? 'label' : undefined" :optionValue="hasObjectOptions(c.options) ? 'value' : undefined" placeholder="Pilih" class="w-full" :invalid="rowInvalid(field, row, c) || nikInvalid(c, row[c.key])" />
+                    <DatePicker v-else-if="c.type === 'date'" v-model="row[c.key]" showIcon iconDisplay="input" dateFormat="dd/mm/yy" :invalid="rowInvalid(field, row, c)" />
+                    <InputText v-else v-model="row[c.key]" :maxlength="isNikField(c) ? 16 : undefined" :inputmode="isNikField(c) ? 'numeric' : undefined" :invalid="rowInvalid(field, row, c) || nikInvalid(c, row[c.key])" />
                     <small v-if="nikInvalid(c, row[c.key])" class="text-red-500">{{ c.label }} harus tepat 16 digit angka.</small>
                   </div>
                 </div>
