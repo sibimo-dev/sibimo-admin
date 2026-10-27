@@ -12,7 +12,7 @@ import { DOC, deathDeceased, deathSigner, signerNames } from "@/data/letterField
 export const sections = [
   deathSigner(["nik", "name", "birthDate", "occupation", "address", "relation"]),
   deathDeceased(
-    ["name", "nik", "kk", "gender", "birthPlace", "religion", "occupation", "address", "childOrder", "deathDate", "deathDay", "deathTime", "deathCause", "deathCauseDetail", "informant", "deathPlace", "deathCity"],
+    ["name", "nik", "kk", "gender", "birthPlace", "religion", "occupation", "address", "deathDate", "deathDay", "deathTime", "deathCause", "deathCauseDetail", "informant", "deathPlace", "deathCity"],
     "Dengan Ini Melaporkan Kematian",
     { birthPlace: "Tempat Dilahirkan", deathPlace: "Tempat Meninggal" },
   ),
