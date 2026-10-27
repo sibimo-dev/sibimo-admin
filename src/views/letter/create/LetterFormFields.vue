@@ -9,9 +9,11 @@ import Checkbox from "primevue/checkbox";
 import Button from "primevue/button";
 import { onMounted, reactive, ref, watch } from "vue";
 import { findResidentByNik } from "@/services/resident-lookup.service";
-import { applyResidentToSections, visible, isFilled, emptyRow, toDate, syncFamilyRows, relocationMode, householdOf, pickFamily } from "./formLogic";
+import { applyResidentToSections, visible, isFilled, emptyRow, toDate, syncFamilyRows, relocationMode, familyModeFor, householdOf, pickFamily } from "./formLogic";
+import { DECEASED_NIK_KEY, KK_KEY, HEAD_KEY, hasDeceasedLookup, fillDeceasedData, clearDeceasedData, findHeadByKk, fillHeadOfFamily } from "./deceasedLookup";
 import { HUES, SECTION_HUES } from "./pastel";
 import { getRegions } from "@/services/region.service";
+import { scopeWilayah } from "@/data/letterFields";
 
 const props = defineProps({
   sections: { type: Array, required: true },
@@ -100,6 +102,78 @@ function onCatinNikInput(section, event) {
   catinSearchTimers.set(section.lookupKey, timer);
 }
 
+/* ---------- Surat kematian: NIK JENAZAH → data jenazah, KK, kepala keluarga, ibu & ayah ----------
+   Begitu isian "NIK" pada blok Data Jenazah (key deceasedNik) berisi 16 digit, data warga dicari lewat NIK itu
+   (bukan NIK pemohon). Bila ditemukan: data jenazah (nama, jenis kelamin, TTL, agama, pekerjaan, alamat), Nomor KK,
+   Nama Kepala Keluarga, serta data ibu dan ayah (bila tercatat) terisi otomatis.
+   Isian yang sudah diketik manual tidak ditimpa; isian otomatis dari NIK jenazah sebelumnya dikosongkan saat NIK berubah.
+   Nomor KK yang diketik manual (tanpa NIK jenazah) juga mencari Nama Kepala Keluarga-nya. */
+const deceased = reactive({ status: "idle", message: "" });
+let deceasedTimer = null;
+let deceasedSeq = 0;
+const resultMessage = (r) => {
+  const parents = r.mother && r.father ? "data ibu dan ayah" : r.mother ? "data ibu" : r.father ? "data ayah" : "";
+  const missing = r.mother && r.father ? "" : r.mother ? " Data ayah belum tercatat, isi manual." : r.father ? " Data ibu belum tercatat, isi manual." : " Data ibu dan ayah belum tercatat, isi manual.";
+  return `Data jenazah${parents ? `, ${parents}` : ""} terisi otomatis dari NIK ini. Periksa dan lengkapi bila perlu.${missing}`;
+};
+async function lookupDeceased() {
+  const digits = String(props.form[DECEASED_NIK_KEY] ?? "").replace(/\D/g, "");
+  const seq = ++deceasedSeq;
+  if (digits.length !== 16) {
+    clearDeceasedData(props.form, props.sections, props.autoFilled);
+    Object.assign(deceased, { status: "idle", message: "" });
+    return;
+  }
+  Object.assign(deceased, { status: "loading", message: "Mencari data jenazah..." });
+  try {
+    const resident = await findResidentByNik(digits);
+    if (seq !== deceasedSeq) return; // NIK sudah berubah lagi selama pencarian
+    if (!resident) {
+      clearDeceasedData(props.form, props.sections, props.autoFilled);
+      Object.assign(deceased, { status: "notfound", message: "NIK jenazah belum terdaftar di data warga. Isi data jenazah, ibu, dan ayah secara manual." });
+      return;
+    }
+    const result = fillDeceasedData(props.form, props.sections, resident, props.autoFilled);
+    Object.assign(deceased, { status: "found", message: resultMessage(result) });
+  } catch (error) {
+    if (seq !== deceasedSeq) return;
+    Object.assign(deceased, { status: "error", message: error?.response?.data?.message || "Gagal mencari data warga. Isi data jenazah secara manual." });
+  }
+}
+watch(
+  () => props.form[DECEASED_NIK_KEY],
+  () => {
+    if (!hasDeceasedLookup(props.sections)) return;
+    clearTimeout(deceasedTimer);
+    deceasedTimer = setTimeout(lookupDeceased, 250);
+  },
+);
+
+// Nomor KK diketik manual → Nama Kepala Keluarga menyesuaikan. KK yang baru saja diisi otomatis dari NIK jenazah dilewati.
+let kkTimer = null;
+let kkSeq = 0;
+async function lookupHeadByKk() {
+  const digits = String(props.form[KK_KEY] ?? "").replace(/\D/g, "");
+  const seq = ++kkSeq;
+  if (digits.length !== 16) return;
+  try {
+    const name = await findHeadByKk(digits);
+    if (seq !== kkSeq) return;
+    fillHeadOfFamily(props.form, props.sections, name, props.autoFilled);
+  } catch {
+    // pencarian gagal: nama kepala keluarga tetap diisi manual
+  }
+}
+watch(
+  () => props.form[KK_KEY],
+  () => {
+    if (!hasDeceasedLookup(props.sections) || !hasField(HEAD_KEY)) return;
+    if (props.autoFilled[KK_KEY] && props.autoFilled.__deceased?.[KK_KEY]) return;
+    clearTimeout(kkTimer);
+    kkTimer = setTimeout(lookupHeadByKk, 250);
+  },
+);
+
 const hamletOptions = ref([]);
 const hamletSuggestions = ref([]);
 
@@ -108,6 +182,16 @@ const searchHamlets = (event) => {
   hamletSuggestions.value = !query
     ? hamletOptions.value
     : hamletOptions.value.filter((name) => name.toLocaleLowerCase("id-ID").includes(query));
+};
+
+/* Isian bertipe `combo` (mis. Desa/Kecamatan/Kabupaten): pilih dari daftar ATAU ketik manual.
+   field.options boleh array atau fungsi (form) => array, sehingga daftar bisa bergantung pada isian lain
+   (daftar desa mengikuti kecamatan, daftar kecamatan mengikuti kabupaten, dst). */
+const comboSuggestions = ref([]);
+const searchCombo = (event, field) => {
+  const list = typeof field.options === "function" ? field.options(props.form) : field.options ?? [];
+  const query = String(event?.query ?? "").trim().toLocaleLowerCase("id-ID");
+  comboSuggestions.value = !query ? list : list.filter((name) => name.toLocaleLowerCase("id-ID").includes(query));
 };
 
 onMounted(async () => {
@@ -131,6 +215,29 @@ watch(
     for (const x of allFields().filter((y) => y.dayKey && keys.has(y.dayKey))) {
       const d = toDate(props.form[x.key]);
       if (d && !Number.isNaN(d.getTime())) props.form[x.dayKey] = HARI[d.getDay()];
+    }
+  },
+  { immediate: true },
+);
+
+/* Wilayah otomatis menurut "Cakupan Kepindahan" (field dengan `scopeAuto: { key, level }`).
+   antar desa satu kecamatan → Ngemplak/Sleman/DIY; antar kecamatan satu kabupaten → Sleman/DIY; antar kabupaten/provinsi → DIY.
+   Hanya menimpa isian yang masih kosong atau yang masih berisi nilai otomatis dari cakupan sebelumnya,
+   jadi ketikan/pilihan manual petugas tidak hilang. */
+const scopeSeen = {};
+const scopeFields = () => allFields().filter((x) => x.scopeAuto);
+watch(
+  () => [...new Set(scopeFields().map((x) => x.scopeAuto.key))].map((k) => props.form[k] ?? "").join("|"),
+  () => {
+    for (const k of new Set(scopeFields().map((x) => x.scopeAuto.key))) {
+      const now = scopeWilayah(props.form[k]);
+      const before = scopeSeen[k] ?? {};
+      for (const x of scopeFields().filter((y) => y.scopeAuto.key === k)) {
+        const level = x.scopeAuto.level;
+        const value = props.form[x.key];
+        if (!isFilled(value) || value === before[level]) props.form[x.key] = now[level] ?? "";
+      }
+      scopeSeen[k] = now;
     }
   },
   { immediate: true },
@@ -191,8 +298,17 @@ const minRows = (field) => field.min ?? (field.optional ? 0 : 1);
 
 /* ---------- Keluarga yang pindah: mengikuti Jenis Kepindahan (field rows dengan `autoByType`) ----------
    mode: head | all | others → baris otomatis & terkunci (tanpa tambah/hapus baris); partial → kepala keluarga otomatis,
-   anggota lain ditambah manual. Tanpa data KK (NIK pemohon belum dicari) → tampil sebagai baris manual biasa. */
-const rowMode = (field) => (field.autoByType && householdOf(props.autoFilled).length ? relocationMode(props.form[field.autoByType]) : null);
+   anggota lain ditambah manual. Tanpa data KK (NIK pemohon belum dicari) → tampil sebagai baris manual biasa.
+   Bila KK tidak punya anggota yang cocok dengan pilihan (mis. "Anggota Keluarga" tetapi KK hanya berisi kepala keluarga),
+   familyModeFor() mengembalikan null → baris tidak dikunci dan bisa diisi/ditambah manual. */
+const rowMode = (field) => {
+  if (!field.autoByType) return null;
+  const household = householdOf(props.autoFilled);
+  return household.length ? familyModeFor(props.form[field.autoByType], household) : null;
+};
+// KK ditemukan & Jenis Kepindahan dipilih, tetapi tidak ada anggota KK yang cocok → isian manual.
+const noAutoMatch = (field) =>
+  !!field.autoByType && householdOf(props.autoFilled).length > 0 && !!relocationMode(props.form[field.autoByType]) && !rowMode(field);
 const isHeadRow = (row) => {
   const nik = String(row?.nik ?? "");
   return !!nik && pickFamily("head", householdOf(props.autoFilled)).some((p) => String(p.nik ?? "") === nik);
@@ -211,7 +327,11 @@ const MODE_HINT = {
   partial: "Kepala keluarga terisi otomatis. Tambahkan anggota keluarga yang ikut pindah dengan tombol di bawah.",
   others: "Seluruh anggota keluarga kecuali kepala keluarga (terisi otomatis dari KK).",
 };
-const modeHint = (field) => (field.fromHousehold ? (props.autoFilled[field.key] ? "Terisi otomatis dari anggota KK yang terdaftar. Periksa, lengkapi, atau ubah bila perlu." : "") : MODE_HINT[rowMode(field)] ?? "");
+const NO_MATCH_HINT = "Tidak ada anggota KK yang sesuai dengan Jenis Kepindahan ini, jadi isi anggota keluarga secara manual (atau ubah Jenis Kepindahan).";
+const modeHint = (field) => {
+  if (noAutoMatch(field)) return NO_MATCH_HINT;
+  return field.fromHousehold ? (props.autoFilled[field.key] ? "Terisi otomatis dari anggota KK yang terdaftar. Periksa, lengkapi, atau ubah bila perlu." : "") : MODE_HINT[rowMode(field)] ?? "";
+};
 const overflowCount = (field) => {
   if (field.fromHousehold) return Math.max(0, householdOf(props.autoFilled).length - (field.max ?? 20));
   const mode = rowMode(field);
@@ -221,7 +341,7 @@ const cellText = (c, value) => {
   const opt = Array.isArray(c.options) ? c.options.find((o) => String(o?.value ?? o).toLowerCase() === String(value ?? "").trim().toLowerCase()) : null;
   return String(opt?.label ?? opt ?? value ?? "").trim() || "-";
 };
-// Di baris manual (mode partial): NIK anggota KK yang diketik lengkap → nama & SHDK terisi otomatis.
+// Di baris manual (mode partial / tanpa kecocokan): NIK anggota KK yang diketik lengkap → nama & SHDK terisi otomatis.
 function onRowInput(field, row, c) {
   if (!field.autoByType || c.key !== "nik") return;
   const nik = String(row.nik ?? "").trim();
@@ -305,6 +425,7 @@ onMounted(resyncFamily);
             <DatePicker v-else-if="field.type === 'date'" :id="`${idPrefix}-${field.key}`" v-model="form[field.key]" showIcon iconDisplay="input" dateFormat="dd/mm/yy" placeholder="dd/mm/yyyy" :disabled="field.readonly || field.disabled" :invalid="!!errors[field.key]" @update:modelValue="edit(field.key)" />
             <AutoComplete v-else-if="field.type === 'occupation'" :inputId="`${idPrefix}-${field.key}`" :modelValue="form[field.key]" :suggestions="jobSuggestions" dropdown :forceSelection="false" :disabled="field.readonly || field.disabled" :invalid="!!errors[field.key]" placeholder="Cari atau ketik pekerjaan" class="w-full" inputClass="w-full" @complete="searchJobs($event, field.options)" @item-select="setJob(form, field.key, bareJob($event.value)); edit(field.key)" @update:modelValue="setJob(form, field.key, $event); edit(field.key)" />
             <AutoComplete v-else-if="field.type === 'hamlet'" :id="`${idPrefix}-${field.key}`" v-model="form[field.key]" :suggestions="hamletSuggestions" dropdown placeholder="Pilih atau ketik nama dusun" :disabled="field.readonly || field.disabled" :invalid="!!errors[field.key]" class="w-full" inputClass="w-full" @complete="searchHamlets" @update:modelValue="edit(field.key)" />
+            <AutoComplete v-else-if="field.type === 'combo'" :inputId="`${idPrefix}-${field.key}`" :modelValue="form[field.key]" :suggestions="comboSuggestions" dropdown :forceSelection="false" placeholder="Pilih atau ketik manual" :disabled="field.readonly || field.disabled" :invalid="!!errors[field.key]" class="w-full" inputClass="w-full" @complete="searchCombo($event, field)" @update:modelValue="form[field.key] = $event ?? ''; edit(field.key)" />
             <Textarea v-else-if="field.type === 'textarea'" :id="`${idPrefix}-${field.key}`" v-model="form[field.key]" rows="3" autoResize :placeholder="field.placeholder" :readonly="field.readonly" :disabled="field.disabled" :invalid="!!errors[field.key]" @update:modelValue="edit(field.key)" />
             <InputText v-else-if="field.type === 'time'" :id="`${idPrefix}-${field.key}`" v-model="form[field.key]" type="time" :readonly="field.readonly" :disabled="field.disabled" :invalid="!!errors[field.key]" @update:modelValue="edit(field.key)" />
 
@@ -322,7 +443,7 @@ onMounted(resyncFamily);
 
             <!-- baris berulang -->
             <div v-else-if="field.type === 'rows'" class="flex flex-col gap-3">
-              <p v-if="modeHint(field)" class="text-xs text-slate-600">{{ modeHint(field) }}</p>
+              <p v-if="modeHint(field)" class="text-xs" :class="noAutoMatch(field) ? 'text-amber-700' : 'text-slate-600'">{{ modeHint(field) }}</p>
               <p v-if="overflowCount(field)" class="text-xs text-amber-700">Formulir hanya memuat {{ field.max }} baris; {{ overflowCount(field) }} anggota keluarga lainnya tidak tercantum.</p>
               <div v-for="(row, i) in form[field.key]" :key="i" class="rounded-xl border border-white bg-white/80 p-3 shadow-sm">
                 <div class="flex items-center justify-between">
@@ -349,6 +470,11 @@ onMounted(resyncFamily);
 
             <small v-if="nikInvalid(field, form[field.key])" class="text-red-500">{{ field.label }} harus tepat 16 digit angka.</small>
             <small v-if="errors[field.key]" class="text-red-500">{{ errors[field.key] }}</small>
+            <small
+              v-if="field.key === DECEASED_NIK_KEY && deceased.message && /^\d{16}$/.test(String(form[field.key] ?? '').trim())"
+              :class="deceased.status === 'found' ? 'text-emerald-700' : deceased.status === 'error' ? 'text-red-600' : deceased.status === 'loading' ? 'text-slate-500' : 'text-amber-700'"
+              aria-live="polite"
+            >{{ deceased.message }}</small>
           </div>
         </template>
       </div>

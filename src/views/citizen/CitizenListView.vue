@@ -303,7 +303,7 @@ function mapRowToResident(row) {
   const birth_certificate_status = normalized['aktalahir'] ?? ''
   const birth_certificate_number = normalized['nomoraktalahir'] ?? ''
   const blood_type = normalized['goldarah'] ?? ''
-  const phone_number = normalized['notelepon'] ?? normalized['nomortelepon'] ?? normalized['phonenumber'] ?? ''
+  const phone_number = normalized['notelepon'] ?? normalized['nomortelepon'] ?? normalized['nomorteleponwa'] ?? normalized['noteleponwa'] ?? normalized['whatsapp'] ?? normalized['nowa'] ?? normalized['phonenumber'] ?? ''
   const address = normalized['alamat'] ?? normalized['address'] ?? ''
   const occupation = normalized['pekerjaan'] ?? normalized['occupation'] ?? ''
   const education = normalized['pendidikan'] ?? normalized['education'] ?? ''
@@ -1185,7 +1185,7 @@ function exportReportToPdf() {
               <InputIcon class="pi pi-search text-neutral-400" />
               <InputText
                 v-model="filters.global.value"
-                placeholder="Cari nama, NIK, atau alamat"
+                placeholder="Cari nama, NIK, alamat, atau telepon"
                 class="w-full rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
               />
             </IconField>
@@ -1241,7 +1241,7 @@ function exportReportToPdf() {
           :value="residents"
           :loading="loading"
           :filters="filters"
-          :globalFilterFields="['name', 'fullName', 'full_name', 'nationalId', 'familyCardNumber', 'address', 'occupation', 'dusun']"
+          :globalFilterFields="['name', 'fullName', 'full_name', 'nationalId', 'familyCardNumber', 'address', 'occupation', 'dusun', 'phoneNumber']"
           :paginator="true"
           :rows="rowsPerPage"
           :rowsPerPageOptions="[10, 25, 50]"
@@ -1279,6 +1279,13 @@ function exportReportToPdf() {
           <Column field="recordEvent" header="Peristiwa" sortable />
           <Column field="gender" header="Jenis Kelamin" sortable />
           <Column field="address" header="Alamat" />
+
+          <Column field="phoneNumber" header="No. Telepon/WA" sortable>
+            <template #body="{ data }">
+              <span v-if="data.phoneNumber" class="whitespace-nowrap">{{ data.phoneNumber }}</span>
+              <span v-else class="text-neutral-400">-</span>
+            </template>
+          </Column>
 
           <Column field="status" header="Status" sortable>
             <template #body="{ data }">
@@ -1580,7 +1587,7 @@ function exportReportToPdf() {
           </div>
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div class="flex flex-col gap-1">
-              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor Telepon</span>
+              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Nomor Telepon/WA</span>
               <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.phoneNumber || '-' }}</span>
             </div>
             <div class="flex flex-col gap-1">

@@ -1,18 +1,11 @@
 // Disalin dari public: views/services/letters/applications/relocation-certificate-form.vue (hanya bagian isian & dokumen).
 // Isian di sini harus tetap sama dengan di public. Tampilan wizard ada di views/letter/create/.
 
-import { f, OPT, DOC, opt, alamat, kodeWilayah } from "@/data/letterFields";
-
-const ORIGIN_WILAYAH = {
-  village: "Bimomartani",
-  district: "Ngemplak",
-  regency: "Sleman",
-  province: "Daerah Istimewa Yogyakarta",
-};
+import { f, OPT, DOC, opt, alamat, kodeWilayah, wilayahDropdown, BIMOMARTANI } from "@/data/letterFields";
 
 // Langkah 1: urutan mengikuti formulir PDF
 export const sections = [
-  // DIISI OLEH PETUGAS: kode wilayah (default). Nama wilayah diambil dari "Alamat Daerah Asal" di bawah; Dusun/Dukuh/Kampung diisi di blok ini (key originHamlet, sama seperti sebelumnya); Nomor KK dari "Data Daerah Asal".
+  // DIISI OLEH PETUGAS: kode wilayah (default). Dusun/Dukuh/Kampung diisi di blok ini (key originHamlet); Nomor KK dari "Data Daerah Asal".
   kodeWilayah({ names: false, hamlet: true, hamletCode: true, hamletKey: "originHamlet", hamletOptional: true }, "Kode Wilayah (Diisi Oleh Petugas)"),
   // DATA DAERAH ASAL: 1. Nomor KK, 2. Nama Kepala Keluarga
   {
@@ -22,24 +15,30 @@ export const sections = [
       f.text("headOfFamily", "Nama Kepala Keluarga", { from: "headOfFamilyName" }),
     ],
   },
-  // 3. Alamat (RT, RW, Dusun, Desa, Kecamatan, Kab/Kota, Provinsi, Kode Pos, Telepon)
-  //    Alamat asal = alamat pemohon → terisi otomatis dari data warga & dibaca sebagai applicant.address
-  alamat("origin", "Alamat Daerah Asal", {
-    from: "address",
-    phoneFrom: "phoneNumber",
-    fieldFrom: {
-      rt: "rt",
-      rw: "rw",
-      village: "village",
-      district: "district",
-      regency: "regency",
-      province: "province",
-      postalCode: "postalCode",
-      phone: "phoneNumber",
-    },
-    defaults: ORIGIN_WILAYAH,
-    hamlet: false, // Dusun/Dukuh/Kampung asal ada di blok Kode Wilayah
-  }),
+  // 3. Alamat asal = alamat pemohon → terisi dari data warga.
+  //    Desa/Kecamatan/Kab/Provinsi: dropdown (boleh diketik), default Bimomartani/Ngemplak/Sleman/DIY.
+  wilayahDropdown(
+    alamat("origin", "Alamat Daerah Asal", {
+      from: "address",
+      phoneFrom: "phoneNumber",
+      fieldFrom: {
+        rt: "rt",
+        rw: "rw",
+        village: "village",
+        district: "district",
+        regency: "regency",
+        province: "province",
+        postalCode: "postalCode",
+        phone: "phoneNumber",
+      },
+      defaults: BIMOMARTANI,
+      hamlet: false, // Dusun/Dukuh/Kampung asal ada di blok Kode Wilayah
+      scopeKey: "relocationTypeLabel",
+    }),
+    "origin",
+    "relocationTypeLabel",
+    BIMOMARTANI,
+  ),
   // 4. NIK Pemohon, 5. Tempat/Tanggal Lahir, 6. Nama Lengkap
   {
     title: "Data Pemohon",
@@ -60,8 +59,13 @@ export const sections = [
       f.select("relocationTypeLabel", "Cakupan Kepindahan (subjudul formulir)", OPT.relocationScope, { default: OPT.relocationScope[0], span: 2 }),
     ],
   },
-  // 2. Alamat Tujuan Pindah
-  alamat("destination", "Alamat Tujuan Pindah"),
+  // 2. Alamat Tujuan Pindah: dropdown (boleh diketik), kosong / dipilih sendiri. Dusun diketik manual.
+  wilayahDropdown(
+    alamat("destination", "Alamat Tujuan Pindah", { hamletFree: true, scopeKey: "relocationTypeLabel" }),
+    "destination",
+    "relocationTypeLabel",
+    {},
+  ),
   // 3. Jenis Kepindahan, 4. Status KK bagi yang tidak pindah, 5. Status Nomor KK bagi yang pindah
   {
     title: "Jenis Kepindahan & Status KK",
@@ -78,7 +82,7 @@ export const sections = [
       f.rows("familyMembers", "Anggota keluarga yang pindah", [
         { key: "nik", label: "NIK" },
         { key: "name", label: "Nama" },
-        { key: "validUntil", label: "Masa berlaku KTP s/d", type: "date", optional: true },
+        { key: "validUntil", label: "Masa berlaku KTP s/d", type: "date", optional: true, lifetime: true },
         { key: "shdk", label: "SHDK", type: "select", options: OPT.shdk },
       ], { max: 7, autoByType: "relocationType" }),
     ],

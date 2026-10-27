@@ -30,6 +30,8 @@ export function display(field, v) {
      2. Kep. Keluarga dan seluruh Angg.        → semua anggota KK                (otomatis, terkunci)
      3. Kep. Keluarga dan sbg Angg. Keluarga   → kepala keluarga otomatis + anggota lain DITAMBAH MANUAL
      4. Anggota Keluarga                       → semua anggota KK kecuali kepala keluarga (otomatis, terkunci)
+   Bila pilihan otomatis tidak menghasilkan satu pun anggota (mis. mode 4 tetapi KK hanya berisi kepala keluarga),
+   baris dibuka sebagai isian MANUAL (tidak terkunci) lewat familyModeFor() → null.
    Daftar anggota KK disimpan di autoFilled.__household (bukan di form, jadi tidak ikut terkirim). */
 const isHead = (p) => /kepala\s+keluarga/i.test(String(p?.familyRelationship ?? ""));
 export const relocationMode = (value) => ({ 1: "head", 2: "all", 3: "partial", 4: "others" })[parseInt(String(value ?? "").trim(), 10)] ?? null;
@@ -41,6 +43,14 @@ export const pickFamily = (mode, household = []) => {
   if (mode === "all") return [...heads, ...others];
   if (mode === "others") return others;
   return [];
+};
+/* Mode efektif untuk tampilan: null bila tidak ada anggota KK yang cocok dengan pilihan Jenis Kepindahan,
+   sehingga baris tidak dikunci dan petugas bisa mengisi manual. Mode "partial" selalu dipertahankan
+   selama ada kepala keluarga (anggota lain ditambah manual). */
+export const familyModeFor = (value, household = []) => {
+  const mode = relocationMode(value);
+  if (!mode) return null;
+  return pickFamily(mode, household).length ? mode : null;
 };
 /* ---------- Daftar anggota dari KK (field rows dengan `fromHousehold`) ----------
    `fromHousehold` = { kunciKolom: "properti warga" }. Satu baris dibuat per anggota KK (kepala keluarga lebih dulu),
@@ -84,20 +94,34 @@ export function syncFamilyRows(form, sections, autoFilled = {}, prevHousehold = 
       const minRows = field.min ?? (field.optional ? 0 : 1);
       const pad = (rows) => [...rows, ...Array.from({ length: Math.max(0, minRows - rows.length) }, () => emptyRow(field.columns))];
       const mode = relocationMode(form[field.autoByType]);
+      const prevMode = autoFilled[`__mode_${field.key}`]; // baris dari mode otomatis (1/2/4) tidak dianggap input manual
       if (!household.length) {
         // KK tidak ditemukan / pencarian dihapus: buang baris otomatis milik KK lama, sisanya (manual) dibiarkan.
         if (prevHousehold.length) {
           form[field.key] = pad(old.filter((r) => !prevHousehold.some((p) => String(p.nik ?? "") === String(r.nik ?? ""))));
           delete autoFilled[field.key];
+          delete autoFilled[`__mode_${field.key}`];
           changed.push(field.key);
         }
         continue;
       }
       if (!mode) continue; // Jenis Kepindahan belum dipilih
+      const picked = pickFamily(mode, household);
+      if (!picked.length) {
+        // Tidak ada anggota KK yang cocok dengan pilihan ini (mis. "Anggota Keluarga" padahal KK hanya berisi kepala keluarga).
+        // Jangan sisakan baris kosong yang terkunci: buang baris otomatis sebelumnya, biarkan isian manual, buka baris untuk diisi manual.
+        const wasAuto = !!prevMode && prevMode !== "partial" && prevMode !== "manual";
+        const autoNiks = new Set([...nikSet(household), ...nikSet(prevHousehold)]);
+        const keep = old.filter((r) => Object.values(r).some(isFilled) && !(wasAuto && autoNiks.has(String(r.nik ?? ""))));
+        form[field.key] = pad(keep);
+        delete autoFilled[field.key];
+        autoFilled[`__mode_${field.key}`] = "manual";
+        changed.push(field.key);
+        continue;
+      }
       const validByNik = new Map(old.filter((r) => r.nik && r.validUntil).map((r) => [String(r.nik), r.validUntil]));
-      const auto = pickFamily(mode, household).map((p) => ({ ...familyRow(p), validUntil: validByNik.get(String(p.nik)) ?? "" }));
-      const prevMode = autoFilled[`__mode_${field.key}`]; // baris dari mode otomatis (2/4) tidak dianggap input manual
-      const manual = mode === "partial" && (!prevMode || prevMode === "partial") ? old.filter((r) => Object.values(r).some(isFilled) && !headNiks.has(String(r.nik ?? "")) && !prevOnly.has(String(r.nik ?? ""))) : [];
+      const auto = picked.map((p) => ({ ...familyRow(p), validUntil: validByNik.get(String(p.nik)) ?? "" }));
+      const manual = mode === "partial" && (!prevMode || prevMode === "partial" || prevMode === "manual") ? old.filter((r) => Object.values(r).some(isFilled) && !headNiks.has(String(r.nik ?? "")) && !prevOnly.has(String(r.nik ?? ""))) : [];
       form[field.key] = pad([...auto, ...manual].slice(0, field.max ?? 20));
       autoFilled[field.key] = true;
       autoFilled[`__mode_${field.key}`] = mode;

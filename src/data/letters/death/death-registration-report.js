@@ -11,7 +11,7 @@ import { PELAPOR_REGISTRATION_DEATH, dokJenazah, deathDeceased, deathParent, dea
 // Langkah 1: Jenazah (Jenis Kelamin/Anak Ke, Tanggal & Jam Kematian), Ibu & Ayah (TTL/Umur, alamat), Pelapor (diisi petugas/admin, khusus admin), Saksi (Tgl Lahir/Umur)
 export const sections = [
   keluarga(),
-  deathDeceased(["nik", "name", "gender", "childOrder", "birthPlace", "birthDate", "age", "religion", "occupation", "address", "deathDate", "deathTime", "deathCause", "deathPlace", "informant"]),
+  deathDeceased(["nik", "name", "gender", "birthPlace", "birthDate", "age", "religion", "occupation", "address", "deathDate", "deathTime", "deathCause", "deathPlace", "informant"]),
   deathParent("mother", "Data Ibu", ["nik", "name", "birthPlace", "birthDate", "age", "address"]),
   deathParent("father", "Data Ayah", ["nik", "name", "birthPlace", "birthDate", "age", "address"]),
   pelaporKematian(PELAPOR_REGISTRATION_DEATH),
