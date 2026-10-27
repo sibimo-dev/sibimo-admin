@@ -25,6 +25,54 @@ export const OPT = {
   plurality: ["Tunggal", "Kembar 2", "Kembar 3", "Kembar 4", "Lainnya"],
 };
 
+/* ---------- Daftar kode resmi Dukcapil (Formulir Biodata Penduduk WNI, F-1.01) ----------
+   Urutan = nomor kode. Nomor dibuat otomatis dari urutan; JANGAN mengubah urutan tanpa mencocokkan dengan formulir cetak.
+   Memakai key baru (…Kode) supaya surat lain yang memakai OPT.marital / education / occupation tidak berubah. */
+const numbered = (list) => list.map((o, i) => `${i + 1}. ${o}`);
+
+Object.assign(OPT, {
+  // Kolom 11, 16, 19: Akta Lahir / Akta Perkawinan / Akta Cerai
+  certificate: numbered(["Tidak Ada", "Ada"]),
+  // Kolom 13: Golongan Darah
+  bloodType: numbered(["A", "B", "AB", "O", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Tidak Tahu"]),
+  // Kolom 14: Agama (7 = Kepercayaan terhadap Tuhan YME)
+  religionKode: numbered(["Islam", "Kristen", "Katolik", "Hindu", "Buddha", "Khonghucu", "Kepercayaan terhadap Tuhan YME"]),
+  // Kolom 15: Status Perkawinan (hanya 4 pilihan)
+  maritalKode: numbered(["Belum Kawin", "Kawin", "Cerai Hidup", "Cerai Mati"]),
+  // Kolom 23: Kelainan Fisik & Mental
+  disability: numbered(["Tidak Ada", "Ada"]),
+  // Kolom 24: Penyandang Cacat
+  disabilityType: numbered([
+    "Cacat Fisik", "Cacat Netra/Buta", "Cacat Rungu/Wicara", "Cacat Mental/Jiwa", "Cacat Fisik dan Mental", "Cacat Lainnya",
+  ]),
+  // Kolom 25: Pendidikan Terakhir
+  educationKode: numbered([
+    "Tidak/Belum Sekolah", "Belum Tamat SD/Sederajat", "Tamat SD/Sederajat", "SLTP/Sederajat", "SLTA/Sederajat",
+    "Diploma I/II", "Akademi/Diploma III/S. Muda", "Diploma IV/Strata I", "Strata II", "Strata III",
+  ]),
+  // Kolom 26: Jenis Pekerjaan
+  occupationKode: numbered([
+    "Belum/Tidak Bekerja", "Mengurus Rumah Tangga", "Pelajar/Mahasiswa", "Pensiunan", "Pegawai Negeri Sipil (PNS)",
+    "Tentara Nasional Indonesia (TNI)", "Kepolisian RI (POLRI)", "Perdagangan", "Petani/Pekebun", "Peternak",
+    "Nelayan/Perikanan", "Industri", "Konstruksi", "Transportasi", "Karyawan Swasta",
+    "Karyawan BUMN", "Karyawan BUMD", "Karyawan Honorer", "Buruh Harian Lepas", "Buruh Tani/Perkebunan",
+    "Buruh Nelayan/Perikanan", "Buruh Peternakan", "Pembantu Rumah Tangga", "Tukang Cukur", "Tukang Listrik",
+    "Tukang Batu", "Tukang Kayu", "Tukang Sol Sepatu", "Tukang Las/Pandai Besi", "Tukang Jahit",
+    "Tukang Gigi", "Penata Rias", "Penata Busana", "Penata Rambut", "Mekanik",
+    "Seniman", "Tabib", "Paraji", "Perancang Busana", "Penterjemah",
+    "Imam Mesjid", "Pendeta", "Pastor", "Wartawan", "Ustadz/Mubaligh",
+    "Juru Masak", "Promotor Acara", "Anggota DPR-RI", "Anggota DPD", "Anggota BPK",
+    "Presiden", "Wakil Presiden", "Anggota Mahkamah Konstitusi", "Anggota Kabinet/Kementerian", "Duta Besar",
+    "Gubernur", "Wakil Gubernur", "Bupati", "Wakil Bupati", "Walikota",
+    "Wakil Walikota", "Anggota DPRD Provinsi", "Anggota DPRD Kabupaten/Kota", "Dosen", "Guru",
+    "Pilot", "Pengacara", "Notaris", "Arsitek", "Akuntan",
+    "Konsultan", "Dokter", "Bidan", "Perawat", "Apoteker",
+    "Psikiater/Psikolog", "Penyiar Televisi", "Penyiar Radio", "Pelaut", "Peneliti",
+    "Sopir", "Pialang", "Paranormal", "Pedagang", "Perangkat Desa",
+    "Kepala Desa", "Biarawati", "Wiraswasta", "Lainnya",
+  ]),
+});
+
 /* ---------- Pembuat field ---------- */
 const make = (type) => (key, label, opts = {}) => ({ key, label, type, ...opts });
 const isGenderOptions = (options) => Array.isArray(options)
@@ -127,9 +175,7 @@ export const wilayahByScope = (prefix, scopeKey, optionsOf = () => ({})) => {
   ];
 };
 
-// TAMBAHKAN bagian ini ke @/data/letterFields.js (di bawah wilayahByScope).
-// Pastikan wilayahByScope sudah ada di file tersebut.
-
+/* Wilayah default Kalurahan Bimomartani (dipakai sebagai nilai awal dropdown alamat). */
 export const BIMOMARTANI = {
   village: "Bimomartani",
   district: "Ngemplak",
@@ -142,7 +188,9 @@ const WILAYAH_LEVELS = { Village: "village", District: "district", Regency: "reg
 /* Ubah Desa/Kecamatan/Kabupaten/Provinsi pada blok alamat menjadi dropdown (pilih atau ketik manual).
    Tidak lagi ikut "Cakupan Kepindahan" (scopeAuto dibuang). Nilai awal dari `defaults`, kosong bila tidak ada. */
 export function wilayahDropdown(section, prefix, scopeKey, defaults = {}) {
-  const combos = Object.fromEntries(wilayahByScope(prefix, scopeKey).map((c) => [c.key, c]));
+  if (!section || !Array.isArray(section.fields)) return section;
+  const list = wilayahByScope(prefix, scopeKey) ?? [];
+  const combos = Object.fromEntries(list.map((c) => [c.key, c]));
   return {
     ...section,
     fields: section.fields.map((fld) => {
@@ -160,10 +208,13 @@ const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 
 /* Pilihan yang NILAI-nya angka kode di formulir cetak (mis. F-1.01 kolom 7, 13, 14, ...): dropdown tetap menampilkan
-   "1. Laki-laki", tetapi yang disimpan dan dicetak di pratinjau hanya angkanya ("1"). */
-export const codeOptions = (list) => list.map((o, i) => (typeof o === "string"
-  ? { value: String(i + 1), label: o, source: o.replace(/^\s*\d+\s*[.)\-:]\s*/, "") }
-  : { value: String(i + 1), label: o.label, source: o.value })); // source = nilai asli di Data Warga (dipakai autofill dari KK)
+   "1. Laki-laki", tetapi yang disimpan dan dicetak di pratinjau hanya angkanya ("1"). Tahan terhadap daftar yang hilang. */
+export const codeOptions = (list) => {
+  if (!Array.isArray(list) || !list.length) console.warn("[codeOptions] daftar pilihan kosong/undefined");
+  return (list ?? []).map((o, i) => (typeof o === "string"
+    ? { value: String(i + 1), label: o, source: o.replace(/^\s*\d+\s*[.)\-:]\s*/, "") }
+    : { value: String(i + 1), label: o.label, source: o.value })); // source = nilai asli di Data Warga (dipakai autofill dari KK)
+};
 
 /* Umur otomatis: field umur dengan `ageOf` = kunci tanggal lahir. Dihitung ulang tiap tanggal lahir berubah
    (lihat LetterFormFields.vue). Bila tanggal lahir tidak ada di form surat itu, umur tetap diisi manual. */
@@ -415,7 +466,7 @@ export const kodeWilayah = (opts = {}, title = "Diisi Oleh Petugas (Kode Wilayah
      hamlet    = false → sembunyikan Dusun/Dukuh/Kampung dari blok alamat (dipindah ke blok Kode Wilayah).
      phoneFrom = kunci data warga untuk mengisi "Telepon" otomatis (mis. "phoneNumber").
      scopeKey  = kunci field "Cakupan Kepindahan" di form (mis. "relocationTypeLabel"). Bila diisi, Desa/Kecamatan/Kab/Provinsi
-                 menjadi dropdown yang boleh diketik manual dan terisi otomatis mengikuti cakupan (lihat wilayahByScope & scopeWilayah).
+                 menjadi dropdown yang boleh diketik manual (lihat wilayahByScope; bungkus dengan wilayahDropdown untuk mematikan isian otomatis).
    Pemanggilan lama alamat("origin", "Judul") tetap berjalan seperti biasa. */
 export const alamat = (prefix, title, { from, phoneFrom, fieldFrom = {}, defaults = {}, hamlet = true, hamletFree = false, scopeKey } = {}) => {
   const source = (suffix) => (fieldFrom[suffix] ? { from: fieldFrom[suffix] } : {});
