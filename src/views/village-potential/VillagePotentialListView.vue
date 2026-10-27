@@ -12,7 +12,7 @@ import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
-import { potentialService } from '@/services/content.service'
+import { potentialService, potentialCategoryService } from '@/services/content.service'
 import { getListCache, setListCache } from '@/services/list-cache'
 import { mediaUrl } from '@/services/media'
 
@@ -33,6 +33,15 @@ function formatDate(value) {
         year: 'numeric',
       })
 }
+
+const categoryNames = ref({})
+
+onMounted(async () => {
+  try {
+    const list = await potentialCategoryService.list()
+    categoryNames.value = Object.fromEntries(list.map((c) => [c.slug, c.name]))
+  } catch (e) { /* biarkan tampil slug */ }
+})
 
 const potentials = ref((cachedPotentials ?? []).map(mapPotentialItem))
 
@@ -297,7 +306,11 @@ function exportData() {
           </Column>
 
           <Column field="date" header="Tanggal" sortable />
-          <Column field="category" header="Kategori" sortable />
+          <Column field="category" header="Kategori" sortable>
+            <template #body="{ data }">
+              {{ categoryNames[data.category] ?? data.category }}
+            </template>
+          </Column>
 
           <Column field="status" header="Status" sortable>
             <template #body="{ data }">

@@ -57,5 +57,11 @@ export const potentialService = {
   },
   remove: (id) => unwrap(api.delete(`/village-potentials/${id}`)),
 }
+export const potentialCategoryService = {
+  list: () => unwrap(api.get('/village-potential-categories')),
+  create: (payload) => unwrap(api.post('/village-potential-categories', payload)),
+  update: (id, payload) => unwrap(api.put(`/village-potential-categories/${id}`, payload)),
+  remove: (id) => unwrap(api.delete(`/village-potential-categories/${id}`)),
+}
 export const serviceService = crud('/services')
 export const feedbackService = crud('/feedbacks')
