@@ -8,18 +8,18 @@ import { f, OPT, codeOptions, kodeWilayah, pemohonRingkas, opt, signerNames } fr
 
 // Kolom bernomor di formulir cetak (7, 11, 13, 14, 15, 16, 19, 22, 23, 24, 25, 26):
 // dropdown menampilkan "1. Laki-laki", tetapi NILAI yang disimpan (dan tercetak di pratinjau) hanya angkanya ("1").
-// Urutan & nomor pilihan sama dengan form Data Warga (OPT di data/letterFields.js).
+// Urutan & nomor pilihan mengikuti kode resmi Dukcapil (lihat OPT.*Kode di data/letterFields.js).
 const KODE = {
   gender: codeOptions(OPT.gender),                 // 7
   certificate: codeOptions(OPT.certificate),       // 11, 16, 19  (1 = Tidak Ada, 2 = Ada)
   bloodType: codeOptions(OPT.bloodType),           // 13
-  religion: codeOptions(OPT.religion),             // 14
-  marital: codeOptions(OPT.marital),               // 15  (1 = Belum Kawin, 2 = Kawin, 3 = Cerai Hidup, 4 = Cerai Mati)
+  religion: codeOptions(OPT.religionKode),         // 14
+  marital: codeOptions(OPT.maritalKode),           // 15  (1 = Belum Kawin, 2 = Kawin, 3 = Cerai Hidup, 4 = Cerai Mati)
   shdk: codeOptions(OPT.shdk),                     // 22
   disability: codeOptions(OPT.disability),         // 23  (1 = Tidak Ada, 2 = Ada)
   disabilityType: codeOptions(OPT.disabilityType), // 24
-  education: codeOptions(OPT.education),           // 25
-  occupation: codeOptions(OPT.occupation),         // 26
+  education: codeOptions(OPT.educationKode),       // 25
+  occupation: codeOptions(OPT.occupationKode),     // 26
 };
 const ADA = "2";            // kode "Ada" untuk akta (11, 16, 19) dan kelainan (23)
 const BELUM_KAWIN = "1";    // kode status perkawinan

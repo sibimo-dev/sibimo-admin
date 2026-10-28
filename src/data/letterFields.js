@@ -1,59 +1,24 @@
 /* Kumpulan "cetakan" isian yang dipakai berulang oleh file-file surat.
    Satu surat = satu file .vue yang menyusun `sections` + `documents` dari sini. */
 
-/* ---------- Pilihan dropdown ----------
-   Pilihan bernomor MENGIKUTI form Data Warga (views/citizen/CitizenFormView.vue):
-   `value` = nilai yang disimpan (sama dengan di data warga), `label` = teks bernomor yang tampil di dropdown.
-   Jangan ubah `value` tanpa mengubah Data Warga, karena autofill dari NIK mencocokkan lewat nilai ini. */
-const opts = (list) => list.map(([value, name], i) => ({ value, label: `${i + 1}. ${name ?? value}` }));
-
-const OCCUPATION_CATALOG = [
-  '1. Belum/Tidak Bekerja', '2. Mengurus Rumah Tangga', '3. Pelajar/Mahasiswa', '4. Pensiunan',
-  '5. Pegawai Negeri Sipil (PNS)', '6. Tentara Nasional Indonesia (TNI)', '7. Kepolisian RI (POLRI)',
-  '8. Perdagangan', '9. Petani/Pekebun', '10. Peternak', '11. Nelayan/Perikanan', '12. Industri',
-  '13. Konstruksi', '14. Transportasi', '15. Karyawan Swasta', '16. Karyawan BUMN', '17. Karyawan BUMD',
-  '18. Karyawan Honorer', '19. Buruh Harian Lepas', '20. Buruh Tani/Perkebunan', '21. Buruh Nelayan/Perikanan',
-  '22. Buruh Peternakan', '23. Pembantu Rumah Tangga', '24. Tukang Cukur', '25. Tukang Listrik',
-  '26. Tukang Batu', '27. Tukang Kayu', '28. Tukang Sol Sepatu', '29. Tukang Las/Pandai Besi',
-  '30. Tukang Jahit', '31. Tukang Gigi', '32. Penata Rias', '33. Penata Busana', '34. Penata Rambut',
-  '35. Mekanik', '36. Seniman', '37. Tabib', '38. Paraji', '39. Perancang Busana', '40. Penterjemah',
-  '41. Imam Masjid', '42. Pendeta', '43. Pastor', '44. Wartawan', '45. Ustadz/Mubaligh', '46. Juru Masak',
-  '47. Promotor Acara', '48. Anggota DPR-RI', '49. Anggota DPD', '50. Anggota BPK', '51. Presiden',
-  '52. Wakil Presiden', '53. Anggota Mahkamah Konstitusi', '54. Anggota Kabinet/Kementrian', '55. Duta Besar',
-  '56. Gubernur', '57. Wakil Gubernur', '58. Bupati', '59. Wakil Bupati', '60. Walikota', '61. Wakil walikota',
-  '62. Anggota DPRD Prov.', '63. Anggota DPRD Kab./Kota', '64. Dosen', '65. Guru', '66. Pilot', '67. Pengacara',
-  '68. Notaris', '69. Arsitek', '70. Akuntan', '71. Konsultan', '72. Dokter', '73. Bidan', '74. Perawat',
-  '75. Apoteker', '76. Psikiater/Psikolog', '77. Penyiar Televisi', '78. Penyiar Radio', '79. Pelaut',
-  '80. Peneliti', '81. Sopir', '82. Pialang', '83. Paranormal', '84. Pedagang', '85. Perangkat Desa',
-  '86. Kepala desa', '87. Biarawati', '88. Wiraswasta', '89. Lainnya, Sebutkan', '90. Hakim', '91. Biarawan',
+/* ---------- Pilihan dropdown ---------- */
+export const GENDER_OPTIONS = [
+  "1. Laki-laki",
+  "2. Perempuan",
 ];
 
 export const OPT = {
-  gender: opts([['Laki-laki'], ['Perempuan']]),
-  religion: opts([['Islam'], ['Kristen'], ['Katolik'], ['Hindu'], ['Buddha', 'Budha'], ['Konghucu', 'Kong Hu Cu'], ['Kepercayaan Terhadap Tuhan Yang Maha Esa']]),
-  marital: opts([['Belum Menikah', 'Belum Kawin'], ['Menikah', 'Kawin'], ['Cerai Hidup'], ['Cerai Mati']]),
-  education: opts([
-    ['Tidak Sekolah', 'Tidak/Belum Sekolah'], ['Belum Tamat SD/Sederajat'], ['Tamat SD/Sederajat'], ['SMP', 'SLTP/Sederajat'],
-    ['SMA/SMK', 'SLTA/Sederajat'], ['D1/D2', 'Diploma I/II'], ['D3', 'Akademi/Diploma III/Sarjana Muda'],
-    ['S1', 'Diploma IV/Strata I'], ['S2', 'Strata II'], ['S3', 'Strata III'],
-  ]),
-  // Pekerjaan: daftar bernomor (string). Dipakai field bertipe "occupation" (cari + ketik bebas), lihat f.occupation.
-  occupation: OCCUPATION_CATALOG,
-  shdk: opts([
-    ['Kepala Keluarga'], ['Suami'], ['Istri'], ['Anak'], ['Menantu'], ['Cucu'], ['Orang Tua'], ['Mertua'],
-    ['Famili Lain'], ['Pembantu'], ['Lainnya'],
-  ]),
-  bloodType: opts([
-    ['A'], ['B'], ['AB'], ['O'], ['A-'], ['A+'], ['B+'], ['B-'], ['AB+'], ['AB-'], ['O+'], ['O-'], ['Tidak Tahu'],
-  ]),
-  // Akta lahir / kawin / cerai (di Data Warga: nilai "Belum Ada" / "Ada")
-  certificate: opts([['Belum Ada', 'Tidak Ada'], ['Ada']]),
-  // No. 25 formulir F-1.01: Kelainan Fisik dan Mental
-  disability: opts([['Tidak Ada'], ['Ada']]),
-  // No. 26 formulir F-1.01: Penyandang Cacat (dipilih bila no. 25 = Ada)
-  disabilityType: opts([
-    ['Cacat Fisik'], ['Cacat Netra/Buta'], ['Cacat Rungu/Wicara'], ['Cacat Mental/Jiwa'], ['Cacat Fisik dan Mental'], ['Cacat Lainnya'],
-  ]),
+  gender: GENDER_OPTIONS,
+  // Kode pilihan mengikuti formulir biodata keluarga: 1 = Tidak Ada, 2 = Ada.
+  certificate: ["Tidak Ada", "Ada"],
+  bloodType: ["A", "B", "AB", "O", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Tidak Tahu"],
+  disability: ["Tidak Ada", "Ada"],
+  disabilityType: ["Tidak Ada", "Cacat Fisik", "Cacat Netra/Buta", "Cacat Rungu/Wicara", "Cacat Mental/Jiwa", "Cacat Fisik dan Mental", "Cacat Lainnya"],
+  religion: ["Islam", "Kristen", "Katolik", "Hindu", "Buddha", "Khonghucu"],
+  marital: ["Belum Kawin", "Kawin", "Kawin Tercatat", "Kawin Belum Tercatat", "Cerai Hidup", "Cerai Mati"],
+  education: ["Tidak/Belum Sekolah", "SD", "SMP", "SMA/SMK", "D1/D2/D3", "D4/S1", "S2", "S3"],
+  occupation: ["Belum/Tidak Bekerja", "Pelajar/Mahasiswa", "Ibu Rumah Tangga", "Petani", "Buruh", "Wiraswasta", "Karyawan Swasta", "PNS/ASN", "TNI/Polri", "Pensiunan"],
+  shdk: ["Kepala Keluarga", "Suami", "Istri", "Anak", "Menantu", "Cucu", "Orang Tua", "Mertua", "Famili Lain", "Pembantu", "Lainnya"],
   kkStatus: ["Numpang KK", "Membuat KK Baru", "Nomor KK Tetap"],
   // Opsi bernomor mengikuti formulir cetak: angka di depan = angka yang dicetak di kotak pilihan pada PDF.
   kkStatusNo: ["1. Numpang KK", "2. Membuat KK Baru", "3. Nomor KK Tetap"],
@@ -65,13 +30,68 @@ export const OPT = {
   plurality: ["Tunggal", "Kembar 2", "Kembar 3", "Kembar 4", "Lainnya"],
 };
 
+/* ---------- Daftar kode resmi Dukcapil (Formulir Biodata Penduduk WNI, F-1.01) ----------
+   Urutan = nomor kode. Nomor dibuat otomatis dari urutan; JANGAN mengubah urutan tanpa mencocokkan dengan formulir cetak.
+   Memakai key baru (…Kode) supaya surat lain yang memakai OPT.marital / education / occupation tidak berubah. */
+const numbered = (list) => list.map((o, i) => `${i + 1}. ${o}`);
+
+Object.assign(OPT, {
+  // Kolom 11, 16, 19: Akta Lahir / Akta Perkawinan / Akta Cerai
+  certificate: numbered(["Tidak Ada", "Ada"]),
+  // Kolom 13: Golongan Darah
+  bloodType: numbered(["A", "B", "AB", "O", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Tidak Tahu"]),
+  // Kolom 14: Agama (7 = Kepercayaan terhadap Tuhan YME)
+  religionKode: numbered(["Islam", "Kristen", "Katolik", "Hindu", "Buddha", "Khonghucu", "Kepercayaan terhadap Tuhan YME"]),
+  // Kolom 15: Status Perkawinan (hanya 4 pilihan)
+  maritalKode: numbered(["Belum Kawin", "Kawin", "Cerai Hidup", "Cerai Mati"]),
+  // Kolom 23: Kelainan Fisik & Mental
+  disability: numbered(["Tidak Ada", "Ada"]),
+  // Kolom 24: Penyandang Cacat
+  disabilityType: numbered([
+    "Cacat Fisik", "Cacat Netra/Buta", "Cacat Rungu/Wicara", "Cacat Mental/Jiwa", "Cacat Fisik dan Mental", "Cacat Lainnya",
+  ]),
+  // Kolom 25: Pendidikan Terakhir
+  educationKode: numbered([
+    "Tidak/Belum Sekolah", "Belum Tamat SD/Sederajat", "Tamat SD/Sederajat", "SLTP/Sederajat", "SLTA/Sederajat",
+    "Diploma I/II", "Akademi/Diploma III/S. Muda", "Diploma IV/Strata I", "Strata II", "Strata III",
+  ]),
+  // Kolom 26: Jenis Pekerjaan
+  occupationKode: numbered([
+    "Belum/Tidak Bekerja", "Mengurus Rumah Tangga", "Pelajar/Mahasiswa", "Pensiunan", "Pegawai Negeri Sipil (PNS)",
+    "Tentara Nasional Indonesia (TNI)", "Kepolisian RI (POLRI)", "Perdagangan", "Petani/Pekebun", "Peternak",
+    "Nelayan/Perikanan", "Industri", "Konstruksi", "Transportasi", "Karyawan Swasta",
+    "Karyawan BUMN", "Karyawan BUMD", "Karyawan Honorer", "Buruh Harian Lepas", "Buruh Tani/Perkebunan",
+    "Buruh Nelayan/Perikanan", "Buruh Peternakan", "Pembantu Rumah Tangga", "Tukang Cukur", "Tukang Listrik",
+    "Tukang Batu", "Tukang Kayu", "Tukang Sol Sepatu", "Tukang Las/Pandai Besi", "Tukang Jahit",
+    "Tukang Gigi", "Penata Rias", "Penata Busana", "Penata Rambut", "Mekanik",
+    "Seniman", "Tabib", "Paraji", "Perancang Busana", "Penterjemah",
+    "Imam Mesjid", "Pendeta", "Pastor", "Wartawan", "Ustadz/Mubaligh",
+    "Juru Masak", "Promotor Acara", "Anggota DPR-RI", "Anggota DPD", "Anggota BPK",
+    "Presiden", "Wakil Presiden", "Anggota Mahkamah Konstitusi", "Anggota Kabinet/Kementerian", "Duta Besar",
+    "Gubernur", "Wakil Gubernur", "Bupati", "Wakil Bupati", "Walikota",
+    "Wakil Walikota", "Anggota DPRD Provinsi", "Anggota DPRD Kabupaten/Kota", "Dosen", "Guru",
+    "Pilot", "Pengacara", "Notaris", "Arsitek", "Akuntan",
+    "Konsultan", "Dokter", "Bidan", "Perawat", "Apoteker",
+    "Psikiater/Psikolog", "Penyiar Televisi", "Penyiar Radio", "Pelaut", "Peneliti",
+    "Sopir", "Pialang", "Paranormal", "Pedagang", "Perangkat Desa",
+    "Kepala Desa", "Biarawati", "Wiraswasta", "Lainnya",
+  ]),
+});
+
 /* ---------- Pembuat field ---------- */
 const make = (type) => (key, label, opts = {}) => ({ key, label, type, ...opts });
+const isGenderOptions = (options) => Array.isArray(options)
+  && options.length === 2
+  && options.every((option) => typeof option === "string")
+  && options.map((option) => option.trim().toLowerCase()).sort().join("|") === "laki-laki|perempuan";
+const normalizeOptions = (options) => isGenderOptions(options) ? GENDER_OPTIONS : options;
 export const f = {
   text: make("text"),
   hamlet: (key, label = "Dusun/Dukuh/Kampung", opts = {}) => ({ key, label, type: "hamlet", ...opts }),
   area: make("textarea"),
   select: (key, label, options, opts = {}) => ({ key, label, type: "select", options, ...opts }),
+  /** dropdown yang BOLEH diketik manual (tidak harus dari daftar). options = array teks atau (form) => array teks (daftar bergantung isian lain). */
+  combo: (key, label, options, opts = {}) => ({ key, label, type: "combo", options, ...opts }),
   date: make("date"),
   time: make("time"),
   /** pekerjaan: pilih dari daftar bernomor (sama dengan Data Warga) atau ketik bebas. Yang disimpan = nama pekerjaan tanpa nomor. */
@@ -84,13 +104,122 @@ export const f = {
   kk: (key, label = "Nomor KK", opts = {}) => ({ key, label, type: "text", digits: 16, placeholder: "16 digit Nomor KK", ...opts }),
 };
 
+/* ---------- Daftar wilayah untuk dropdown "pilih atau ketik manual" ----------
+   Hanya saran; petugas tetap boleh mengetik wilayah di luar daftar. Cocokkan ejaan dengan data resmi/tabel wilayah sebelum dipakai.
+   Aturan daftar yang saling bergantung (desa ← kecamatan ← kabupaten ← provinsi):
+     - induk sudah terisi dan dikenal  → tampil anak dari induk itu saja
+     - induk masih kosong              → tampil SEMUA pilihan yang dikenal (supaya dropdown tetap berfungsi di semua cakupan)
+     - induk diketik manual & tak dikenal → daftar kosong, isian diketik manual */
+const DESA_BY_KECAMATAN = {
+  Berbah: ["Jogotirto", "Kalitirto", "Sendangtirto", "Tegaltirto"],
+  Cangkringan: ["Argomulyo", "Glagaharjo", "Kepuharjo", "Umbulharjo", "Wukirsari"],
+  Depok: ["Caturtunggal", "Condongcatur", "Maguwoharjo"],
+  Gamping: ["Ambarketawang", "Balecatur", "Banyuraden", "Nogotirto", "Trihanggo"],
+  Godean: ["Sidoagung", "Sidoarum", "Sidokarto", "Sidoluhur", "Sidomoyo", "Sidomulyo", "Sidorejo"],
+  Kalasan: ["Purwomartani", "Selomartani", "Tamanmartani", "Tirtomartani"],
+  Minggir: ["Sendangagung", "Sendangarum", "Sendangmulyo", "Sendangrejo", "Sendangsari"],
+  Mlati: ["Sendangadi", "Sinduadi", "Sumberadi", "Tirtoadi", "Tlogoadi"],
+  Moyudan: ["Sumberagung", "Sumberarum", "Sumberrahayu", "Sumbersari"],
+  Ngaglik: ["Donoharjo", "Minomartani", "Sardonoharjo", "Sariharjo", "Sinduharjo", "Sukoharjo"],
+  Ngemplak: ["Bimomartani", "Sindumartani", "Umbulmartani", "Wedomartani", "Widodomartani"],
+  Pakem: ["Candibinangun", "Hargobinangun", "Harjobinangun", "Pakembinangun", "Purwobinangun"],
+  Prambanan: ["Bokoharjo", "Gayamharjo", "Joho", "Madurejo", "Sambirejo", "Wukirharjo"],
+  Seyegan: ["Margoagung", "Margodadi", "Margokaton", "Margoluwih", "Margomulyo"],
+  Sleman: ["Caturharjo", "Pandowoharjo", "Tridadi", "Triharjo", "Trimulyo"],
+  Tempel: ["Banyurejo", "Lumbungrejo", "Merdikorejo", "Mororejo", "Pondokrejo", "Sumberrejo", "Tambakrejo"],
+  Turi: ["Bangunkerto", "Donokerto", "Girikerto", "Wonokerto"],
+};
+const KECAMATAN_BY_KABUPATEN = {
+  Sleman: Object.keys(DESA_BY_KECAMATAN),
+  Bantul: ["Bambanglipuro", "Banguntapan", "Bantul", "Dlingo", "Imogiri", "Jetis", "Kasihan", "Kretek", "Pajangan", "Pandak", "Piyungan", "Pleret", "Pundong", "Sanden", "Sedayu", "Sewon", "Srandakan"],
+  "Kulon Progo": ["Galur", "Girimulyo", "Kalibawang", "Kokap", "Lendah", "Nanggulan", "Panjatan", "Pengasih", "Samigaluh", "Sentolo", "Temon", "Wates"],
+  Gunungkidul: ["Gedangsari", "Girisubo", "Karangmojo", "Ngawen", "Nglipar", "Paliyan", "Panggang", "Patuk", "Playen", "Ponjong", "Purwosari", "Rongkop", "Saptosari", "Semanu", "Semin", "Tanjungsari", "Tepus", "Wonosari"],
+  "Kota Yogyakarta": ["Danurejan", "Gedongtengen", "Gondokusuman", "Gondomanan", "Jetis", "Kotagede", "Kraton", "Mantrijeron", "Mergangsan", "Ngampilan", "Pakualaman", "Tegalrejo", "Umbulharjo", "Wirobrajan"],
+};
+const KABUPATEN_BY_PROVINSI = {
+  "Daerah Istimewa Yogyakarta": ["Sleman", "Bantul", "Kulon Progo", "Gunungkidul", "Kota Yogyakarta"],
+};
+const PROVINSI = [
+  "Aceh", "Sumatera Utara", "Sumatera Barat", "Riau", "Jambi", "Sumatera Selatan", "Bengkulu", "Lampung",
+  "Kepulauan Bangka Belitung", "Kepulauan Riau", "DKI Jakarta", "Jawa Barat", "Jawa Tengah", "Daerah Istimewa Yogyakarta",
+  "Jawa Timur", "Banten", "Bali", "Nusa Tenggara Barat", "Nusa Tenggara Timur", "Kalimantan Barat", "Kalimantan Tengah",
+  "Kalimantan Selatan", "Kalimantan Timur", "Kalimantan Utara", "Sulawesi Utara", "Sulawesi Tengah", "Sulawesi Selatan",
+  "Sulawesi Tenggara", "Gorontalo", "Sulawesi Barat", "Maluku", "Maluku Utara", "Papua", "Papua Barat", "Papua Barat Daya",
+  "Papua Selatan", "Papua Tengah", "Papua Pegunungan",
+];
+const flat = (map) => [...new Set(Object.values(map).flat())].sort((a, b) => a.localeCompare(b, "id"));
+const optionsFor = (map, parent) => {
+  const name = String(parent ?? "").trim().toLowerCase();
+  if (!name) return flat(map);
+  const key = Object.keys(map).find((k) => k.toLowerCase() === name);
+  return key ? map[key] : [];
+};
+
+/* Isian wilayah otomatis menurut "Cakupan Kepindahan" (urutan = OPT.relocationScope).
+   Yang terisi otomatis hanya level di ATAS desa; desa (dan kecamatan/kab pada cakupan lebih luas) dibiarkan kosong
+   untuk dipilih dari dropdown atau diketik.
+   antar desa satu kecamatan → Kecamatan Ngemplak, Sleman, DIY | antar kecamatan → Sleman, DIY | antar kab/prov → DIY */
+const DIY = "Daerah Istimewa Yogyakarta";
+const SCOPE_WILAYAH = [
+  { district: "Ngemplak", regency: "Sleman", province: DIY },
+  { regency: "Sleman", province: DIY },
+  { province: DIY },
+];
+export const scopeWilayah = (label) => SCOPE_WILAYAH[OPT.relocationScope.indexOf(label)] ?? {};
+
+/* Desa/Kecamatan/Kab/Provinsi yang mengikuti cakupan kepindahan (dibaca watcher di LetterFormFields.vue lewat `scopeAuto`).
+   Semua dropdown tetap aktif di setiap cakupan dan boleh diketik manual.
+   optionsOf(level) = opsi tambahan per level (mis. from/default dari alamat()). */
+export const wilayahByScope = (prefix, scopeKey, optionsOf = () => ({})) => {
+  const scoped = (level) => ({ scopeAuto: { key: scopeKey, level } });
+  return [
+    f.combo(`${prefix}Village`, "Desa/Kelurahan", (form) => optionsFor(DESA_BY_KECAMATAN, form[`${prefix}District`]), { ...scoped("village"), ...optionsOf("village") }),
+    f.combo(`${prefix}District`, "Kecamatan", (form) => optionsFor(KECAMATAN_BY_KABUPATEN, form[`${prefix}Regency`]), { ...scoped("district"), ...optionsOf("district") }),
+    f.combo(`${prefix}Regency`, "Kabupaten/Kota", (form) => optionsFor(KABUPATEN_BY_PROVINSI, form[`${prefix}Province`]), { ...scoped("regency"), ...optionsOf("regency") }),
+    f.combo(`${prefix}Province`, "Provinsi", PROVINSI, { ...scoped("province"), ...optionsOf("province") }),
+  ];
+};
+
+/* Wilayah default Kalurahan Bimomartani (dipakai sebagai nilai awal dropdown alamat). */
+export const BIMOMARTANI = {
+  village: "Bimomartani",
+  district: "Ngemplak",
+  regency: "Sleman",
+  province: "Daerah Istimewa Yogyakarta",
+};
+
+const WILAYAH_LEVELS = { Village: "village", District: "district", Regency: "regency", Province: "province" };
+
+/* Ubah Desa/Kecamatan/Kabupaten/Provinsi pada blok alamat menjadi dropdown (pilih atau ketik manual).
+   Tidak lagi ikut "Cakupan Kepindahan" (scopeAuto dibuang). Nilai awal dari `defaults`, kosong bila tidak ada. */
+export function wilayahDropdown(section, prefix, scopeKey, defaults = {}) {
+  if (!section || !Array.isArray(section.fields)) return section;
+  const list = wilayahByScope(prefix, scopeKey) ?? [];
+  const combos = Object.fromEntries(list.map((c) => [c.key, c]));
+  return {
+    ...section,
+    fields: section.fields.map((fld) => {
+      const suffix = Object.keys(WILAYAH_LEVELS).find((s) => fld.key === `${prefix}${s}`);
+      if (!suffix) return fld;
+      const merged = { ...fld, ...(combos[fld.key] ?? {}) };
+      delete merged.scopeAuto;
+      merged.default = defaults[WILAYAH_LEVELS[suffix]] ?? "";
+      return merged;
+    }),
+  };
+}
+
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
+
 /* Pilihan yang NILAI-nya angka kode di formulir cetak (mis. F-1.01 kolom 7, 13, 14, ...): dropdown tetap menampilkan
-   "1. Laki-laki", tetapi yang disimpan dan dicetak di pratinjau hanya angkanya ("1"). */
-export const codeOptions = (list) => list.map((o, i) => (typeof o === "string"
-  ? { value: String(i + 1), label: o, source: o.replace(/^\s*\d+\s*[.)\-:]\s*/, "") }
-  : { value: String(i + 1), label: o.label, source: o.value })); // source = nilai asli di Data Warga (dipakai autofill dari KK)
+   "1. Laki-laki", tetapi yang disimpan dan dicetak di pratinjau hanya angkanya ("1"). Tahan terhadap daftar yang hilang. */
+export const codeOptions = (list) => {
+  if (!Array.isArray(list) || !list.length) console.warn("[codeOptions] daftar pilihan kosong/undefined");
+  return (list ?? []).map((o, i) => (typeof o === "string"
+    ? { value: String(i + 1), label: o, source: o.replace(/^\s*\d+\s*[.)\-:]\s*/, "") }
+    : { value: String(i + 1), label: o.label, source: o.value })); // source = nilai asli di Data Warga (dipakai autofill dari KK)
+};
 
 /* Umur otomatis: field umur dengan `ageOf` = kunci tanggal lahir. Dihitung ulang tiap tanggal lahir berubah
    (lihat LetterFormFields.vue). Bila tanggal lahir tidak ada di form surat itu, umur tetap diisi manual. */
@@ -210,7 +339,10 @@ export const perkawinanOrtu = () => ({
   ],
 });
 
-export const saksi = (n) => person(`witness${n}`, `Data Saksi ${n}`, ["name", "nik", "birth", "address"]);
+export const saksi = (n) => {
+  const section = person(`witness${n}`, `Data Saksi ${n}`, ["name", "nik", "birth", "address"]);
+  return { ...section, fields: section.fields.map((field) => ({ ...field, optional: true })) };
+};
 
 export const almarhum = () => ({
   title: "Data Almarhum/Almarhumah",
@@ -341,11 +473,21 @@ export const kodeWilayah = (opts = {}, title = "Diisi Oleh Petugas (Kode Wilayah
      hamletFree = true → Dusun/Dukuh/Kampung berupa isian teks bebas (tanpa daftar dusun desa ini), mis. alamat tujuan pindah yang bisa di luar desa.
      hamlet    = false → sembunyikan Dusun/Dukuh/Kampung dari blok alamat (dipindah ke blok Kode Wilayah).
      phoneFrom = kunci data warga untuk mengisi "Telepon" otomatis (mis. "phoneNumber").
+     scopeKey  = kunci field "Cakupan Kepindahan" di form (mis. "relocationTypeLabel"). Bila diisi, Desa/Kecamatan/Kab/Provinsi
+                 menjadi dropdown yang boleh diketik manual (lihat wilayahByScope; bungkus dengan wilayahDropdown untuk mematikan isian otomatis).
    Pemanggilan lama alamat("origin", "Judul") tetap berjalan seperti biasa. */
-export const alamat = (prefix, title, { from, phoneFrom, fieldFrom = {}, defaults = {}, hamlet = true, hamletFree = false } = {}) => {
+export const alamat = (prefix, title, { from, phoneFrom, fieldFrom = {}, defaults = {}, hamlet = true, hamletFree = false, scopeKey } = {}) => {
   const source = (suffix) => (fieldFrom[suffix] ? { from: fieldFrom[suffix] } : {});
   const fallback = (suffix) => (Object.prototype.hasOwnProperty.call(defaults, suffix) ? { default: defaults[suffix] } : {});
   const options = (suffix) => ({ ...source(suffix), ...fallback(suffix) });
+  const wilayah = scopeKey
+    ? wilayahByScope(prefix, scopeKey, options)
+    : [
+        f.text(`${prefix}Village`, "Desa/Kelurahan", options("village")),
+        f.text(`${prefix}District`, "Kecamatan", options("district")),
+        f.text(`${prefix}Regency`, "Kabupaten/Kota", options("regency")),
+        f.text(`${prefix}Province`, "Provinsi", options("province")),
+      ];
   return ({
   title,
   fields: [
@@ -353,10 +495,7 @@ export const alamat = (prefix, title, { from, phoneFrom, fieldFrom = {}, default
     f.text(`${prefix}Rt`, "RT", options("rt")),
     f.text(`${prefix}Rw`, "RW", options("rw")),
     ...(hamlet ? [hamletFree ? f.text(`${prefix}Hamlet`, "Dusun/Dukuh/Kampung", { placeholder: "Ketik nama dusun/dukuh/kampung", ...options("hamlet") }) : f.hamlet(`${prefix}Hamlet`, "Dusun/Dukuh/Kampung", { optional: true, ...options("hamlet") })] : []),
-    f.text(`${prefix}Village`, "Desa/Kelurahan", options("village")),
-    f.text(`${prefix}District`, "Kecamatan", options("district")),
-    f.text(`${prefix}Regency`, "Kabupaten/Kota", options("regency")),
-    f.text(`${prefix}Province`, "Provinsi", options("province")),
+    ...wilayah,
     f.text(`${prefix}PostalCode`, "Kode Pos", { optional: true, ...options("postalCode") }),
     f.text(`${prefix}Phone`, "Telepon", { optional: true, ...(phoneFrom ? { from: phoneFrom } : {}), ...options("phone") }),
   ],
@@ -408,10 +547,10 @@ export const calonPengantin = () => ({ title: "Calon Pengantin", fields: [f.text
 export const DOC_LAHIR = "Surat keterangan lahir dari dokter/bidan/penolong kelahiran";
 export const bayi = () => [keluarga(), anak({ detail: true }), ortu("mother", "Data Ibu Kandung"), ortu("father", "Data Ayah Kandung"), perkawinanOrtu(),
   pemohonRingkas([f.text("reporterRelation", "Hubungan pelapor dengan bayi", { placeholder: "Contoh: Ayah, Ibu, Kakek" })]), saksi(1), saksi(2)];
-export const dokBayi = () => [DOC_LAHIR, DOC.kk, "Fotokopi KTP ayah dan ibu", DOC.akta, DOC.ktpSaksi];
+export const dokBayi = () => [DOC_LAHIR, DOC.kk, "Fotokopi KTP ayah dan ibu", DOC.akta, opt(DOC.ktpSaksi)];
 
 export const jenazah = () => [keluarga(), almarhum(), pelaporKematian(), saksi(1), saksi(2)];
-export const dokJenazah = () => [DOC.suratKematian, DOC.kk, "Fotokopi KTP almarhum/almarhumah", "Fotokopi KTP pelapor", DOC.ktpSaksi];
+export const dokJenazah = () => [DOC.suratKematian, DOC.kk, "Fotokopi KTP almarhum/almarhumah", "Fotokopi KTP pelapor", opt(DOC.ktpSaksi)];
 
 export const DOC_LETTER_C = "Fotokopi Letter C / bukti kepemilikan tanah";
 export const DOC_PBB = opt("Fotokopi SPPT PBB");
@@ -582,10 +721,10 @@ const localToday = () => {
 export const birthWitness = (n) => ({
   title: `Data Saksi ${n}`,
   fields: [
-    f.nik(`witness${n}Nik`),
-    f.text(`witness${n}Name`, "Nama Lengkap"),
-    f.text(`witness${n}Age`, "Umur (tahun)", { placeholder: "Contoh: 40" }),
-    f.area(`witness${n}Address`, "Alamat", { span: 2 }),
+    f.nik(`witness${n}Nik`, "NIK", { optional: true }),
+    f.text(`witness${n}Name`, "Nama Lengkap", { optional: true }),
+    f.text(`witness${n}Age`, "Umur (tahun)", { optional: true, placeholder: "Contoh: 40" }),
+    f.area(`witness${n}Address`, "Alamat", { optional: true, span: 2 }),
   ],
 });
 
@@ -714,7 +853,7 @@ const DEATH_DECEASED = {
   religion: () => [f.select("deceasedReligion", "Agama", OPT.religion)],
   occupation: () => [f.occupation("deceasedOccupation", "Pekerjaan")],
   address: () => [f.area("deceasedAddress", "Alamat", { span: 2 })],
-  childOrder: () => [f.text("deceasedChildOrder", "Anak ke- (dengan huruf)", { placeholder: "Contoh: Kedua" })],
+  childOrder: () => [f.text("deceasedChildOrder", "Anak ke- (dengan huruf)", { optional: true, placeholder: "Contoh: Kedua" })], // tidak dipakai lagi (dihapus dari semua surat kematian); dibiarkan agar file lama yang masih menyebut "childOrder" tidak error
   deathDate: () => [f.date("deathDate", "Tanggal Meninggal", { dayKey: "deathDay" })],
   deathDay: () => [f.text("deathDay", "Hari Meninggal", { placeholder: "Terisi otomatis dari tanggal" })],
   deathTime: () => [f.time("deathTime", "Jam Meninggal")],
@@ -731,16 +870,17 @@ export const deathDeceased = (parts, title = "Data Jenazah", labels = {}) => ({
   fields: parts.flatMap((p) => DEATH_DECEASED[p]().map((x) => (labels[p] ? { ...x, label: labels[p] } : x))),
 });
 
-/* Urutan SAMA di Formulir Pelaporan Kematian & Surat Keterangan Kematian */
-export const DEATH_JENAZAH_FORM = ["nik", "name", "gender", "birthPlace", "birthDate", "age", "religion", "occupation", "address", "childOrder", "deathDate", "deathDay", "deathTime", "deathCause", "deathPlace", "informant"];
+/* Urutan SAMA di Formulir Pelaporan Kematian & Surat Keterangan Kematian ("Anak ke" sudah dihapus) */
+export const DEATH_JENAZAH_FORM = ["nik", "name", "gender", "birthPlace", "birthDate", "age", "religion", "occupation", "address", "deathDate", "deathDay", "deathTime", "deathCause", "deathPlace", "informant"];
 
 /* Surat Keterangan Kematian: sama seperti di atas, ditambah "Tempat Meninggal" (no. 11 di xlsx) setelah Hari/Tanggal */
-export const DEATH_JENAZAH_SKK = ["nik", "name", "gender", "birthPlace", "birthDate", "age", "religion", "occupation", "address", "childOrder", "deathDate", "deathDay", "deathLocation", "deathTime", "deathCause", "deathPlace", "informant"];
+export const DEATH_JENAZAH_SKK = ["nik", "name", "gender", "birthPlace", "birthDate", "age", "religion", "occupation", "address", "deathDate", "deathDay", "deathLocation", "deathTime", "deathCause", "deathPlace", "informant"];
 
 /* ---------- Ibu / Ayah jenazah ---------- */
 const DEATH_PARENT = {
-  nik: (p) => [f.nik(`${p}Nik`)],
-  name: (p) => [f.text(`${p}Name`, "Nama Lengkap")],
+  // NIK & nama orang tua jenazah tidak wajib: data warga lama sering tidak lengkap
+  nik: (p) => [f.nik(`${p}Nik`, "NIK", { optional: true, placeholder: "Kosongkan bila tidak ada / tidak diketahui" })],
+  name: (p) => [f.text(`${p}Name`, "Nama Lengkap", { optional: true, placeholder: "Kosongkan bila tidak diketahui" })],
   birthPlace: (p) => [f.text(`${p}BirthPlace`, "Tempat Lahir")],
   birthDate: (p) => [f.date(`${p}BirthDate`, "Tanggal Lahir")],
   age: (p) => [f.text(`${p}Age`, "Umur (tahun)", { optional: true, placeholder: "Otomatis dari tanggal lahir; isi manual bila tanggal lahir tidak diketahui", ageOf: `${p}BirthDate` })],
@@ -760,7 +900,10 @@ const DEATH_WITNESS = {
   ageOptional: (n) => [f.text(`witness${n}Age`, "Umur (tahun)", { optional: true, placeholder: "Otomatis dari tanggal lahir; isi manual bila tanggal lahir tidak diketahui", ageOf: `witness${n}BirthDate` })],
   address: (n) => [f.area(`witness${n}Address`, "Alamat", { span: 2 })],
 };
-export const deathWitness = (n, parts = ["nik", "name", "age", "address"]) => ({ title: `Data Saksi ${n}`, fields: parts.flatMap((p) => DEATH_WITNESS[p](n)) });
+export const deathWitness = (n, parts = ["nik", "name", "age", "address"]) => ({
+  title: `Data Saksi ${n}`,
+  fields: parts.flatMap((p) => DEATH_WITNESS[p](n)).map((field) => ({ ...field, optional: true })),
+});
 
 /* ---------- Yang bertanda tangan / pemohon (terisi otomatis dari data warga) ---------- */
 const DEATH_SIGNER = {

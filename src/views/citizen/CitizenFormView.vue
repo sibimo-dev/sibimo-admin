@@ -1114,7 +1114,7 @@ function deleteCitizen() {
 
               <div class="flex flex-col gap-2">
                 <label :class="labelClass" for="phoneNumber">
-                  Nomor Telepon <span class="font-normal text-neutral-400">(Opsional)</span>
+                  Nomor Telepon/WA <span class="font-normal text-neutral-400">(Opsional)</span>
                 </label>
                 <InputText id="phoneNumber" v-model="phoneNumber" inputmode="tel" placeholder="08xxxxxxxxxx" :class="inputClass" />
               </div>

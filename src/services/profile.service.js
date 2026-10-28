@@ -7,7 +7,7 @@ function unwrapCollection(request) {
     const data = response.data?.data
     const rows = (Array.isArray(data) ? data : (data ? [data] : [])).map((row) => {
       const normalized = { ...row }
-      for (const field of ['points', 'photos', 'missions', 'levels']) {
+      for (const field of ['points', 'photos', 'missions', 'levels', 'former_officials']) {        
         if (typeof normalized[field] !== 'string') continue
         try {
           const parsed = JSON.parse(normalized[field])
@@ -71,6 +71,8 @@ export function saveOrganizationalStructure({ id, payload, files = [] }) {
   formData.append('status', payload.status ?? 'Draft')
   if (payload.published_at) formData.append('published_at', payload.published_at)
   formData.append('levels', JSON.stringify(payload.levels ?? []))
+  formData.append('former_officials', JSON.stringify(payload.former_officials ?? []))
+  formData.append('show_former_officials', payload.show_former_officials ? '1' : '0')
 
   files.forEach(({ token, file, type }) => {
     if (token && file) {

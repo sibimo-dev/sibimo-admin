@@ -6,7 +6,13 @@ export const MAX_FILE_MB = 5;
 export const DOCS_OPTIONAL = true;
 export const ACCEPTED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic"];
 
-export const toDate = (v) => (v instanceof Date ? v : v ? new Date(v) : null);
+/* String yang bukan tanggal (mis. "SEUMUR HIDUP" pada Masa Berlaku KTP) menghasilkan null, bukan Invalid Date. */
+export const toDate = (v) => {
+  if (v instanceof Date) return v;
+  if (!v) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
 export const isFilled = (v) =>
   v instanceof Date ? !Number.isNaN(v.getTime()) : Array.isArray(v) ? v.length > 0 : String(v ?? "").trim() !== "";
 export const emptyRow = (columns) => Object.fromEntries(columns.map((c) => [c.key, c.default ?? ""]));
@@ -30,6 +36,8 @@ export function display(field, v) {
      2. Kep. Keluarga dan seluruh Angg.        → semua anggota KK                (otomatis, terkunci)
      3. Kep. Keluarga dan sbg Angg. Keluarga   → kepala keluarga otomatis + anggota lain DITAMBAH MANUAL
      4. Anggota Keluarga                       → semua anggota KK kecuali kepala keluarga (otomatis, terkunci)
+   Bila pilihan otomatis tidak menghasilkan satu pun anggota (mis. mode 4 tetapi KK hanya berisi kepala keluarga),
+   baris dibuka sebagai isian MANUAL (tidak terkunci) lewat familyModeFor() → null.
    Daftar anggota KK disimpan di autoFilled.__household (bukan di form, jadi tidak ikut terkirim). */
 const isHead = (p) => /kepala\s+keluarga/i.test(String(p?.familyRelationship ?? ""));
 export const relocationMode = (value) => ({ 1: "head", 2: "all", 3: "partial", 4: "others" })[parseInt(String(value ?? "").trim(), 10)] ?? null;
@@ -41,6 +49,14 @@ export const pickFamily = (mode, household = []) => {
   if (mode === "all") return [...heads, ...others];
   if (mode === "others") return others;
   return [];
+};
+/* Mode efektif untuk tampilan: null bila tidak ada anggota KK yang cocok dengan pilihan Jenis Kepindahan,
+   sehingga baris tidak dikunci dan petugas bisa mengisi manual. Mode "partial" selalu dipertahankan
+   selama ada kepala keluarga (anggota lain ditambah manual). */
+export const familyModeFor = (value, household = []) => {
+  const mode = relocationMode(value);
+  if (!mode) return null;
+  return pickFamily(mode, household).length ? mode : null;
 };
 /* ---------- Daftar anggota dari KK (field rows dengan `fromHousehold`) ----------
    `fromHousehold` = { kunciKolom: "properti warga" }. Satu baris dibuat per anggota KK (kepala keluarga lebih dulu),
@@ -84,20 +100,34 @@ export function syncFamilyRows(form, sections, autoFilled = {}, prevHousehold = 
       const minRows = field.min ?? (field.optional ? 0 : 1);
       const pad = (rows) => [...rows, ...Array.from({ length: Math.max(0, minRows - rows.length) }, () => emptyRow(field.columns))];
       const mode = relocationMode(form[field.autoByType]);
+      const prevMode = autoFilled[`__mode_${field.key}`]; // baris dari mode otomatis (1/2/4) tidak dianggap input manual
       if (!household.length) {
         // KK tidak ditemukan / pencarian dihapus: buang baris otomatis milik KK lama, sisanya (manual) dibiarkan.
         if (prevHousehold.length) {
           form[field.key] = pad(old.filter((r) => !prevHousehold.some((p) => String(p.nik ?? "") === String(r.nik ?? ""))));
           delete autoFilled[field.key];
+          delete autoFilled[`__mode_${field.key}`];
           changed.push(field.key);
         }
         continue;
       }
       if (!mode) continue; // Jenis Kepindahan belum dipilih
+      const picked = pickFamily(mode, household);
+      if (!picked.length) {
+        // Tidak ada anggota KK yang cocok dengan pilihan ini (mis. "Anggota Keluarga" padahal KK hanya berisi kepala keluarga).
+        // Jangan sisakan baris kosong yang terkunci: buang baris otomatis sebelumnya, biarkan isian manual, buka baris untuk diisi manual.
+        const wasAuto = !!prevMode && prevMode !== "partial" && prevMode !== "manual";
+        const autoNiks = new Set([...nikSet(household), ...nikSet(prevHousehold)]);
+        const keep = old.filter((r) => Object.values(r).some(isFilled) && !(wasAuto && autoNiks.has(String(r.nik ?? ""))));
+        form[field.key] = pad(keep);
+        delete autoFilled[field.key];
+        autoFilled[`__mode_${field.key}`] = "manual";
+        changed.push(field.key);
+        continue;
+      }
       const validByNik = new Map(old.filter((r) => r.nik && r.validUntil).map((r) => [String(r.nik), r.validUntil]));
-      const auto = pickFamily(mode, household).map((p) => ({ ...familyRow(p), validUntil: validByNik.get(String(p.nik)) ?? "" }));
-      const prevMode = autoFilled[`__mode_${field.key}`]; // baris dari mode otomatis (2/4) tidak dianggap input manual
-      const manual = mode === "partial" && (!prevMode || prevMode === "partial") ? old.filter((r) => Object.values(r).some(isFilled) && !headNiks.has(String(r.nik ?? "")) && !prevOnly.has(String(r.nik ?? ""))) : [];
+      const auto = picked.map((p) => ({ ...familyRow(p), validUntil: validByNik.get(String(p.nik)) ?? "" }));
+      const manual = mode === "partial" && (!prevMode || prevMode === "partial" || prevMode === "manual") ? old.filter((r) => Object.values(r).some(isFilled) && !headNiks.has(String(r.nik ?? "")) && !prevOnly.has(String(r.nik ?? ""))) : [];
       form[field.key] = pad([...auto, ...manual].slice(0, field.max ?? 20));
       autoFilled[field.key] = true;
       autoFilled[`__mode_${field.key}`] = mode;
@@ -160,17 +190,38 @@ export function fillForm(form, sections, lookup = () => undefined) {
    Jenis kelamin dibandingkan secara longgar (huruf besar/kecil, "L"/"P", "Male"/"Female", dst.). */
 const MALE = ["laki-laki", "laki laki", "l", "male", "pria"];
 const FEMALE = ["perempuan", "p", "female", "wanita"];
+const normGender = (value) => {
+  const gender = String(value ?? "").trim().toLowerCase();
+  if (MALE.includes(gender)) return "Laki-laki";
+  if (FEMALE.includes(gender)) return "Perempuan";
+  return String(value ?? "").trim();
+};
 
 export function makeResidentLookup(resident) {
   return (key) => {
     if (!resident) return undefined;
-    const m = /^(asFather|asMother|asGroom|asBride|parentFather|parentMother|spouse):(.+)$/.exec(key);
+    const m = /^(asFather|asMother|asGroom|asBride|asHusband|asWife|parentFather|parentMother|spouse):(.+)$/.exec(key);
     if (!m) return resident[key];
     const [, relation, property] = m;
     const g = String(resident.gender ?? "").trim().toLowerCase();
     if (relation === "parentFather") return resident.father?.[property];
     if (relation === "parentMother") return resident.mother?.[property];
     if (relation === "spouse") return resident.spouse?.[property];
+    if (relation === "asHusband" || relation === "asWife") {
+      const status = String(resident.maritalStatus ?? "").trim().toLowerCase();
+      const familyRelation = String(resident.familyRelationship ?? "").trim().toLowerCase();
+      const eligible = resident.spouse
+        && status
+        && !/belum|cerai|janda|duda|jejaka|perawan/i.test(status)
+        && /kawin|menikah/i.test(status)
+        && familyRelation
+        && !/anak|menantu|cucu|orang ?tua|saudara|famili/i.test(familyRelation)
+        && /suami|istri|kepala|\bkk\b/i.test(familyRelation);
+      if (!eligible) return undefined;
+      const requestedGender = relation === "asHusband" ? "Laki-laki" : "Perempuan";
+      const source = normGender(resident.gender) === requestedGender ? resident : resident.spouse;
+      return source?.[property];
+    }
     const role = MALE.includes(g) ? "Father" : FEMALE.includes(g) ? "Mother" : null;
     const coupleRole = MALE.includes(g) ? "asGroom" : FEMALE.includes(g) ? "asBride" : null;
     if (relation === "asFather" || relation === "asMother") return relation === `as${role}` ? resident[property] : undefined;
@@ -178,29 +229,32 @@ export function makeResidentLookup(resident) {
   };
 }
 
-/* Untuk field `select` / `occupation`: samakan nilai dari data warga dengan pilihan di form (tanpa peduli huruf besar/kecil,
-   nomor di depan, atau penulisan lama), supaya "ISLAM" cocok dengan opsi "Islam" dan "5. Pegawai Negeri Sipil (PNS)" cocok
-   dengan "Pegawai Negeri Sipil (PNS)". Pilihan boleh teks biasa atau { value, label }. Bila tidak ada yang cocok, nilai aslinya
-   dipakai apa adanya. */
-const bareNumber = (v) => String(v ?? "").replace(/^\s*\d+\s*[.)\-:]\s*/, "").trim();
-const keyOf = (v) => bareNumber(v).toLowerCase().replace(/[^a-z0-9]+/g, "");
-// Penulisan lama / ejaan lain yang artinya sama dengan nilai di Data Warga.
-const OLD_VALUE = { belumkawin: "belummenikah", kawin: "menikah", khonghucu: "konghucu", konghucu: "konghucu", budha: "buddha" };
-const canon = (v) => OLD_VALUE[keyOf(v)] ?? keyOf(v);
+/* Untuk field `select`: samakan nilai dari data warga dengan pilihan di form (tanpa peduli huruf besar/kecil),
+   supaya "ISLAM" cocok dengan opsi "Islam". Bila tidak ada yang cocok, nilai aslinya dipakai apa adanya. */
+const bareOption = (value) => String(value ?? "")
+  .replace(/^\s*\d+\s*[.)\-:]\s*/, "")
+  .trim()
+  .toLowerCase();
+const numberedGender = (value) => {
+  const bare = bareOption(value);
+  if (bare === "laki-laki") return "1. Laki-laki";
+  if (bare === "perempuan") return "2. Perempuan";
+  return value;
+};
+const isGenderField = (field) => {
+  const key = String(field.key ?? "").toLowerCase();
+  const label = String(field.label ?? "").toLowerCase();
+  return field.from === "gender" || key.includes("gender") || key.includes("jeniskelamin") || label.includes("jenis kelamin");
+};
 const matchOption = (field, raw) => {
-  const text = String(raw ?? "").trim();
-  if (field.type === "occupation") {
-    const hit = (field.options ?? []).find((o) => keyOf(o) === keyOf(text));
-    return hit ? bareNumber(hit) : bareNumber(text) || text;
-  }
-  if (field.type !== "select" || !Array.isArray(field.options)) return raw;
-  const want = canon(text);
-  const hit = field.options.find((o) => {
-    const value = o && typeof o === "object" ? o.value : o;
-    const label = o && typeof o === "object" ? o.label : o;
-    return canon(value) === want || canon(label) === want;
+  if (field.type !== "select" || !Array.isArray(field.options)) return isGenderField(field) ? numberedGender(raw) : raw;
+  const text = String(raw ?? "").trim().toLowerCase();
+  const hit = field.options.find((option) => {
+    const value = option && typeof option === "object" ? option.value ?? option.label : option;
+    return String(value).trim().toLowerCase() === text || bareOption(value) === bareOption(raw);
   });
-  return hit === undefined ? raw : (hit && typeof hit === "object" ? hit.value : hit);
+  if (hit === undefined) return raw;
+  return hit && typeof hit === "object" ? hit.value ?? hit.label : hit;
 };
 
 /* Isi semua field yang punya `from` dari data warga. Isian yang sudah diketik manual TIDAK ditimpa; isian yang sebelumnya
@@ -301,7 +355,15 @@ export function applyResident(form, sections, resident, autoFilled = {}, options
       const source = field.from || alias?.from;
       if (!source) continue;
       const raw = lookup(source);
-      if (!isFilled(raw)) continue;
+      if (!isFilled(raw)) {
+        // Bila NIK diganti ke warga yang belum menikah/tidak memiliki pasangan,
+        // jangan tinggalkan data pasangan otomatis dari pencarian sebelumnya.
+        if (/^(spouse|asHusband|asWife):/.test(String(field.from ?? "")) && autoFilled[field.key]) {
+          form[field.key] = field.default ?? "";
+          delete autoFilled[field.key];
+        }
+        continue;
+      }
       const current = form[field.key];
       // Pencarian catin adalah perintah eksplisit untuk mengganti isi blok catin
       // dan orang tuanya dengan hasil NIK yang baru dicari. Pencarian pemohon
