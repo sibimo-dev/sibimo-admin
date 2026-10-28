@@ -26,25 +26,25 @@ export const sections = [
   {
     title: "Data Keluarga",
     fields: [
-      f.kk("kkNumber", "Nomor Kartu Keluarga"),
-      f.text("householdHead", "Nama Kepala Keluarga"),
-      f.text("birthCertNumber", "Nomor Akta Kelahiran"),
+      f.kk("kkNumber", "Nomor Kartu Keluarga", { from: "familyCardNumber" }),
+      f.text("householdHead", "Nama Kepala Keluarga", { from: "headOfFamilyName" }),
+      f.text("birthCertNumber", "Nomor Akta Kelahiran", { from: "birthCertificateNumber" }),
     ],
   },
   {
     title: "Agama & Kewarganegaraan",
     fields: [
       f.select("religion", "Agama", OPT.religion, { noAutofill: true }), // agama anak
-      f.text("citizenship", "Kewarganegaraan", { default: "WNI" }),
+      f.text("citizenship", "Kewarganegaraan", { from: "nationality", default: "WNI" }),
     ],
   },
   {
     title: "Alamat",
     fields: [
-      f.text("rt", "RT"),
-      f.text("rw", "RW"),
-      f.text("village", "Kelurahan", { default: "Bimomartani" }),
-      f.text("district", "Kecamatan", { default: "Ngemplak" }),
+      f.text("rt", "RT", { from: "rt" }),
+      f.text("rw", "RW", { from: "rw" }),
+      f.text("village", "Kelurahan", { from: "village", default: "Bimomartani" }),
+      f.text("district", "Kecamatan", { from: "district", default: "Ngemplak" }),
     ],
   },
   // TTD (2): 1. Pemohon  2. Petugas

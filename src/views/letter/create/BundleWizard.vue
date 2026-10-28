@@ -68,7 +68,12 @@ const requiresDualCatinLookup = computed(() => selectedLetters.value.some((lette
   const lookupKeys = new Set((letter.sections ?? []).filter((section) => section.lookupKey).map((section) => section.lookupKey));
   return (lookupKeys.has("groom") && lookupKeys.has("bride")) || (lookupKeys.has("child") && lookupKeys.has("childSpouse"));
 }));
-const showApplicantLookup = computed(() => !ui.value.hideApplicantLookup && (selectedVisibleCount.value > 1 || !requiresDualCatinLookup.value));
+// Bila surat pertama sudah punya dua blok catin (mis. FPN/DPN), tiap catin dicari dari kotak NIK-nya sendiri.
+const firstHasDualCatin = computed(() => {
+  const keys = new Set((selectedLetters.value[0]?.sections ?? []).filter((s) => s.lookupKey).map((s) => s.lookupKey));
+  return keys.has("groom") && keys.has("bride");
+});
+const showApplicantLookup = computed(() => !ui.value.hideApplicantLookup && !firstHasDualCatin.value && (selectedVisibleCount.value > 1 || !requiresDualCatinLookup.value));
 const sectionsOf = (letter) => (letter.id === selectedLetters.value[0]?.id ? [...letter.sections, NOTIF_SECTION] : letter.sections);
 
 const applicantLookupSections = computed(() => {

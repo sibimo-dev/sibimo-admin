@@ -6,7 +6,13 @@ export const MAX_FILE_MB = 5;
 export const DOCS_OPTIONAL = true;
 export const ACCEPTED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic"];
 
-export const toDate = (v) => (v instanceof Date ? v : v ? new Date(v) : null);
+/* String yang bukan tanggal (mis. "SEUMUR HIDUP" pada Masa Berlaku KTP) menghasilkan null, bukan Invalid Date. */
+export const toDate = (v) => {
+  if (v instanceof Date) return v;
+  if (!v) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
 export const isFilled = (v) =>
   v instanceof Date ? !Number.isNaN(v.getTime()) : Array.isArray(v) ? v.length > 0 : String(v ?? "").trim() !== "";
 export const emptyRow = (columns) => Object.fromEntries(columns.map((c) => [c.key, c.default ?? ""]));

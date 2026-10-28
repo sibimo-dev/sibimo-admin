@@ -104,8 +104,8 @@ const ALIAS_MATI = []; // pelapor kematian diisi petugas/admin, tidak disambungk
 const ALIAS_LETTER_C = [["letterCOwnerName", "ownerName"]]; // pemilik pada Letter C = pemilik tanah pada surat keterangan
 
 // 10 surat (married-man) dan 12 surat (marriage-women), sama dengan daftar di scaffold.
-const NIKAH_LAKI = ["khn", "dpn", "pnk", "skn", "knn", "kbp", "pbm", "kkn", "scm", "sio"];
-const NIKAH_PEREMPUAN = ["n2", "fpn", "n1", "phk", "pnn", "kbm", "pbn", "n6", "n4", "n5", "swn", "swh"];
+const NIKAH_LAKI = ["dpn", "khn", "pnk", "skn", "knn", "kbp", "pbm", "kkn", "scm", "sio"];
+const NIKAH_PEREMPUAN = ["fpn", "n2", "n1", "phk", "pnn", "kbm", "pbn", "n6", "n4", "n5", "swn", "swh"];
 // Kelahiran = 11 surat (Lama: semua; Baru: tanpa Keputusan Pencatatan Terlambat).
 // Kematian = 7 surat (Baru) / 8 surat (Lama, + SPTJM Data Kematian). "hpk" (Perhitungan Selamatan) tidak dipublikasikan.
 const LAHIR_BARU = ["akl", "lpk", "pcl", "pak", "klh", "pld", "plk", "kak", "sps", "pdl"];

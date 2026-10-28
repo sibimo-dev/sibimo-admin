@@ -35,7 +35,7 @@ export const sections = [
     title: "Data Suami/Istri",
     fields: [
       ...biodata("spouse", { religion: false, resident: true, relation: "spouse" }),
-      f.text("marriageCertNumber", "Surat Nikah (Nomor)", { from: "spouse:marriageCertificateNumber" }),
+      f.text("marriageCertNumber", "Surat Nikah (Nomor)"),
     ],
   },
 

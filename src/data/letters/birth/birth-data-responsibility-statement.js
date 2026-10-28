@@ -131,6 +131,6 @@ export const sections = arrange(
 );
 
 // Langkah 2: dokumen pendukung (opt(...) = tidak wajib)
-export const documents = [DOC.ktp, DOC.kk, "Fotokopi KTP ayah dan ibu", DOC.ktpSaksi, opt(DOC_LAHIR)];
+export const documents = [DOC.ktp, DOC.kk, "Fotokopi KTP ayah dan ibu", opt(DOC.ktpSaksi), opt(DOC_LAHIR)];
 
 export const meta = {"title": "Surat Pernyataan Tanggung Jawab Mutlak Kebenaran Data Kelahiran", "code": "PDL"};

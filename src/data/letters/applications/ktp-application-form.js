@@ -17,11 +17,11 @@ export const sections = [
     hint: "Terisi otomatis dari data warga. Koreksi bila ada yang tidak sesuai.",
     fields: [
       f.text("name", "Nama Lengkap", { from: "fullName" }),
-      f.kk("kkNumber", "No KK"),
+      f.kk("kkNumber", "No KK", { from: "familyCardNumber" }),
       f.nik("nik", "NIK", { from: "nik" }),
       f.area("address", "Alamat", { from: "address", span: 2 }),
-      f.text("rt", "RT"),
-      f.text("rw", "RW"),
+      f.text("rt", "RT", { from: "rt" }),
+      f.text("rw", "RW", { from: "rw" }),
     ],
   },
   // TTD (4): 1. Pemohon (= name di atas)  2. Dukuh  3. Camat  4. Lurah/Petugas kalurahan

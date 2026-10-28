@@ -9,17 +9,17 @@
  */
 export default [
   {
-    path: 'letter',
-    name: 'letter-list',
-    component: () => import('@/views/letter/LetterListView.vue'),
-    meta: { breadcrumb: ['Persuratan', 'Pengelolaan Surat'] },
-  },
-  {
-    // Harus di atas route lain supaya "create" tidak dibaca sebagai :id.
+    // Route statis didahulukan agar tombol Tambah Surat selalu membuka katalog.
     path: 'letter/create',
     name: 'letter-create',
     component: () => import('@/views/letter/LetterCreateView.vue'),
     meta: { breadcrumb: ['Persuratan', 'Pengelolaan Surat', 'Tambah Surat'] },
+  },
+  {
+    path: 'letter',
+    name: 'letter-list',
+    component: () => import('@/views/letter/LetterListView.vue'),
+    meta: { breadcrumb: ['Persuratan', 'Pengelolaan Surat'] },
   },
   {
     // Halaman Verifikasi + Otorisasi (satu halaman) untuk satu pengajuan surat.
