@@ -60,6 +60,7 @@ const menuGroups = [
     items: [
       { label: 'Data Warga', icon: 'pi pi-users', route: '/citizen' },
       { label: 'Potensi Kalurahan', icon: 'pi pi-star', route: '/village-potential', permission: 'potensi-kalurahan' },
+      { label: 'Hasil Survei', icon: 'pi pi-chart-bar', route: '/survey' },
     ],
   },
   {
