@@ -11,6 +11,8 @@ import Avatar from 'primevue/avatar'
 import Dialog from 'primevue/dialog'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
+import InputNumber from 'primevue/inputnumber'
+import ToggleSwitch from 'primevue/toggleswitch'
 
 import {
   getOrganizationalStructures,
@@ -122,6 +124,9 @@ const form = reactive({
   status: 'Published',
   published_at: null,
   people: [],
+  // Pejabat terdahulu (RT/RW hingga Lurah) + pengaturan tampil di halaman publik.
+  former_officials: [],
+  show_former_officials: false,
 })
 
 function seedCustomJabatan(existingLevels = []) {
@@ -155,12 +160,26 @@ function seedPeople(existingLevels = []) {
       jabatan: person.title ?? null,
       nama: person.name ?? '',
       desc: person.desc ?? '',
+      start_year: person.start_year ?? null,
+      end_year: person.end_year ?? null,
       photo: person.photo ?? null,
       photoFile: null,
       signature: person.signature ?? null,
       signatureFile: null,
     }))
   ))
+}
+
+function seedFormerOfficials(list = []) {
+  if (!Array.isArray(list)) return []
+  return list.map((item) => ({
+    id: item.id ?? uid(),
+    jabatan: item.jabatan ?? '',
+    nama: item.nama ?? '',
+    start_year: item.start_year ?? null,
+    end_year: item.end_year ?? null,
+    desc: item.desc ?? '',
+  }))
 }
 
 function loadExisting(structure) {
@@ -172,6 +191,8 @@ function loadExisting(structure) {
     status: structure.status ?? 'Published',
     published_at: structure.published_at ?? null,
     people: seedPeople(structure.levels ?? []),
+    former_officials: seedFormerOfficials(structure.former_officials ?? []),
+    show_former_officials: !!structure.show_former_officials,
   })
   customJabatan.splice(0, customJabatan.length, ...seedCustomJabatan(structure.levels ?? []))
 }
@@ -207,6 +228,8 @@ const emptyPersonForm = () => ({
   jabatan: null,
   nama: '',
   desc: '',
+  start_year: null,
+  end_year: null,
   photo: null,
   photoFile: null,
   signature: null,
@@ -226,6 +249,8 @@ function openEditPerson(person) {
     jabatan: person.jabatan,
     nama: person.nama,
     desc: person.desc,
+    start_year: person.start_year ?? null,
+    end_year: person.end_year ?? null,
     photo: person.photo,
     photoFile: null,
     signature: person.signature,
@@ -271,6 +296,8 @@ function buildLevels() {
       name: person.nama.trim(),
       title: person.jabatan,
       desc: person.desc?.trim() ?? '',
+      start_year: person.start_year ?? null,
+      end_year: person.end_year ?? null,
       photo: person.photoFile ? `upload:${person.id}` : person.photo,
       signature: person.signatureFile ? `upload-signature:${person.id}` : person.signature,
     })
@@ -301,6 +328,15 @@ async function persistStructure() {
         status: form.status,
         published_at: form.published_at,
         levels: buildLevels(),
+        former_officials: form.former_officials.map((item) => ({
+          id: item.id,
+          jabatan: item.jabatan,
+          nama: item.nama,
+          start_year: item.start_year,
+          end_year: item.end_year,
+          desc: item.desc,
+        })),
+        show_former_officials: form.show_former_officials,
       },
       files,
     })
@@ -325,6 +361,10 @@ async function savePersonDialog() {
     toast.add({ severity: 'error', summary: 'Jabatan dan nama wajib diisi', life: 2500 })
     return
   }
+  if (personForm.start_year && personForm.end_year && personForm.end_year < personForm.start_year) {
+    toast.add({ severity: 'error', summary: 'Tahun selesai tidak boleh lebih kecil dari tahun mulai', life: 2500 })
+    return
+  }
 
   if (editingPersonId.value) {
     // photo/photoFile mengikuti isi modal apa adanya (sama seperti signature),
@@ -336,6 +376,8 @@ async function savePersonDialog() {
             jabatan: personForm.jabatan,
             nama,
             desc: personForm.desc.trim(),
+            start_year: personForm.start_year,
+            end_year: personForm.end_year,
             photo: personForm.photo,
             photoFile: personForm.photoFile,
             signature: personForm.signature,
@@ -351,6 +393,8 @@ async function savePersonDialog() {
         jabatan: personForm.jabatan,
         nama,
         desc: personForm.desc.trim(),
+        start_year: personForm.start_year,
+        end_year: personForm.end_year,
         photo: personForm.photo,
         photoFile: personForm.photoFile,
         signature: personForm.signature,
@@ -499,6 +543,173 @@ async function onPersonSignatureChange(event) {
     toast.add({ severity: 'error', summary: 'Gagal memproses tanda tangan', life: 2500 })
   }
 }
+
+/* ========================================================================
+   CRUD pejabat terdahulu (RT/RW hingga Lurah) + toggle tampil di publik.
+   Disimpan bersama payload struktur yang sama (persistStructure).
+   ======================================================================== */
+
+const FORMER_EXTRA_JABATAN = ['RT', 'RW']
+const formerJabatanOptions = computed(() => {
+  const seen = new Set()
+  const list = []
+  ;[...FORMER_EXTRA_JABATAN, ...allJabatanOptions.value.map((o) => o.label)].forEach((label) => {
+    if (!seen.has(label)) {
+      seen.add(label)
+      list.push(label)
+    }
+  })
+  return list
+})
+
+function formatMasaJabatan(item) {
+  if (!item?.start_year && !item?.end_year) return '—'
+  if (item.start_year && !item.end_year) return `${item.start_year} – Sekarang`
+  return `${item.start_year ?? '?'} – ${item.end_year}`
+}
+
+const selectedFormer = ref([])
+const formerDialogVisible = ref(false)
+const editingFormerId = ref(null)
+const formerDialogTitle = computed(() =>
+  editingFormerId.value ? 'Edit Pejabat Terdahulu' : 'Tambah Pejabat Terdahulu',
+)
+
+const emptyFormerForm = () => ({ jabatan: null, nama: '', start_year: null, end_year: null, desc: '' })
+const formerForm = reactive(emptyFormerForm())
+const formerNomor = ref('')
+const needsNomor = computed(() =>
+  ['RT', 'RW'].includes((formerForm.jabatan || '').trim().toUpperCase()),
+)
+
+function openNewFormer() {
+  editingFormerId.value = null
+  Object.assign(formerForm, emptyFormerForm())
+  formerDialogVisible.value = true
+  formerNomor.value = ''
+}
+
+function openEditFormer(item) {
+  editingFormerId.value = item.id
+  const match = /^(RT|RW)\s+(.+)$/i.exec(item.jabatan || '')
+  Object.assign(formerForm, {
+    jabatan: match ? match[1].toUpperCase() : item.jabatan,
+    nama: item.nama,
+    start_year: item.start_year,
+    end_year: item.end_year,
+    desc: item.desc,
+  })
+  formerNomor.value = match ? match[2] : ''
+  formerDialogVisible.value = true
+}
+
+function closeFormerDialog() {
+  formerDialogVisible.value = false
+  editingFormerId.value = null
+  Object.assign(formerForm, emptyFormerForm())
+  formerNomor.value = ''
+}
+
+async function saveFormerDialog() {
+  let jabatan = (formerForm.jabatan || '').trim()
+  if (needsNomor.value && formerNomor.value.trim()) {
+    jabatan = `${jabatan} ${formerNomor.value.trim()}`
+  }  
+  const nama = formerForm.nama.trim()
+  if (!jabatan || !nama) {
+    toast.add({ severity: 'error', summary: 'Jabatan dan nama wajib diisi', life: 2500 })
+    return
+  }
+  if (!formerForm.start_year || !formerForm.end_year) {
+    toast.add({ severity: 'error', summary: 'Masa jabatan (tahun mulai & selesai) wajib diisi', life: 2500 })
+    return
+  }
+  if (formerForm.end_year < formerForm.start_year) {
+    toast.add({ severity: 'error', summary: 'Tahun selesai tidak boleh lebih kecil dari tahun mulai', life: 2500 })
+    return
+  }
+
+  const entry = {
+    jabatan,
+    nama,
+    start_year: formerForm.start_year,
+    end_year: formerForm.end_year,
+    desc: formerForm.desc.trim(),
+  }
+
+  const wasEditing = !!editingFormerId.value
+  if (wasEditing) {
+    form.former_officials = form.former_officials.map((p) =>
+      p.id === editingFormerId.value ? { ...p, ...entry } : p,
+    )
+  } else {
+    form.former_officials = [...form.former_officials, { id: uid(), ...entry }]
+  }
+
+  if (!(await persistStructure())) return
+
+  toast.add({
+    severity: 'success',
+    summary: wasEditing ? 'Pejabat terdahulu diperbarui' : 'Pejabat terdahulu ditambahkan',
+    life: 2500,
+  })
+  closeFormerDialog()
+}
+
+function deleteFormer(item) {
+  confirm.require({
+    message: `Hapus "${item.nama}" dari daftar pejabat terdahulu?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      form.former_officials = form.former_officials.filter((p) => p.id !== item.id)
+      selectedFormer.value = selectedFormer.value.filter((p) => p.id !== item.id)
+      if (await persistStructure()) {
+        toast.add({ severity: 'success', summary: 'Pejabat terdahulu dihapus', life: 2000 })
+      }
+    },
+  })
+}
+
+function deleteSelectedFormer() {
+  if (!selectedFormer.value.length) return
+  confirm.require({
+    message: `Hapus ${selectedFormer.value.length} pejabat terdahulu terpilih?`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      const ids = new Set(selectedFormer.value.map((p) => p.id))
+      form.former_officials = form.former_officials.filter((p) => !ids.has(p.id))
+      selectedFormer.value = []
+      if (await persistStructure()) {
+        toast.add({ severity: 'success', summary: 'Pejabat terdahulu terpilih dihapus', life: 2000 })
+      }
+    },
+  })
+}
+
+// Toggle tampil di halaman publik: langsung disimpan, dikembalikan jika gagal.
+async function onToggleShowFormer(value) {
+  const previous = !value
+  form.show_former_officials = value
+  if (await persistStructure()) {
+    toast.add({
+      severity: 'success',
+      summary: value
+        ? 'Pejabat terdahulu akan ditampilkan di halaman profil'
+        : 'Pejabat terdahulu disembunyikan dari halaman profil',
+      life: 2500,
+    })
+  } else {
+    form.show_former_officials = previous
+  }
+}
 </script>
 
 <template>
@@ -605,6 +816,12 @@ async function onPersonSignatureChange(event) {
 
           <Column field="nama" header="Nama" />
 
+          <Column field="start_year" header="Masa Jabatan">
+            <template #body="{ data }">
+              <span class="whitespace-nowrap text-slate-600">{{ formatMasaJabatan(data) }}</span>
+            </template>
+          </Column>
+
           <Column field="desc" header="Deskripsi">
             <template #body="{ data }">
               <span class="line-clamp-1 text-slate-500">{{ data.desc || '—' }}</span>
@@ -622,6 +839,133 @@ async function onPersonSignatureChange(event) {
         </DataTable>
       </template>
     </Card>
+
+    <!-- ===== Pejabat Terdahulu ===== -->
+    <Card class="mt-6">
+      <template #title>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <span class="text-sm font-semibold text-slate-700">Pejabat Terdahulu</span>
+          <div class="flex items-center gap-2">
+            <ToggleSwitch
+              inputId="showFormer"
+              :modelValue="form.show_former_officials"
+              :disabled="saving || loading"
+              @update:modelValue="onToggleShowFormer"
+            />
+            <label for="showFormer" class="cursor-pointer text-xs font-medium text-slate-600">
+              Tampilkan di halaman profil publik
+            </label>
+          </div>
+        </div>
+      </template>
+      <template #content>
+        <div class="mb-3 flex items-center gap-2">
+          <Button label="Tambah Pejabat" icon="pi pi-plus" size="small" @click="openNewFormer" />
+          <Button
+            label="Hapus"
+            icon="pi pi-trash"
+            size="small"
+            severity="danger"
+            outlined
+            :disabled="!selectedFormer.length"
+            @click="deleteSelectedFormer"
+          />
+        </div>
+
+        <DataTable
+          v-model:selection="selectedFormer"
+          :value="form.former_officials"
+          :loading="loading"
+          dataKey="id"
+          size="small"
+          stripedRows
+          :rows="10"
+          paginator
+          paginatorTemplate="PrevPageLink PageLinks NextPageLink"
+          responsiveLayout="scroll"
+        >
+          <template #empty>
+            <div class="py-6 text-center text-sm text-slate-400">
+              Belum ada data pejabat terdahulu. Klik "Tambah Pejabat" untuk mulai.
+            </div>
+          </template>
+
+          <Column selectionMode="multiple" headerStyle="width: 3rem" />
+          <Column field="jabatan" header="Jabatan" sortable />
+          <Column field="nama" header="Nama" sortable />
+          <Column field="start_year" header="Masa Jabatan" sortable>
+            <template #body="{ data }">{{ formatMasaJabatan(data) }}</template>
+          </Column>
+          <Column field="desc" header="Keterangan">
+            <template #body="{ data }">
+              <span class="line-clamp-1 text-slate-500">{{ data.desc || '—' }}</span>
+            </template>
+          </Column>
+          <Column header="Aksi" headerStyle="width: 6rem">
+            <template #body="{ data }">
+              <div class="flex items-center gap-1">
+                <Button icon="pi pi-pencil" text rounded size="small" @click="openEditFormer(data)" aria-label="Edit pejabat terdahulu" />
+                <Button icon="pi pi-trash" text rounded size="small" severity="danger" @click="deleteFormer(data)" aria-label="Hapus pejabat terdahulu" />
+              </div>
+            </template>
+          </Column>
+        </DataTable>
+      </template>
+    </Card>
+
+    <!-- Modal Tambah / Edit Pejabat Terdahulu -->
+    <Dialog
+      v-model:visible="formerDialogVisible"
+      modal
+      :header="formerDialogTitle"
+      :style="{ width: '440px' }"
+      :closable="true"
+      @hide="closeFormerDialog"
+    >
+      <div class="flex flex-col gap-4">
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[13px] font-semibold text-slate-700">Jabatan</label>
+          <Select
+            v-model="formerForm.jabatan"
+            :options="formerJabatanOptions"
+            editable
+            filter
+            placeholder="Pilih atau ketik jabatan (mis. RT 03 / RW 02)"
+            fluid
+          />
+          <div v-if="needsNomor" class="flex flex-col gap-1.5">
+            <label class="text-[13px] font-semibold text-slate-700">Nomor {{ formerForm.jabatan }}</label>
+            <InputText v-model="formerNomor" placeholder="mis. 03" fluid />
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[13px] font-semibold text-slate-700">Nama</label>
+          <InputText v-model="formerForm.nama" placeholder="Nama lengkap" fluid />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[13px] font-semibold text-slate-700">Tahun Mulai</label>
+            <InputNumber v-model="formerForm.start_year" :useGrouping="false" :min="1900" :max="2100" placeholder="mis. 2010" fluid />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[13px] font-semibold text-slate-700">Tahun Selesai</label>
+            <InputNumber v-model="formerForm.end_year" :useGrouping="false" :min="1900" :max="2100" placeholder="mis. 2018" fluid />
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[13px] font-semibold text-slate-700">Keterangan</label>
+          <InputText v-model="formerForm.desc" placeholder="Opsional" fluid />
+        </div>
+      </div>
+
+      <template #footer>
+        <Button label="Cancel" icon="pi pi-times" text severity="secondary" :disabled="saving" @click="closeFormerDialog" />
+        <Button label="Save" icon="pi pi-check" :loading="saving" @click="saveFormerDialog" />
+      </template>
+    </Dialog>
 
     <!-- Modal Tambah / Edit Anggota -->
     <Dialog
@@ -702,6 +1046,16 @@ async function onPersonSignatureChange(event) {
         <div class="flex flex-col gap-1.5">
           <label class="text-[13px] font-semibold text-slate-700">Deskripsi</label>
           <InputText v-model="personForm.desc" placeholder="Deskripsi jabatan (opsional)" fluid />
+        </div>
+
+        <!-- Masa jabatan -->
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[13px] font-semibold text-slate-700">Masa Jabatan</label>
+          <div class="grid grid-cols-2 gap-3">
+            <InputNumber v-model="personForm.start_year" :useGrouping="false" :min="1900" :max="2100" placeholder="Tahun mulai" fluid />
+            <InputNumber v-model="personForm.end_year" :useGrouping="false" :min="1900" :max="2100" placeholder="Tahun selesai" fluid />
+          </div>
+          <small class="text-xs text-slate-400">Kosongkan tahun selesai jika masih menjabat (tampil "Sekarang").</small>
         </div>
       </div>
 
