@@ -15,6 +15,18 @@ export async function getRecordEventCounters(year) {
   return response.data.data
 }
 
+export async function refreshCitizenAges() {
+  const response = await api.post('/citizens/refresh-ages')
+  return response.data
+}
+
+export async function validateCitizenImport(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await api.post('/citizens/import/validate', formData)
+  return response.data
+}
+
 export async function createCitizen(payload) {
   const response = await api.post('/citizens', payload)
   return response.data.data

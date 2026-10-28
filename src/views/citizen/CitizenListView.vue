@@ -1,11 +1,17 @@
 <script setup>
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import * as XLSX from 'xlsx'
 import { FilterMatchMode } from '@primevue/core/api'
 import { useConfirm } from 'primevue/useconfirm'
-import { createCitizen, deleteCitizen as removeCitizen, getCitizens } from '@/services/citizen.service'
+import {
+  createCitizen,
+  deleteCitizen as removeCitizen,
+  getCitizens,
+  refreshCitizenAges,
+  validateCitizenImport,
+} from '@/services/citizen.service'
 import { getListCache, setListCache } from '@/services/list-cache'
 import CitizenDocumentsPanel from '@/components/citizen/CitizenDocumentsPanel.vue'
 
@@ -17,7 +23,6 @@ import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
-import FileUpload from 'primevue/fileupload'
 import Message from 'primevue/message'
 import Dialog from 'primevue/dialog'
 import SelectButton from 'primevue/selectbutton'
@@ -142,8 +147,19 @@ async function fetchCitizens({ background = false } = {}) {
   }
 }
 
+function handleBeforeUnload(event) {
+  if (!importing.value && !refreshingAges.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
 // Panggil sekali waktu halaman dibuka
-onMounted(() => fetchCitizens({ background: Boolean(cachedCitizens) }))
+onMounted(() => {
+  fetchCitizens({ background: Boolean(cachedCitizens) })
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnload))
 
 const selectedResidents = ref([])
 const rowsPerPage = ref(10)
@@ -157,6 +173,60 @@ const importSuccess = ref('')
 const importProgress = ref('')
 const importing = ref(false)
 const importCancelled = ref(false)
+const importDialogVisible = ref(false)
+const importFileInput = ref(null)
+const refreshingAges = ref(false)
+const ageRefreshProgress = ref('')
+const ageRefreshSuccess = ref('')
+const ageRefreshError = ref('')
+
+const citizenImportColumns = [
+  { key: 'record_type', label: 'JENIS DATA' },
+  { key: 'record_event', label: 'PERISTIWA' },
+  { key: 'record_year', label: 'TAHUN PERISTIWA' },
+  { key: 'title_code', label: 'GELAR' },
+  { key: 'family_card_number', label: 'Nomor KK' },
+  { key: 'dusun', label: 'DUSUN' },
+  { key: 'address', label: 'ALAMAT' },
+  { key: 'rt', label: 'RT' },
+  { key: 'rw', label: 'RW' },
+  { key: 'national_id', label: 'NIK' },
+  { key: 'full_name', label: 'NAMA LENGKAP' },
+  { key: 'gender', label: 'L/P' },
+  { key: 'birth_place', label: 'TEMPAT LAHIR' },
+  { key: 'birth_date', label: 'TANGGAL LAHIR' },
+  { key: 'age', label: 'UMUR' },
+  { key: 'birth_certificate_status', label: 'AKTA LAHIR' },
+  { key: 'birth_certificate_number', label: 'NOMOR AKTA LAHIR' },
+  { key: 'blood_type', label: 'GOL. DARAH' },
+  { key: 'religion', label: 'AGAMA' },
+  { key: 'marital_status', label: 'STATUS KAWIN' },
+  { key: 'marriage_certificate_status', label: 'AKTA KAWIN' },
+  { key: 'marriage_certificate_number', label: 'NOMOR AKTA KAWIN' },
+  { key: 'marriage_date', label: 'TANGGAL KAWIN' },
+  { key: 'divorce_certificate_status', label: 'AKTA CERAI' },
+  { key: 'divorce_certificate_number', label: 'NOMOR AKTA CERAI' },
+  { key: 'divorce_date', label: 'TANGGAL CERAI' },
+  { key: 'family_relationship', label: 'STATUS HUB DLM KELUARGA' },
+  { key: 'physical_disability', label: 'KELAINAN FISIK' },
+  { key: 'disability_status', label: 'PENYANDANG CACAT' },
+  { key: 'education', label: 'PENDIDIKAN TERAKHIR' },
+  { key: 'occupation', label: 'JENIS PEKERJAAN' },
+  { key: 'mother_national_id', label: 'NIK IBU' },
+  { key: 'mother_name', label: 'NAMA LENGKAP IBU' },
+  { key: 'father_national_id', label: 'NIK AYAH' },
+  { key: 'father_name', label: 'NAMA LENGKAP AYAH' },
+  { key: 'nationality', label: 'KEWARGANEGARAAN' },
+  { key: 'rt_head_name', label: 'NAMA KETUA RT' },
+  { key: 'rw_head_name', label: 'NAMA KETUA RW' },
+  { key: 'phone_number', label: 'NOMOR TELEPON' },
+  { key: 'ktp_address', label: 'ALAMAT SESUAI KTP' },
+  { key: 'previous_address', label: 'ALAMAT SEBELUMNYA' },
+  { key: 'passport_number', label: 'NOMOR PASPOR' },
+  { key: 'passport_expiry_date', label: 'TANGGAL BERAKHIR PASPOR' },
+  { key: 'belief_organization', label: 'ORGANISASI KEPERCAYAAN' },
+  { key: 'status', label: 'STATUS' },
+]
 
 function cancelImport() {
   if (!importing.value) return
@@ -170,6 +240,63 @@ function statusSeverity(status) {
 
 function createResident() {
   router.push({ name: 'citizen-create' })
+}
+
+function openImportDialog() {
+  importError.value = ''
+  importSuccess.value = ''
+  importDialogVisible.value = true
+}
+
+function chooseImportFile() {
+  importFileInput.value?.click()
+}
+
+function downloadCitizenImportTemplate() {
+  const labels = citizenImportColumns.map(column => column.label)
+  const worksheet = XLSX.utils.aoa_to_sheet([labels])
+  worksheet['!cols'] = labels.map(column => ({ wch: Math.min(Math.max(column.length + 3, 16), 28) }))
+
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Template Data Warga')
+  // Excel dengan regional Indonesia memakai titik koma sebagai pemisah CSV.
+  // Dengan separator ini setiap header terbuka sebagai kolom terpisah.
+  XLSX.writeFile(workbook, 'Template-Import-Data-Warga.csv', { bookType: 'csv', FS: ';' })
+}
+
+function handleImportFileInput(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (file) handleFileSelect({ files: [file] })
+}
+
+function refreshAges() {
+  confirm.require({
+    message: 'Perbarui umur seluruh data warga berdasarkan tanggal lahir sekarang?',
+    header: 'Perbarui Umur Warga',
+    icon: 'pi pi-refresh',
+    acceptLabel: 'Perbarui',
+    rejectLabel: 'Batal',
+    accept: async () => {
+      refreshingAges.value = true
+      ageRefreshProgress.value = 'Menghitung ulang umur seluruh data warga...'
+      ageRefreshSuccess.value = ''
+      ageRefreshError.value = ''
+
+      try {
+        const response = await refreshCitizenAges()
+        ageRefreshProgress.value = 'Memuat ulang data warga...'
+        await fetchCitizens({ background: true })
+        const updatedCount = response?.data?.updated_count ?? 0
+        ageRefreshSuccess.value = `${response?.message || 'Umur warga berhasil diperbarui.'} ${updatedCount} data diproses.`
+      } catch (err) {
+        ageRefreshError.value = err.response?.data?.message || 'Gagal memperbarui umur warga.'
+      } finally {
+        refreshingAges.value = false
+        ageRefreshProgress.value = ''
+      }
+    },
+  })
 }
 
 function editResident(id) {
@@ -287,6 +414,7 @@ function mapRowToResident(row) {
 
   const record_type = normalized['tulispendudukmatipindahorangluar'] ?? normalized['jenisdata'] ?? normalized['recordtype'] ?? 'PENDUDUK'
   const record_event = normalized['tulislahir01dstdatang01dstpindah01dstmati01dst'] ?? normalized['peristiwa'] ?? normalized['recordevent'] ?? 'Lahir01'
+  const record_year = normalized['tahunperistiwa'] ?? normalized['recordyear'] ?? ''
   const title_code = normalized['gelar'] ?? normalized['kodegelar'] ?? ''
   const full_name = normalized['namalengkap'] ?? normalized['nama'] ?? normalized['name'] ?? ''
   const national_id = normalized['nik'] ?? normalized['nationalid'] ?? ''
@@ -305,8 +433,8 @@ function mapRowToResident(row) {
   const blood_type = normalized['goldarah'] ?? ''
   const phone_number = normalized['notelepon'] ?? normalized['nomortelepon'] ?? normalized['nomorteleponwa'] ?? normalized['noteleponwa'] ?? normalized['whatsapp'] ?? normalized['nowa'] ?? normalized['phonenumber'] ?? ''
   const address = normalized['alamat'] ?? normalized['address'] ?? ''
-  const occupation = normalized['pekerjaan'] ?? normalized['occupation'] ?? ''
-  const education = normalized['pendidikan'] ?? normalized['education'] ?? ''
+  const occupation = normalized['pekerjaan'] ?? normalized['jenispekerjaan'] ?? normalized['occupation'] ?? ''
+  const education = normalized['pendidikan'] ?? normalized['pendidikanterakhir'] ?? normalized['education'] ?? ''
   const marital_status = normalized['statuskawin'] ?? normalized['statuspernikahan'] ?? normalized['maritalstatus'] ?? ''
   const marriage_certificate_status = normalized['aktakawin'] ?? ''
   const marriage_certificate_number = normalized['nomoraktakawin'] ?? ''
@@ -336,6 +464,7 @@ function mapRowToResident(row) {
   return {
     record_type: String(record_type).trim() || 'PENDUDUK',
     record_event: String(record_event).trim() || 'Lahir01',
+    record_year: String(record_year).trim(),
     title_code: String(title_code).trim(),
     full_name: String(full_name).trim(),
     national_id: String(national_id).trim(),
@@ -408,93 +537,98 @@ async function handleFileSelect(event) {
   const file = event.files?.[0]
   if (!file) return
 
+  importDialogVisible.value = false
   importError.value = ''
   importSuccess.value = ''
-  importProgress.value = 'Membaca file Excel...'
+  importProgress.value = 'Memeriksa jumlah baris CSV di server...'
   importing.value = true
   importCancelled.value = false
 
-  const reader = new FileReader()
+  try {
+    const preflight = await validateCitizenImport(file)
+    const serverRowCount = preflight?.data?.row_count ?? 0
 
-  reader.onload = async (e) => {
-    try {
-      const data = new Uint8Array(e.target.result)
-      const workbook = XLSX.read(data, { type: 'array' })
-      const rows = readCitizenRows(workbook)
-
-      if (rows.length === 0) {
-        importError.value = 'File tidak berisi data yang bisa diimpor.'
-        return
-      }
-
-      const mappedRows = rows
-        .map((row, index) => ({ rowNumber: index + 2, payload: mapRowToResident(row) }))
-        .filter(item => item.payload !== null)
-
-      if (mappedRows.length === 0) {
-        importError.value = 'Tidak ada baris valid ditemukan. Pastikan kolom Nama Lengkap dan NIK terisi.'
-        return
-      }
-
-      let successCount = 0
-      let failCount = 0
-      const failures = []
-      const successfulNiks = []
-
-      for (const [index, { payload, rowNumber }] of mappedRows.entries()) {
-        if (importCancelled.value) break
-        importProgress.value = `Mengimpor data ${index + 1} dari ${mappedRows.length}...`
-        try {
-          await createCitizen(payload)
-          successCount++
-          successfulNiks.push(payload.national_id)
-        } catch (err) {
-          failCount++
-          if (failures.length < 5) {
-            const validationErrors = err.response?.data?.errors
-            const validationMessage = validationErrors
-              ? Object.entries(validationErrors)
-                .flatMap(([field, messages]) => `${field}: ${messages.join(', ')}`)
-                .join('; ')
-              : err.response?.data?.message || 'Data ditolak server.'
-            failures.push(`Baris ${rowNumber} (${payload.full_name || payload.national_id}): ${validationMessage}`)
-          }
-        }
-      }
-
-      importProgress.value = 'Memverifikasi data ke database...'
-      const refreshed = await fetchCitizens()
-      const wasCancelled = importCancelled.value
-
-      if (wasCancelled) {
-        const processedCount = successCount + failCount
-        const remainingCount = Math.max(mappedRows.length - processedCount, 0)
-        importSuccess.value = successCount > 0
-          ? `${successCount} data warga berhasil diimpor sebelum proses dibatalkan.`
-          : ''
-        importError.value = `Import dibatalkan. ${remainingCount} data belum diproses.`
-      } else if (!refreshed && successCount > 0) {
-        importError.value = `${successCount} data berhasil dikirim, tetapi daftar warga gagal dimuat ulang dari database. Periksa koneksi lalu refresh halaman.`
-      } else if (successCount > 0) {
-        const savedNiks = new Set(residents.value.map(resident => String(resident.nationalId ?? '').trim()))
-        const verifiedCount = successfulNiks.filter(nik => savedNiks.has(String(nik).trim())).length
-        importSuccess.value = `${verifiedCount} dari ${successCount} data berhasil diimpor dan terverifikasi tersimpan di database.`
-
-        if (verifiedCount < successCount) {
-          importError.value = `${successCount - verifiedCount} data berhasil dikirim tetapi belum terbaca saat verifikasi ulang.`
-        }
-      } else {
-        importError.value = `${failCount} data gagal diimpor. ${failures.join(' | ')}`
-      }
-    } catch (err) {
-      importError.value = 'Gagal membaca file. Pastikan format file adalah .xlsx, .xls, atau .csv.'
-    } finally {
-      importing.value = false
-      importProgress.value = ''
+    if (importCancelled.value) {
+      importError.value = 'Import dibatalkan sebelum data diproses.'
+      return
     }
-  }
 
-  reader.readAsArrayBuffer(file)
+    importProgress.value = `File CSV lolos pemeriksaan (${serverRowCount} data). Membaca isi file...`
+    const data = new Uint8Array(await file.arrayBuffer())
+    const workbook = XLSX.read(data, { type: 'array' })
+    const rows = readCitizenRows(workbook)
+
+    if (rows.length === 0) {
+      importError.value = 'File tidak berisi data yang bisa diimpor.'
+      return
+    }
+
+    const mappedRows = rows
+      .map((row, index) => ({ rowNumber: index + 2, payload: mapRowToResident(row) }))
+      .filter(item => item.payload !== null)
+
+    if (mappedRows.length === 0) {
+      importError.value = 'Tidak ada baris valid ditemukan. Pastikan kolom Nama Lengkap dan NIK terisi.'
+      return
+    }
+
+    let successCount = 0
+    let failCount = 0
+    const failures = []
+    const successfulNiks = []
+
+    for (const [index, { payload, rowNumber }] of mappedRows.entries()) {
+      if (importCancelled.value) break
+      importProgress.value = `Mengimpor data ${index + 1} dari ${mappedRows.length}...`
+      try {
+        await createCitizen(payload)
+        successCount++
+        successfulNiks.push(payload.national_id)
+      } catch (err) {
+        failCount++
+        if (failures.length < 5) {
+          const validationErrors = err.response?.data?.errors
+          const validationMessage = validationErrors
+            ? Object.entries(validationErrors)
+              .flatMap(([field, messages]) => `${field}: ${messages.join(', ')}`)
+              .join('; ')
+            : err.response?.data?.message || 'Data ditolak server.'
+          failures.push(`Baris ${rowNumber} (${payload.full_name || payload.national_id}): ${validationMessage}`)
+        }
+      }
+    }
+
+    importProgress.value = 'Memverifikasi data ke database...'
+    const refreshed = await fetchCitizens()
+    const wasCancelled = importCancelled.value
+
+    if (wasCancelled) {
+      const processedCount = successCount + failCount
+      const remainingCount = Math.max(mappedRows.length - processedCount, 0)
+      importSuccess.value = successCount > 0
+        ? `${successCount} data warga berhasil diimpor sebelum proses dibatalkan.`
+        : ''
+      importError.value = `Import dibatalkan. ${remainingCount} data belum diproses.`
+    } else if (!refreshed && successCount > 0) {
+      importError.value = `${successCount} data berhasil dikirim, tetapi daftar warga gagal dimuat ulang dari database. Periksa koneksi lalu refresh halaman.`
+    } else if (successCount > 0) {
+      const savedNiks = new Set(residents.value.map(resident => String(resident.nationalId ?? '').trim()))
+      const verifiedCount = successfulNiks.filter(nik => savedNiks.has(String(nik).trim())).length
+      importSuccess.value = `${verifiedCount} dari ${successCount} data berhasil diimpor dan terverifikasi tersimpan di database.`
+
+      if (verifiedCount < successCount) {
+        importError.value = `${successCount - verifiedCount} data berhasil dikirim tetapi belum terbaca saat verifikasi ulang.`
+      }
+    } else {
+      importError.value = `${failCount} data gagal diimpor. ${failures.join(' | ')}`
+    }
+  } catch (err) {
+    importError.value = err.response?.data?.message
+      || 'Gagal membaca file. Pastikan file yang dipilih berformat CSV dan sesuai template.'
+  } finally {
+    importing.value = false
+    importProgress.value = ''
+  }
 }
 
 // ======================================================================
@@ -1130,6 +1264,35 @@ function exportReportToPdf() {
 <template>
   <div>
 
+    <div
+      v-if="importing || refreshingAges"
+      class="fixed inset-0 z-[1100] flex items-center justify-center bg-neutral-900/35 px-4 backdrop-blur-[1px]"
+      @click.stop
+    >
+      <div class="w-full max-w-sm rounded-xl bg-white p-5 text-center shadow-xl">
+        <i class="pi pi-spin pi-spinner text-3xl text-primary-600" />
+        <h2 class="mt-3 text-base font-semibold text-primary-900">
+          {{ refreshingAges ? 'Memperbarui umur warga' : 'Mengimpor data warga' }}
+        </h2>
+        <p class="mt-2 text-sm text-neutral-600">
+          {{ refreshingAges ? (ageRefreshProgress || 'Sedang memproses data...') : (importProgress || 'Sedang memproses data...') }}
+        </p>
+        <p class="mt-2 text-xs text-amber-700">
+          Jangan berpindah halaman atau menutup browser sampai proses selesai.
+        </p>
+        <Button
+          v-if="importing"
+          label="Batalkan Import"
+          icon="pi pi-times"
+          severity="danger"
+          outlined
+          size="small"
+          class="mt-4"
+          @click="cancelImport"
+        />
+      </div>
+    </div>
+
     <div class="mb-6">
       <h1 class="m-0 text-2xl font-bold text-primary-900">
         Kelola Data Warga
@@ -1190,27 +1353,42 @@ function exportReportToPdf() {
               />
             </IconField>
 
-            <FileUpload
-              mode="basic"
-              accept=".xlsx,.xls,.csv"
-              chooseLabel="Import Data Warga"
-              chooseIcon="pi pi-upload"
-              :auto="false"
-              :disabled="importing"
-              customUpload
-              :pt="{
-                root: { class: 'inline-flex' },
-                chooseButton: {
-                  class:
-                    'inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100',
-                },
-              }"
-              @select="handleFileSelect"
+            <Button
+              label="Perbarui Umur"
+              icon="pi pi-refresh"
+              severity="secondary"
+              outlined
+              :loading="refreshingAges"
+              :disabled="refreshingAges"
+              class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
+              @click="refreshAges"
+            />
+
+            <Button
+              label="Import Data Warga"
+              icon="pi pi-upload"
+              severity="secondary"
+              outlined
+              :disabled="importing || refreshingAges"
+              class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
+              @click="openImportDialog"
             />
           </div>
         </div>
 
-        <div v-if="importError || importSuccess || importProgress" class="mb-4">
+        <div v-if="importError || importSuccess || importProgress || ageRefreshError || ageRefreshSuccess || ageRefreshProgress" class="mb-4">
+          <Message v-if="ageRefreshProgress" severity="info" :closable="false" class="mb-2 text-[13px]">
+            {{ ageRefreshProgress }}
+          </Message>
+
+          <Message v-if="ageRefreshError" severity="error" :closable="false" class="mb-2 text-[13px]">
+            {{ ageRefreshError }}
+          </Message>
+
+          <Message v-if="ageRefreshSuccess" severity="success" :closable="false" class="mb-2 text-[13px]">
+            {{ ageRefreshSuccess }}
+          </Message>
+
           <Message v-if="importProgress" severity="info" :closable="false" class="mb-2 text-[13px]">
             <div class="flex flex-wrap items-center justify-between gap-2">
               <span>{{ importProgress }}</span>
@@ -1334,6 +1512,65 @@ function exportReportToPdf() {
 
       </template>
     </Card>
+
+    <input
+      ref="importFileInput"
+      type="file"
+      accept=".csv,text/csv"
+      class="hidden"
+      @change="handleImportFileInput"
+    />
+
+    <Dialog
+      v-model:visible="importDialogVisible"
+      header="Import Data Warga"
+      modal
+      :style="{ width: '30rem' }"
+      class="rounded-lg"
+      :pt="{
+        header: { class: 'border-b border-neutral-100 px-5 py-4' },
+        title: { class: 'text-base font-bold text-primary-900' },
+        content: { class: 'px-5 py-5' },
+        footer: { class: 'flex justify-end gap-2 border-t border-neutral-100 px-5 py-3' },
+      }"
+    >
+      <div class="space-y-4 text-sm text-neutral-600">
+        <p class="m-0">
+          Gunakan template agar nama kolom sesuai database. Import hanya menerima file CSV dengan maksimal 1.000 data warga.
+        </p>
+
+        <div class="rounded-lg border border-primary-100 bg-primary-50 p-3 text-xs text-primary-800">
+          Sebelum diimpor, file akan diperiksa oleh backend. Jika lebih dari 1.000 baris data, proses akan ditolak dan tidak ada data yang masuk.
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <Button
+            label="Download Template CSV"
+            icon="pi pi-download"
+            severity="secondary"
+            outlined
+            class="rounded-lg"
+            @click="downloadCitizenImportTemplate"
+          />
+          <Button
+            label="Pilih File CSV"
+            icon="pi pi-upload"
+            class="rounded-lg"
+            @click="chooseImportFile"
+          />
+        </div>
+      </div>
+
+      <template #footer>
+        <Button
+          label="Batal"
+          severity="secondary"
+          outlined
+          class="rounded-lg"
+          @click="importDialogVisible = false"
+        />
+      </template>
+    </Dialog>
 
     <!-- ============ DIALOG: PILIH PERIODE DOWNLOAD (BULANAN / TAHUNAN) ============ -->
     <Dialog

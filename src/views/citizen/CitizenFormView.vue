@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
-import { createCitizen, deleteCitizen as removeCitizen, getCitizen, getRecordEventCounters, updateCitizen } from '@/services/citizen.service'
+import { createCitizen, deleteCitizen as removeCitizen, getCitizen, getCitizens, getRecordEventCounters, updateCitizen } from '@/services/citizen.service'
 import { updateListCache } from '@/services/list-cache'
 
 import Card from 'primevue/card'
