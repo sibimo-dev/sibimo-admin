@@ -394,7 +394,7 @@ export const akad = () => ({
     f.text("akadPlace", "Tempat Akad Nikah", { span: 2 }),
   ],
 });
-const NIKAH = ["name", "nik", "birth", "nationality", "religion", "occupation", "education", "address"];
+const NIKAH = ["name", "nik", "birth", "gender", "nationality", "religion", "occupation", "education", "address"];
 const RESIDENT_PARTS = {
   Name: "fullName", Nik: "nik", BirthPlace: "birthPlace", BirthDate: "birthDate", Gender: "gender",
   Religion: "religion", Occupation: "occupation", Education: "education", Nationality: "nationality",
