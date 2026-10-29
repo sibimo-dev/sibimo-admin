@@ -486,13 +486,22 @@ export function buildAliasIndex(pairs = []) {
    (termasuk hasil revisi pengguna) tidak pernah ditimpa. Mengembalikan daftar kunci yang terisi. */
 export function applyAliases(form, sections, index) {
   const filled = [];
+  const aliasValue = (field, peer, value) => {
+    if (field.key === "maritalStatus" && /status$/i.test(String(peer))) {
+      const status = bareOption(value);
+      if (/jejaka|perawan|belum|lajang|single|unmarried/.test(status)) return "Belum Kawin";
+      if (/duda|janda|cerai|widow|balu/.test(status)) return "Cerai Hidup";
+      if (/beristri|kawin|menikah|married/.test(status)) return "Kawin";
+    }
+    return value;
+  };
   for (const section of sections) {
     for (const field of section.fields) {
       if (field.type === "rows" || field.type === "checks") continue;
       if (!visible(field, form) || isFilled(form[field.key])) continue;
       const peer = (index[field.key] ?? []).find((k) => k !== field.key && isFilled(form[k]));
       if (!peer) continue;
-      const v = form[peer];
+      const v = aliasValue(field, peer, form[peer]);
       form[field.key] = v instanceof Date ? new Date(v.getTime()) : v;
       filled.push(field.key);
     }
