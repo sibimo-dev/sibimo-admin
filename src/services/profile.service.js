@@ -7,7 +7,7 @@ function unwrapCollection(request) {
     const data = response.data?.data
     const rows = (Array.isArray(data) ? data : (data ? [data] : [])).map((row) => {
       const normalized = { ...row }
-      for (const field of ['points', 'photos', 'missions', 'levels', 'former_officials']) {        
+      for (const field of ['points', 'photos', 'missions', 'levels', 'former_officials', 'neighborhood_leaders']) {
         if (typeof normalized[field] !== 'string') continue
         try {
           const parsed = JSON.parse(normalized[field])
@@ -72,13 +72,17 @@ export function saveOrganizationalStructure({ id, payload, files = [] }) {
   if (payload.published_at) formData.append('published_at', payload.published_at)
   formData.append('levels', JSON.stringify(payload.levels ?? []))
   formData.append('former_officials', JSON.stringify(payload.former_officials ?? []))
+  // Hanya dikirim bila form admin menyertakannya, supaya data RT/RW aktif
+  // di backend tidak terhapus oleh array kosong yang tidak disengaja.
+  if (payload.neighborhood_leaders !== undefined) {
+    formData.append('neighborhood_leaders', JSON.stringify(payload.neighborhood_leaders))
+  }
   formData.append('show_former_officials', payload.show_former_officials ? '1' : '0')
 
   files.forEach(({ token, file, type }) => {
-    if (token && file) {
-      const field = type === 'signature' ? `signatures[${token}]` : `photos[${token}]`
-      formData.append(field, file)
-    }
+    if (!token || !file) return
+    const field = type === 'signature' ? 'signatures' : type === 'sk' ? 'sk_documents' : 'photos'
+    formData.append(`${field}[${token}]`, file)
   })
 
   if (id) {
