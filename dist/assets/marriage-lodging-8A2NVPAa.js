@@ -1,0 +1,1 @@
+import{n as e}from"./rolldown-runtime-QTnfLwEv.js";import{F as t,L as n,c as r}from"./letterFields-R50gtkOW.js";var i=e({documents:()=>o,meta:()=>s,sections:()=>a}),a=[t(),n()],o=[r.ktp,r.kk,r.rt],s={title:`Surat Keterangan Numpang Nikah`,code:`PNN`};export{i as t};

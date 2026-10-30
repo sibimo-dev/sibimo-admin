@@ -18,6 +18,7 @@ import villageProfileRoutes from './modules/village-profile.routes'
 import userManagementRoutes from './modules/user-management.routes'
 import permissionRoutes from './modules/permission.routes'
 import footerRoutes from './modules/footer.routes'
+import surveyRoutes from './modules/survey.routes'
 
 
 const protectedRoutes = {
@@ -41,6 +42,7 @@ const protectedRoutes = {
     ...footerRoutes,
     ...userManagementRoutes,
     ...permissionRoutes,
+    ...surveyRoutes,
     // ...tambahkan modul baru di sini juga, dengan pola yang sama
   ],
 }

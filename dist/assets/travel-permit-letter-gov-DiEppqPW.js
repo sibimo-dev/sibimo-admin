@@ -1,1 +1,0 @@
-import{J as e,K as t,Z as n,c as r,nt as i}from"./letterFields-DDY53qtK.js";var a=[i([t.kk(`kkNumber`,`Nomor KK`),t.text(`phone`,`Nomor telepon`,{placeholder:`Contoh: 081234567890`})]),e(`Tujuan perjalanan`,`Tempat tujuan`)],o=[r.ktp,r.kk,r.rt,n(`Surat tugas/undangan dari instansi`)],s={title:`Surat Keterangan Jalan`,code:`IPI`};export{o as documents,s as meta,a as sections};
