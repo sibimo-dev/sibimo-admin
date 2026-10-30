@@ -30,13 +30,15 @@ onBeforeUnmount(() => window.removeEventListener('sibimo:letter-request-updated'
 
 const columns = [
   { field: 'requestId', header: 'Request ID', sortable: true },
-  { field: 'citizenId', header: 'Citizen ID', sortable: true },
-  { field: 'purpose', header: 'Purpose / Service Type', sortable: true },
+  { field: 'citizenId', header: 'NIK', sortable: true },
+  { field: 'purpose', header: 'Keperluan / Jenis Layanan', sortable: true },
   { field: 'status', header: 'Status', sortable: true },
-  { field: 'signatureType', header: 'Signature Type' },
-  { field: 'verifiedBy', header: 'Verified By' },
-  { field: 'authorizedBy', header: 'Authorized By' },
-  { field: 'date', header: 'Date', sortable: true },
+  { field: 'signatureType', header: 'Jenis Tanda Tangan' },
+  { field: 'verifiedBy', header: 'Diverifikasi Oleh' },
+  { field: 'authorizedBy', header: 'Diotorisasi Oleh' },
+  // Kolom Tanggal memakai field 'dateTs' (timestamp angka) supaya sorting oleh tabel
+  // berdasarkan tahun-bulan-hari. Teksnya ditampilkan lewat slot #dateTs di template.
+  { field: 'dateTs', header: 'Tanggal', sortable: true },
   { field: 'source', header: 'Sumber' },
 ]
 
@@ -45,7 +47,22 @@ const activeFilter = ref('Semua Status')
 
 const searchQuery = ref('')
 
-const sortField = ref('dateValue')
+// Ubah berbagai format tanggal (Date, timestamp, "dd/mm/yyyy", ISO) menjadi timestamp angka.
+// Format dd/mm/yyyy dibaca sebagai hari/bulan/tahun, bukan bulan/hari/tahun.
+function parseDate(value) {
+  if (value instanceof Date) return value.getTime()
+  if (typeof value === 'number') return value
+  const str = String(value ?? '').trim()
+  const match = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/)
+  if (match) {
+    return new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1])).getTime()
+  }
+  const time = new Date(str).getTime()
+  return Number.isNaN(time) ? 0 : time
+}
+
+// Default: tanggal terbaru di atas
+const sortField = ref('dateTs')
 const sortOrder = ref(-1)
 
 function handleSort(field) {
@@ -57,13 +74,13 @@ function handleSort(field) {
   }
 }
 
-function sortValue(row, field) {
-  if (field === 'date') return new Date(row.dateValue).getTime()
-  return row[field]
-}
 
 const filteredRows = computed(() => {
-  let result = rows.value.map((r) => ({ ...r, status: toDisplayStatus(r) }))
+  let result = rows.value.map((r) => ({
+    ...r,
+    status: toDisplayStatus(r),
+    dateTs: parseDate(r.dateValue ?? r.date),
+  }))
 
   if (activeFilter.value !== 'Semua Status') {
     result = result.filter((r) => r.status === activeFilter.value)
@@ -80,10 +97,10 @@ const filteredRows = computed(() => {
     )
   }
 
-  const field = sortField.value === 'date' ? 'date' : sortField.value
+  const key = sortField.value
   result.sort((a, b) => {
-    const aVal = sortValue(a, field)
-    const bVal = sortValue(b, field)
+    const aVal = a[key]
+    const bVal = b[key]
     if (aVal < bVal) return -1 * sortOrder.value
     if (aVal > bVal) return 1 * sortOrder.value
     return 0
@@ -281,14 +298,16 @@ function buildRecapFromRows(rowsInPeriod) {
 
 function buildMonthlyRecap(month, year) {
   const rowsInPeriod = rows.value.filter((row) => {
-    const rowDate = new Date(row.dateValue)
+    const rowDate = new Date(parseDate(row.dateValue ?? row.date))
     return rowDate.getMonth() + 1 === month && rowDate.getFullYear() === year
   })
   return buildRecapFromRows(rowsInPeriod)
 }
 
 function buildYearlyRecap(year) {
-  const rowsInPeriod = rows.value.filter((row) => new Date(row.dateValue).getFullYear() === year)
+  const rowsInPeriod = rows.value.filter(
+    (row) => new Date(parseDate(row.dateValue ?? row.date)).getFullYear() === year,
+  )
   return buildRecapFromRows(rowsInPeriod)
 }
 
@@ -501,6 +520,9 @@ function downloadExcel() {
               :severity="statusColor[data.status]"
               class="!whitespace-nowrap"
             />
+          </template>
+          <template #dateTs="{ data }">
+            {{ data.date }}
           </template>
           <template #actions="{ data }">
             <AppButton
