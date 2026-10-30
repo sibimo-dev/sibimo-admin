@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import { createCitizen, deleteCitizen as removeCitizen, getCitizen, getCitizens, updateCitizen } from '@/services/citizen.service'
 import { updateListCache } from '@/services/list-cache'
+import { getRegionAreas } from '@/services/region.service'
+
 
 import Card from 'primevue/card'
 import InputText from 'primevue/inputtext'
@@ -14,6 +16,7 @@ import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import CitizenDocumentsPanel from '@/components/citizen/CitizenDocumentsPanel.vue'
 import CitizenPersonFields from '@/components/citizen/CitizenPersonFields.vue'
+
 
 const route = useRoute()
 const router = useRouter()
@@ -153,31 +156,8 @@ function searchOccupation(event) {
 /* Ganti dengan data asli (mis. dari region.service.js) bila tersedia.  */
 /* ------------------------------------------------------------------ */
 const villageName = 'Kalurahan Bimomartani'
-// 12 padukuhan Kalurahan Bimomartani beserta jumlah RW dan RT-nya
-// (sumber: bimomartanisid.slemankab.go.id, "Kondisi Umum Kalurahan Bimomartani", data 2022).
-// Format: [nama padukuhan, jumlah RW, jumlah RT]. Urutan ini dipakai untuk penomoran RW
-// yang berlanjut antar padukuhan (contoh: Pondok Suruh = RW 14-16).
-const dusunSeed = [
-  ['Krebet', 2, 5], ['Rogobangsan', 2, 5], ['Kalibulus', 2, 4], ['Macanan', 2, 4],
-  ['Cokrogaten', 3, 6], ['Koroulon Lor', 2, 5], ['Pondok Suruh', 3, 7], ['Balong', 2, 6],
-  ['Banjarharjo', 3, 6], ['Kragilan', 2, 4], ['Sorasan', 2, 5], ['Koroulon Kidul', 2, 4],
-]
-const pad2 = n => String(n).padStart(2, '0')
-let rwCounter = 0
-const regionData = dusunSeed.map(([dusunName, rwCount, rtCount]) => {
-  let rtCounter = 0
-  const rws = Array.from({ length: rwCount }, (_, i) => {
-    rwCounter += 1
-    // RT dibagi rata antar RW; sisa dibagikan ke RW pertama. Nomor RT berlanjut dalam satu padukuhan.
-    const total = Math.floor(rtCount / rwCount) + (i < rtCount % rwCount ? 1 : 0)
-    const rts = Array.from({ length: total }, () => {
-      rtCounter += 1
-      return { rt: pad2(rtCounter), head: `Ketua RT ${pad2(rtCounter)} (dummy)` }
-    })
-    return { rw: pad2(rwCounter), head: `Ketua RW ${pad2(rwCounter)} (dummy)`, rts }
-  })
-  return { dusun: dusunName, rws }
-}).sort((a, b) => a.dusun.localeCompare(b.dusun))
+// Pohon dusun -> RW -> RT dari GET /region-areas
+const regionData = ref([])
 
 /* ------------------------------------------------------------------ */
 /* State form                                                          */
@@ -395,15 +375,15 @@ function applyFamilyCardData() {
   // Wilayah mengikuti anggota KK yang sudah tercatat
   if (lastRegionKk !== kk) {
     const source = familyCardHead.value
-    const dusunData = regionData.find(item => item.dusun === source?.dusun)
+    const dusunData = regionData.value.find(item => item.dusun === source?.dusun)
     const rwData = dusunData?.rws.find(item => item.rw === source?.rw)
     const rtData = rwData?.rts.find(item => item.rt === source?.rt)
 
     dusun.value = source?.dusun ?? ''
     rw.value = source?.rw ?? ''
     rt.value = source?.rt ?? ''
-    rwHeadName.value = rwData?.head ?? source?.rw_head_name ?? ''
-    rtHeadName.value = rtData?.head ?? source?.rt_head_name ?? ''
+    rwHeadName.value = rwData?.head_name ?? source?.rw_head_name ?? ''
+    rtHeadName.value = rtData?.head_name ?? source?.rt_head_name ?? ''
     nationality.value = source?.nationality ?? nationality.value
     lastRegionKk = kk
   }
@@ -411,10 +391,13 @@ function applyFamilyCardData() {
   // Data orang tua diambil dari anggota KK bila yang dicatat adalah anak
   if (familyRelationship.value === 'Anak' && lastParentKk !== kk) {
     const members = familyCardMembers.value
-    const dad = members.find(c => c.gender === 'Laki-laki' && /kepala|suami/i.test(String(c.family_relationship ?? '')))
-      ?? members.find(c => c.gender === 'Laki-laki')
-    const mom = members.find(c => c.gender === 'Perempuan' && /istri/i.test(String(c.family_relationship ?? '')))
-      ?? members.find(c => c.gender === 'Perempuan')
+    const pick = (genderValue, relation) => members.find(c => (
+      c.gender === genderValue && relation.test(String(c.family_relationship ?? ''))
+    ))
+    // Hanya Kepala Keluarga / Suami / Istri yang bisa menjadi orang tua.
+    // Anak, Menantu, Cucu, dll. tidak pernah diisikan ke data ayah atau ibu.
+    const dad = pick('Laki-laki', /suami/i) ?? pick('Laki-laki', /kepala/i)
+    const mom = pick('Perempuan', /istri/i) ?? pick('Perempuan', /kepala/i)
 
     Object.assign(father, newParent())
     Object.assign(mother, newParent())
@@ -446,15 +429,15 @@ function withCurrent(values, current) {
 }
 
 const dusunOptions = computed(() => (
-  withCurrent(regionData.map(item => item.dusun), dusun.value).map(value => ({ value, label: value }))
+  withCurrent(regionData.value.map(item => item.dusun), dusun.value).map(value => ({ value, label: value }))
 ))
 const rwOptions = computed(() => {
-  const dusunData = regionData.find(item => item.dusun === dusun.value)
+  const dusunData = regionData.value.find(item => item.dusun === dusun.value)
   return withCurrent((dusunData?.rws ?? []).map(item => item.rw), rw.value)
     .map(value => ({ value, label: `RW ${value}` }))
 })
 const rtOptions = computed(() => {
-  const rwData = regionData
+  const rwData = regionData.value
     .find(item => item.dusun === dusun.value)
     ?.rws.find(item => item.rw === rw.value)
   return withCurrent((rwData?.rts ?? []).map(item => item.rt), rt.value)
@@ -473,17 +456,17 @@ function onRwChange(value) {
   rw.value = value ?? ''
   rt.value = ''
   rtHeadName.value = ''
-  const rwData = regionData.find(item => item.dusun === dusun.value)?.rws.find(item => item.rw === value)
-  rwHeadName.value = rwData?.head ?? ''
+  const rwData = regionData.value.find(item => item.dusun === dusun.value)?.rws.find(item => item.rw === value)
+  rwHeadName.value = rwData?.head_name ?? ''
 }
 
 function onRtChange(value) {
   rt.value = value ?? ''
-  const rtData = regionData
+  const rtData = regionData.value
     .find(item => item.dusun === dusun.value)
     ?.rws.find(item => item.rw === rw.value)
     ?.rts.find(item => item.rt === value)
-  rtHeadName.value = rtData?.head ?? ''
+  rtHeadName.value = rtData?.head_name ?? ''
 }
 
 // Catatan 10: alamat lengkap dihapus. Alamat KTP otomatis dari isian dusun, RW, RT.
@@ -659,7 +642,18 @@ async function fetchCitizenLookup() {
   }
 }
 
+async function fetchRegions() {
+  try {
+    const tree = await getRegionAreas()
+    regionData.value = Array.isArray(tree) ? tree : []
+  } catch (err) {
+    console.error('Gagal memuat data dusun/RW/RT:', err)
+    regionData.value = []
+  }
+}
+
 onMounted(() => {
+  fetchRegions()
   fetchCitizenLookup()
   if (isEditMode.value) fetchCitizenDetail()
 })

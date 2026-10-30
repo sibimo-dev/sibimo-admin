@@ -1,61 +1,56 @@
 <script setup>
 import { reactive, ref, computed, onMounted } from 'vue'
 import { useToast } from 'primevue/usetoast'
+import { useConfirm } from 'primevue/useconfirm'
 import * as XLSX from 'xlsx'
 
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import InputText from 'primevue/inputtext'
-import InputNumber from 'primevue/inputnumber'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
+import Select from 'primevue/select'
+import RegionAreaDialog from '@/components/region/RegionAreaDialog.vue'
+import { getStaffList } from '@/services/staff.service'
 import { getRegions, createRegion, updateRegion, deleteRegion } from '@/services/region.service'
 import { getListCache, setListCache, updateListCache } from '@/services/list-cache'
 
 const toast = useToast()
+const confirm = useConfirm()
+
+/* ---------- Dialog Kelola RW dan RT ---------- */
+const areaDialogVisible = ref(false)
+const areaRegionId = ref(null)
+
+function openAreaDialog(region) {
+  areaRegionId.value = region.region_id
+  areaDialogVisible.value = true
+}
+
+/* ---------- Daftar staff untuk dropdown Kepala Dusun ---------- */
+const staffOptions = ref([])
+async function loadStaff() {
+  try { staffOptions.value = await getStaffList() } catch { staffOptions.value = [] }
+}
 
 // Kolom yang diharapkan ada di header baris pertama file Excel/CSV.
 // Urutan bebas -- dicocokkan berdasarkan nama header, bukan posisi kolom.
 const EXCEL_COLUMN_MAP = {
   'Dusun': 'name',
   'Kepala Dusun': 'headName',
-  'Jumlah RW': 'rwCount',
-  'Jumlah RT': 'rtCount',
-  'Jumlah KK': 'kkCount',
-  'Jiwa': 'population',
-  'Laki-laki': 'maleCount',
-  'Perempuan': 'femaleCount',
 }
-const NUMBER_FIELDS = ['rwCount', 'rtCount', 'kkCount', 'population', 'maleCount', 'femaleCount']
-
 const excelFileInput = ref(null)
 const importingExcel = ref(false)
 
-// Dummy data dusun -- ganti dengan GET /hamlets via region.service.js.
 // Field kkCount, population, maleCount, femaleCount sementara manual;
 // idealnya dihitung backend dari data warga per dusun.
 const cachedRegions = getListCache('regions')
 const hamlets = ref((cachedRegions ?? []).map(toHamletView))
 const loadingRegions = ref(!cachedRegions)
 const regionLoadError = ref('')
-/* const hamletsDummy = [
-  { id: 1, name: 'BALONG', headName: '', rwCount: 3, rtCount: 6, kkCount: 354, population: 1014, maleCount: 513, femaleCount: 501 },
-  { id: 2, name: 'BANJARHARJO', headName: 'BASUKI WIBOWO', rwCount: 4, rtCount: 6, kkCount: 265, population: 709, maleCount: 362, femaleCount: 347 },
-  { id: 3, name: 'COKROGATEN', headName: 'MUCHAROM', rwCount: 4, rtCount: 6, kkCount: 327, population: 929, maleCount: 452, femaleCount: 477 },
-  { id: 4, name: 'KALIBULUS', headName: 'UMI SOLIKAH', rwCount: 3, rtCount: 4, kkCount: 237, population: 606, maleCount: 299, femaleCount: 307 },
-  { id: 5, name: 'KOROULON KIDUL', headName: '', rwCount: 3, rtCount: 4, kkCount: 224, population: 613, maleCount: 284, femaleCount: 329 },
-  { id: 6, name: 'KOROULON LOR', headName: '', rwCount: 3, rtCount: 5, kkCount: 288, population: 762, maleCount: 392, femaleCount: 370 },
-  { id: 7, name: 'KRAGILAN', headName: 'SUHARYONO', rwCount: 3, rtCount: 4, kkCount: 168, population: 442, maleCount: 219, femaleCount: 223 },
-  { id: 8, name: 'KREBET', headName: 'JAKA WIDADA', rwCount: 3, rtCount: 5, kkCount: 267, population: 716, maleCount: 360, femaleCount: 356 },
-  { id: 9, name: 'MACANAN', headName: 'KAHARUDIN', rwCount: 3, rtCount: 4, kkCount: 181, population: 523, maleCount: 257, femaleCount: 266 },
-  { id: 10, name: 'PONDOK SURUH', headName: 'SUKIRMAN', rwCount: 4, rtCount: 7, kkCount: 255, population: 700, maleCount: 344, femaleCount: 356 },
-  { id: 11, name: 'ROGOBANGSAN', headName: 'ANGGA WAHYU INDRA IRAWAN', rwCount: 3, rtCount: 5, kkCount: 291, population: 736, maleCount: 350, femaleCount: 386 },
-  { id: 12, name: 'SORASAN', headName: 'JAZIM THOYIBI', rwCount: 3, rtCount: 5, kkCount: 300, population: 828, maleCount: 412, femaleCount: 416 },
-]
-*/
 
 // Ringkasan kartu di atas -- dihitung dari hamlets, bukan dari store terpisah.
 const totalArea = ref(0)
@@ -63,8 +58,6 @@ const totalRw = computed(() => hamlets.value.reduce((sum, h) => sum + h.rwCount,
 const totalRt = computed(() => hamlets.value.reduce((sum, h) => sum + h.rtCount, 0))
 
 // Format sama seperti stats di Dashboard.vue -- label, value, unit, icon, bg.
-// bg pakai token warna tema Sibimo (primary/secondary/success/warning), bukan
-// warna Tailwind generik, biar konsisten dengan dashboard dan file main.css.
 const areaStats = computed(() => [
   {
     label: 'Luas Wilayah',
@@ -115,12 +108,7 @@ const savingHamlet = ref(false)
 const hamletForm = reactive({
   name: '',
   headName: '',
-  rwCount: 1,
-  rtCount: 1,
-  kkCount: 0,
-  population: 0,
-  maleCount: 0,
-  femaleCount: 0,
+  headStaffId: null,
 })
 
 const boundaryDialogOpen = ref(false)
@@ -137,6 +125,7 @@ function toHamletView(item) {
     id: item.region_id,
     name: item.name,
     headName: item.head_name ?? '',
+    headStaffId: item.head_staff_id ?? null,
     rwCount: item.rw_count ?? 0,
     rtCount: item.rt_count ?? 0,
     kkCount: item.kk_count ?? 0,
@@ -169,6 +158,7 @@ async function loadRegions({ background = false } = {}) {
 }
 
 onMounted(async () => {
+  loadStaff()
   try {
     await loadRegions({ background: Boolean(cachedRegions) })
   } catch {
@@ -187,12 +177,7 @@ function openCreateHamlet() {
   editingHamletId.value = null
   hamletForm.name = ''
   hamletForm.headName = ''
-  hamletForm.rwCount = 1
-  hamletForm.rtCount = 1
-  hamletForm.kkCount = 0
-  hamletForm.population = 0
-  hamletForm.maleCount = 0
-  hamletForm.femaleCount = 0
+  hamletForm.headStaffId = null
   hamletDialogOpen.value = true
 }
 
@@ -200,12 +185,7 @@ function openEditHamlet(hamlet) {
   editingHamletId.value = hamlet.id
   hamletForm.name = hamlet.name
   hamletForm.headName = hamlet.headName
-  hamletForm.rwCount = hamlet.rwCount
-  hamletForm.rtCount = hamlet.rtCount
-  hamletForm.kkCount = hamlet.kkCount
-  hamletForm.population = hamlet.population
-  hamletForm.maleCount = hamlet.maleCount
-  hamletForm.femaleCount = hamlet.femaleCount
+  hamletForm.headStaffId = hamlet.headStaffId
   hamletDialogOpen.value = true
 }
 
@@ -223,32 +203,24 @@ async function saveHamlet() {
   const isCreating = editingHamletId.value === null
   const editingId = editingHamletId.value
   const name = hamletForm.name
+
+  // Nama kepala dusun ikut nama staff yang dipilih (head_name jadi salinan/cadangan).
+  const picked = staffOptions.value.find((s) => s.staff_id === hamletForm.headStaffId)
+  if (picked) hamletForm.headName = picked.name
+
   const payload = {
     name: hamletForm.name,
     head_name: hamletForm.headName,
-    rw_count: hamletForm.rwCount,
-    rt_count: hamletForm.rtCount,
-    kk_count: hamletForm.kkCount,
-    population: hamletForm.population,
-    male_count: hamletForm.maleCount,
-    female_count: hamletForm.femaleCount,
+    head_staff_id: hamletForm.headStaffId,
   }
 
   savingHamlet.value = true
-  try {
-    const saved = isCreating
+    try {
+    isCreating
       ? await createRegion(payload)
       : await updateRegion(editingId, payload)
 
-    updateListCache('regions', (items) => isCreating
-      ? [saved, ...items]
-      : items.map((item) => item.region_id === editingId ? { ...item, ...saved } : item))
-    hamlets.value = isCreating
-      ? [toHamletView(saved), ...hamlets.value]
-      : hamlets.value.map((item) => item.id === editingId
-          ? toHamletView({ ...item, ...saved })
-          : item)
-
+    await loadRegions({ background: true }).catch(() => {})
     currentPage.value = 0
     hamletDialogOpen.value = false
 
@@ -270,32 +242,43 @@ async function saveHamlet() {
   }
 }
 
-async function deleteHamlet(id) {
+// Dengan konfirmasi, karena RW dan RT di dalam dusun ikut terhapus (cascade).
+function deleteHamlet(id) {
   const hamlet = hamlets.value.find((h) => h.id === id)
-  try {
-    await deleteRegion(id)
-    hamlets.value = hamlets.value.filter((item) => item.id !== id)
-    updateListCache('regions', (items) => items.filter((item) => item.region_id !== id))
+  confirm.require({
+    message: `Hapus dusun "${hamlet?.name ?? ''}"? Seluruh RW dan RT di dusun ini ikut terhapus.`,
+    header: 'Konfirmasi Hapus',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Hapus',
+    rejectLabel: 'Batal',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      try {
+        await deleteRegion(id)
+        hamlets.value = hamlets.value.filter((item) => item.id !== id)
+        updateListCache('regions', (items) => items.filter((item) => item.region_id !== id))
 
-    const maxFirst =
-      Math.max(0, Math.ceil(hamlets.value.length / rowsPerPage.value) - 1) *
-      rowsPerPage.value
-    if (currentPage.value > maxFirst) currentPage.value = maxFirst
+        const maxFirst =
+          Math.max(0, Math.ceil(hamlets.value.length / rowsPerPage.value) - 1) *
+          rowsPerPage.value
+        if (currentPage.value > maxFirst) currentPage.value = maxFirst
 
-    toast.add({
-      severity: 'success',
-      summary: 'Berhasil',
-      detail: `Dusun ${hamlet?.name ?? ''} dihapus`,
-      life: 3000,
-    })
-  } catch (error) {
-    toast.add({
-      severity: 'error',
-      summary: 'Gagal menghapus data',
-      detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
-      life: 4000,
-    })
-  }
+        toast.add({
+          severity: 'success',
+          summary: 'Berhasil',
+          detail: `Dusun ${hamlet?.name ?? ''} dihapus`,
+          life: 3000,
+        })
+      } catch (error) {
+        toast.add({
+          severity: 'error',
+          summary: 'Gagal menghapus data',
+          detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+          life: 4000,
+        })
+      }
+    },
+  })
 }
 
 function downloadExcelTemplate() {
@@ -303,12 +286,6 @@ function downloadExcelTemplate() {
   const exampleRow = {
     'Dusun': 'CONTOH DUSUN',
     'Kepala Dusun': 'Nama Kepala Dusun',
-    'Jumlah RW': 3,
-    'Jumlah RT': 5,
-    'Jumlah KK': 250,
-    'Jiwa': 700,
-    'Laki-laki': 350,
-    'Perempuan': 350,
   }
 
   const worksheet = XLSX.utils.json_to_sheet([exampleRow], { header: headers })
@@ -321,6 +298,8 @@ function triggerExcelImport() {
   excelFileInput.value?.click()
 }
 
+// CATATAN: import ini baru menambah ke layar, belum ke database
+// (id: Date.now() + index, tidak memanggil createRegion).
 async function handleExcelImport(event) {
   const file = event.target.files?.[0]
   if (!file) return
@@ -333,7 +312,6 @@ async function handleExcelImport(event) {
     const firstSheetName = workbook.SheetNames[0]
     const sheet = workbook.Sheets[firstSheetName]
 
-   
     const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
 
     if (rows.length === 0) {
@@ -367,11 +345,13 @@ async function handleExcelImport(event) {
         id: Date.now() + index,
         name,
         headName: String(mapped.headName ?? '').trim(),
-      }
-
-      for (const field of NUMBER_FIELDS) {
-        const num = Number(mapped[field])
-        hamlet[field] = Number.isFinite(num) ? num : 0
+        headStaffId: null,
+        rwCount: 0,
+        rtCount: 0,
+        kkCount: 0,
+        population: 0,
+        maleCount: 0,
+        femaleCount: 0,
       }
 
       parsed.push(hamlet)
@@ -596,10 +576,20 @@ function saveBoundaries() {
 
               <Column
                 header="Aksi"
-                headerStyle="width: 7rem"
+                headerStyle="width: 9rem"
               >
                 <template #body="{ data }">
                   <div class="flex items-center gap-1">
+                    <Button
+                      icon="pi pi-sitemap"
+                      text
+                      rounded
+                      severity="secondary"
+                      aria-label="Kelola RW dan RT"
+                      title="Kelola RW dan RT"
+                      @click="openAreaDialog({ region_id: data.id })"
+                    />
+
                     <Button
                       icon="pi pi-pencil"
                       text
@@ -699,100 +689,20 @@ function saveBoundaries() {
           <label class="text-sm font-semibold text-slate-700" for="hamletHead">
             Kepala Dusun
           </label>
-          <InputText
+          <Select
             id="hamletHead"
-            v-model="hamletForm.headName"
-            placeholder="Nama kepala dusun"
-            class="w-full"
-          />
-        </div>
-
-        <div class="grid grid-cols-2 gap-4">
-          <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-slate-700" for="hamletRw">
-              Jumlah RW
-            </label>
-            <InputNumber
-              id="hamletRw"
-              v-model="hamletForm.rwCount"
-              :min="0"
-              class="w-full"
-              inputClass="w-full"
-              fluid
-            />
-          </div>
-
-          <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-slate-700" for="hamletRt">
-              Jumlah RT
-            </label>
-            <InputNumber
-              id="hamletRt"
-              v-model="hamletForm.rtCount"
-              :min="0"
-              class="w-full"
-              inputClass="w-full"
-              fluid
-            />
-          </div>
-        </div>
-
-        <div class="flex flex-col gap-2">
-          <label class="text-sm font-semibold text-slate-700" for="hamletKk">
-            Jumlah KK
-          </label>
-          <InputNumber
-            id="hamletKk"
-            v-model="hamletForm.kkCount"
-            :min="0"
-            class="w-full"
-            inputClass="w-full"
+            v-model="hamletForm.headStaffId"
+            :options="staffOptions"
+            optionLabel="name"
+            optionValue="staff_id"
+            placeholder="Pilih dari data pamong"
+            filter
+            showClear
             fluid
           />
-        </div>
-
-        <div class="grid grid-cols-3 gap-3">
-          <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-slate-700" for="hamletPopulation">
-              Jiwa
-            </label>
-            <InputNumber
-              id="hamletPopulation"
-              v-model="hamletForm.population"
-              :min="0"
-              class="w-full"
-              inputClass="w-full"
-              fluid
-            />
-          </div>
-
-          <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-slate-700" for="hamletMale">
-              Laki-laki
-            </label>
-            <InputNumber
-              id="hamletMale"
-              v-model="hamletForm.maleCount"
-              :min="0"
-              class="w-full"
-              inputClass="w-full"
-              fluid
-            />
-          </div>
-
-          <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-slate-700" for="hamletFemale">
-              Perempuan
-            </label>
-            <InputNumber
-              id="hamletFemale"
-              v-model="hamletForm.femaleCount"
-              :min="0"
-              class="w-full"
-              inputClass="w-full"
-              fluid
-            />
-          </div>
+          <small class="text-xs text-slate-500">
+            Bila belum dipilih dari daftar pamong, nama lama tetap dipakai: {{ hamletForm.headName || '-' }}
+          </small>
         </div>
       </div>
 
@@ -849,5 +759,8 @@ function saveBoundaries() {
         />
       </template>
     </Dialog>
+
+    <!-- Dialog Kelola RW dan RT -->
+    <RegionAreaDialog v-model:visible="areaDialogVisible" :region-id="areaRegionId" />
   </div>
 </template>

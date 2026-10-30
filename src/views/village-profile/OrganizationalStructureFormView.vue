@@ -228,6 +228,7 @@ function seedPeople(existingLevels = []) {
   return existingLevels.flatMap((level) => (
     (level.people ?? []).map((person) => ({
       id: uid(),
+      staff_id: person.staff_id ?? null,
       jabatan: normalizeJabatan(person.title) || null,
       nama: person.name ?? '',
       desc: person.desc ?? '',
@@ -236,7 +237,7 @@ function seedPeople(existingLevels = []) {
       major: person.major ?? '',
       school_name: person.school_name ?? '',
       graduation_year: person.graduation_year ?? null,
-      age: person.age ?? null,
+      birth_date: person.birth_date ?? '',
       term_end_date: person.term_end_date ?? '',
       position_history: seedHistory(person.position_history),
       start_date: person.start_date ?? '',
@@ -267,6 +268,7 @@ function seedFormerOfficials(list = []) {
   if (!Array.isArray(list)) return []
   return list.map((item) => ({
     id: item.id ?? uid(),
+    staff_id: item.staff_id ?? null,
     jabatan: canonicalStaff(item.jabatan ?? ''),
     nama: item.nama ?? '',
     rt_number: item.rt_number ?? '',
@@ -278,7 +280,7 @@ function seedFormerOfficials(list = []) {
     end_date: item.end_date ?? '',
     desc: item.desc ?? '',
     gender: item.gender ?? null,
-    age: item.age ?? null,
+    birth_date: item.birth_date ?? '',
     education: item.education ?? null,
     major: item.major ?? '',
     school_name: item.school_name ?? '',
@@ -351,7 +353,7 @@ const emptyPersonForm = () => ({
   major: '',
   school_name: '',
   graduation_year: null,
-  age: null,
+  birth_date: '',
   term_end_date: '',
   position_history: [],
   start_date: '',
@@ -474,7 +476,7 @@ const previewInfoCards = computed(() => {
   const masaJabatan = formatMasaJabatan(p)
   const common = [
     { label: 'Jenis Kelamin', value: p.gender, icon: 'pi-user' },
-    { label: 'Usia', value: p.age ? `${p.age} tahun` : '', icon: 'pi-id-card' },
+    { label: 'Usia', value: calcAge(p.birth_date) !== null ? `${calcAge(p.birth_date)} tahun` : '', icon: 'pi-id-card' },
   ]
 
   // Kartu wilayah: RT/RW (nomor & padukuhan) atau Dukuh (padukuhan).
@@ -529,7 +531,7 @@ function openEditPerson(person) {
     major: person.major ?? '',
     school_name: person.school_name ?? '',
     graduation_year: person.graduation_year ?? null,
-    age: person.age ?? null,
+    birth_date: person.birth_date ?? '',
     term_end_date: person.term_end_date ?? '',
     position_history: seedHistory(person.position_history),
     start_date: person.start_date ?? '',
@@ -676,6 +678,7 @@ function buildLevels() {
     if (!option) return
 
     buckets.get(option.level).push({
+      staff_id: person.staff_id ?? null,
       name: person.nama.trim(),
       title: person.jabatan,
       desc: person.desc?.trim() ?? '',
@@ -684,7 +687,7 @@ function buildLevels() {
       major: person.major?.trim() ?? '',
       school_name: person.school_name?.trim() ?? '',
       graduation_year: person.graduation_year ?? null,
-      age: person.age ?? null,
+      birth_date: person.birth_date ?? '',
       term_end_date: person.term_end_date || null,
       position_history: (person.position_history ?? []).map((item, index) => ({
         sk: item.sk,
@@ -745,6 +748,7 @@ async function persistStructure() {
         levels: buildLevels(),
         former_officials: form.former_officials.map((item) => ({
           id: item.id,
+          staff_id: item.staff_id ?? null,
           jabatan: item.jabatan,
           nama: item.nama,
           rt_number: item.rt_number,
@@ -756,7 +760,7 @@ async function persistStructure() {
           end_date: item.end_date || null,
           desc: item.desc,
           gender: item.gender ?? null,
-          age: item.age ?? null,
+          birth_date: item.birth_date ?? '',
           education: item.education ?? null,
           major: item.major?.trim() ?? '',
           school_name: item.school_name?.trim() ?? '',
@@ -840,7 +844,7 @@ async function savePersonDialog() {
     major: personForm.major.trim(),
     school_name: personForm.school_name.trim(),
     graduation_year: personForm.graduation_year,
-    age: personForm.age,
+    birth_date: personForm.birth_date,
     // Tanggal habis jabatan = tanggal selesai masa jabatan (dikirim juga agar halaman publik tetap terbaca).
     term_end_date: usesDates ? (personForm.end_date || '') : (personForm.term_end_date || ''),
     // Baris riwayat yang benar-benar kosong tidak ikut disimpan.
@@ -1052,6 +1056,18 @@ const formerSchoolNamePlaceholder = computed(() => (
   isHigherEducation(formerForm.education) ? 'mis. Universitas Negeri Yogyakarta' : 'mis. SMA Negeri 1 Yogyakarta'
 ))
 
+// Usia dihitung dari tanggal lahir (tidak disimpan di database).
+function calcAge(birthDate) {
+  if (!birthDate) return null
+  const b = new Date(`${String(birthDate).slice(0, 10)}T00:00:00`)
+  if (Number.isNaN(b.getTime())) return null
+  const now = new Date()
+  let age = now.getFullYear() - b.getFullYear()
+  const m = now.getMonth() - b.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age -= 1
+  return age >= 0 ? age : null
+}
+
 function padNumber(value) {
   const v = String(value ?? '').trim()
   return /^\d+$/.test(v) ? v.padStart(2, '0') : v
@@ -1136,7 +1152,7 @@ const emptyFormerForm = () => ({
   end_year: null,
   sk_number: '',
   gender: null,
-  age: null,
+  birth_date: '',
   education: null,
   major: '',
   school_name: '',
@@ -1183,7 +1199,7 @@ function openEditFormer(item) {
     end_year: item.end_year ?? null,
     sk_number: item.sk_number ?? '',
     gender: item.gender ?? null,
-    age: item.age ?? null,
+    birth_date: item.birth_date ?? '',
     education: item.education ?? null,
     major: item.major ?? '',
     school_name: item.school_name ?? '',
@@ -1283,7 +1299,7 @@ async function saveFormerDialog() {
     end_year: usesDates ? yearOf(formerForm.end_date) : formerForm.end_year,
     sk_number: formerForm.sk_number.trim(),
     gender: formerForm.gender,
-    age: formerForm.age,
+    birth_date: formerForm.birth_date,
     education: formerForm.education,
     major: formerForm.major.trim(),
     school_name: formerForm.school_name.trim(),
@@ -1452,9 +1468,9 @@ async function onToggleShowFormer(value) {
             </template>
           </Column>
 
-          <Column field="age" header="Usia" headerStyle="width: 5rem">
+          <Column field="birth_date" header="Usia" headerStyle="width: 5rem">
             <template #body="{ data }">
-              <span class="whitespace-nowrap text-slate-600">{{ data.age ? `${data.age} th` : '—' }}</span>
+              <span class="whitespace-nowrap text-slate-600">{{ calcAge(data.birth_date) !== null ? `${calcAge(data.birth_date)} th` : '—' }}</span>
             </template>
           </Column>
 
@@ -1688,8 +1704,8 @@ async function onToggleShowFormer(value) {
               <Select v-model="formerForm.gender" :options="GENDER_OPTIONS" placeholder="Pilih jenis kelamin" fluid />
             </div>
             <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-semibold text-slate-700">Usia</label>
-              <InputNumber v-model="formerForm.age" :useGrouping="false" :min="0" :max="120" placeholder="mis. 60" suffix=" tahun" fluid />
+              <label class="text-[13px] font-semibold text-slate-700">Tanggal Lahir</label>
+              <InputText v-model="formerForm.birth_date" type="date" fluid />
             </div>
             <div class="flex flex-col gap-1.5">
               <label class="text-[13px] font-semibold text-slate-700">Jenjang Pendidikan</label>
@@ -2153,8 +2169,8 @@ async function onToggleShowFormer(value) {
               <Select v-model="personForm.gender" :options="GENDER_OPTIONS" placeholder="Pilih jenis kelamin" fluid />
             </div>
             <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-semibold text-slate-700">Usia</label>
-              <InputNumber v-model="personForm.age" :useGrouping="false" :min="0" :max="120" placeholder="mis. 32" suffix=" tahun" fluid />
+              <label class="text-[13px] font-semibold text-slate-700">Tanggal Lahir</label>
+              <InputText v-model="personForm.birth_date" type="date" fluid />
             </div>
             <div class="flex flex-col gap-1.5">
               <label class="text-[13px] font-semibold text-slate-700">Jenjang Pendidikan</label>
