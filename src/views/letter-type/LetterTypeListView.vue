@@ -5,7 +5,6 @@ import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import { useToast } from 'primevue/usetoast'
 import Card from 'primevue/card'
-import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import ToggleSwitch from 'primevue/toggleswitch'
 import IconField from 'primevue/iconfield'
@@ -102,10 +101,6 @@ function handleKelola(data) {
   router.push({ name: 'letter-type-manage', params: { id: data.letter_type_id } })
 }
 
-function handleTambah() {
-  router.push({ name: 'letter-type-manage', params: { id: 'new' } })
-}
-
 // ====== Hapus tipe surat (selalu minta konfirmasi dulu) ======
 const isDeleteDialogVisible = ref(false)
 const isDeleting = ref(false)
@@ -182,36 +177,28 @@ async function confirmHapus() {
       }"
     >
       <template #content>
-        <!-- Toolbar -->
+        <!-- Toolbar: filter kategori (pill) di kiri, pencarian di kanan -->
         <div class="mb-4 flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
           <div class="flex flex-wrap items-center gap-2">
             <Button
-              label="Tambah Tipe Surat"
-              icon="pi pi-plus"
-              class="rounded-lg border border-transparent bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
-              @click="handleTambah"
+              v-for="opt in categoryOptions"
+              :key="opt.value ?? 'all'"
+              :label="opt.label"
+              size="small"
+              :outlined="selectedCategory !== opt.value"
+              :aria-pressed="selectedCategory === opt.value"
+              @click="selectedCategory = opt.value"
             />
           </div>
 
-          <div class="flex flex-wrap items-center gap-2">
-            <IconField class="w-full sm:w-72">
-              <InputIcon class="pi pi-search text-neutral-400" />
-              <InputText
-                v-model="searchQuery"
-                placeholder="Cari nama surat, prefix, atau indeks"
-                class="w-full rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
-              />
-            </IconField>
-
-            <Select
-              v-model="selectedCategory"
-              :options="categoryOptions"
-              option-label="label"
-              option-value="value"
-              placeholder="Semua Kategori"
-              class="w-full text-[13px] sm:w-52"
+          <IconField class="w-full sm:w-72">
+            <InputIcon class="pi pi-search text-neutral-400" />
+            <InputText
+              v-model="searchQuery"
+              placeholder="Cari nama surat/prefix/indeks"
+              class="w-full rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
             />
-          </div>
+          </IconField>
         </div>
 
         <DataTable
@@ -314,30 +301,30 @@ async function confirmHapus() {
 
           <Column
             header="Aksi"
-            header-style="width: 7rem; text-align: center"
+            header-style="width: 6rem; text-align: center"
             body-class="text-center"
             :pt="{ columnHeaderContent: { class: 'justify-center' } }"
           >
             <template #body="{ data }">
-              <!-- Edit di atas, Hapus di bawah; keduanya berlabel supaya jelas -->
-              <div class="mx-auto flex w-24 flex-col gap-1.5">
+              <div class="flex items-center justify-center gap-1">
                 <Button
-                  label="Edit"
                   icon="pi pi-pencil"
+                  text
+                  rounded
                   size="small"
-                  outlined
-                  class="w-full justify-center border-primary-300 bg-primary-50 text-primary-700 hover:border-primary-700 hover:bg-primary-700 hover:text-white"
+                  class="text-slate-500! hover:bg-slate-100!"
                   aria-label="Edit tipe surat"
+                  title="Edit"
                   @click="handleKelola(data)"
                 />
                 <Button
-                  label="Hapus"
                   icon="pi pi-trash"
+                  text
+                  rounded
                   size="small"
-                  outlined
                   severity="danger"
-                  class="w-full justify-center"
                   aria-label="Hapus tipe surat"
+                  title="Hapus"
                   @click="handleHapus(data)"
                 />
               </div>

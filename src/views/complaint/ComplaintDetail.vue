@@ -470,7 +470,10 @@ onMounted(() => loadComplaint({ background: Boolean(cachedComplaint) }));
       <Card>
         <template #content>
           <h2 class="mb-4 font-semibold">{{ complaint.title }}</h2>
-          <Tag :value="complaint.category" severity="secondary" />
+          <Tag
+            :value="categoryLabel[complaint.category] ?? complaint.category"
+            severity="secondary"
+          />
 
           <div v-if="complaint.location" class="mt-4 rounded-lg bg-gray-50 p-3">
             <p class="text-sm font-semibold text-gray-700">Lokasi Kejadian</p>
