@@ -3,15 +3,16 @@
 // sections & documents di-export supaya juga dibaca halaman register (data/registrationLetters.js).
 // Surat Pengantar Permohonan Pindah WNI (F.1-25)
 // Template PDF: letters/relocation-cover-letter.blade.php
-// Yang TIDAK menjadi field (diisi petugas/sistem): kode wilayah (Provinsi, Kab/Kota, Kecamatan, Desa/Kelurahan,
-// Dusun), Nomor surat (471.21/...), tanggal, serta tanda tangan Petugas Registrasi dan a.n Lurah.
+// Yang TIDAK menjadi field (diisi petugas/sistem): kode wilayah (Provinsi, Kab/Kota, Kecamatan, Desa/Kelurahan; dipatenkan di PDF),
+// Dusun, Nomor surat (471.21/...), tanggal, serta tanda tangan Petugas Registrasi dan a.n Lurah.
 // Isian sama persis dengan Formulir Keterangan Pindah WNI (kunci field sama) agar digabung 1 halaman saat register.
 // Langkah 3 (cek ulang, ceklis dokumen asli, kirim, pop-up hasil) sudah ditangani LetterWizard.
 import { f, OPT, DOC, opt, alamat, kodeWilayah, wilayahDropdown, BIMOMARTANI } from "@/data/letterFields";
 
 // Langkah 1: urutan mengikuti formulir PDF
 export const sections = [
-  kodeWilayah({ names: false, hamlet: true, hamletCode: true, hamletKey: "originHamlet", hamletOptional: true }, "Kode Wilayah (Diisi Oleh Petugas)"),
+  // Kode Dusun + dropdown Dusun/Dukuh/Kampung asal (key originHamlet, terisi dari dusun warga) ada di blok petugas ini, untuk mengisi PDF.
+  kodeWilayah({ hamlet: true, hamletCode: true, hamletKey: "originHamlet", hamletOptional: true }, "Kode Dusun (Diisi Oleh Petugas)"),
   {
     title: "Data Daerah Asal",
     fields: [
@@ -26,6 +27,7 @@ export const sections = [
       phoneFrom: "phoneNumber",
       fieldFrom: {
         rt: "rt",
+        hamlet: "dusun",
         rw: "rw",
         village: "village",
         district: "district",
@@ -35,7 +37,7 @@ export const sections = [
         phone: "phoneNumber",
       },
       defaults: BIMOMARTANI,
-      hamlet: false, // Dusun/Dukuh/Kampung asal ada di blok Kode Wilayah
+      hamlet: false, // Dusun asal sudah ada di blok "Kode Dusun" di atas (key sama: originHamlet), jangan dobel
       scopeKey: "relocationTypeLabel",
     }),
     "origin",
@@ -62,7 +64,7 @@ export const sections = [
   },
   // Alamat tujuan: dropdown (boleh diketik), kosong / dipilih sendiri. Dusun diketik manual.
   wilayahDropdown(
-    alamat("destination", "Alamat Tujuan Pindah", { hamletFree: true, scopeKey: "relocationTypeLabel" }),
+    alamat("destination", "Alamat Tujuan Pindah", { scopeKey: "relocationTypeLabel" }),
     "destination",
     "relocationTypeLabel",
     {},

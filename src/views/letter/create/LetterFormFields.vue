@@ -288,6 +288,19 @@ function syncRow(field, row) {
   for (const c of field.columns) if (colDisabled(c, row) && isFilled(row[c.key])) row[c.key] = c.default ?? "";
 }
 
+// Kolom terkunci dikosongkan otomatis setiap ada perubahan (mis. status akta diganti "Tidak Ada" → nomor akta ikut kosong).
+watch(
+  () => props.form,
+  () => {
+    for (const section of props.sections) {
+      for (const field of section.fields) {
+        if (field.type === "rows" && Array.isArray(props.form[field.key])) for (const row of props.form[field.key]) syncRow(field, row);
+      }
+    }
+  },
+  { deep: true },
+);
+
 const rowInvalid = (field, row, c) =>
   !!props.errors[field.key] && !c.optional && !isFilled(row[c.key]) && Object.values(row).some(isFilled);
 /* Kolom tanggal dengan `lifetime: true` (Masa Berlaku KTP): centang "Seumur hidup" mengisi nilai teks LIFETIME sebagai pengganti tanggal. */
@@ -453,8 +466,8 @@ onMounted(resyncFamily);
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
                   <div v-for="c in field.columns" :key="c.key" class="flex flex-col gap-1">
-                    <label class="text-xs text-slate-800">{{ c.label }}</label>
-                    <Select v-if="c.type === 'select'" v-model="row[c.key]" :options="c.options" :optionLabel="hasObjectOptions(c.options) ? 'label' : undefined" :optionValue="hasObjectOptions(c.options) ? 'value' : undefined" placeholder="Pilih" class="w-full" :invalid="rowInvalid(field, row, c) || nikInvalid(c, row[c.key])" />
+                    <label class="text-xs text-slate-800">{{ c.label }}<span v-if="c.optional" class="text-[var(--color-text-muted)]"> (opsional)</span></label>
+                    <Select v-if="c.type === 'select'" v-model="row[c.key]" :options="c.options" :optionLabel="hasObjectOptions(c.options) ? 'label' : undefined" :optionValue="hasObjectOptions(c.options) ? 'value' : undefined" :disabled="colDisabled(c, row)" placeholder="Pilih" class="w-full" :invalid="rowInvalid(field, row, c) || nikInvalid(c, row[c.key])" />
                     <!-- kolom tanggal; bila c.lifetime: ada centang "Seumur hidup" (nilai tersimpan = teks SEUMUR HIDUP) -->
                     <template v-else-if="c.type === 'date'">
                       <InputText
@@ -469,18 +482,21 @@ onMounted(resyncFamily);
                         showIcon
                         iconDisplay="input"
                         dateFormat="dd/mm/yy"
+                        :disabled="colDisabled(c, row)"
                         :invalid="rowInvalid(field, row, c)"
                       />
                       <label v-if="c.lifetime" class="flex items-center gap-2 text-xs text-slate-700">
                         <Checkbox
                           binary
                           :modelValue="isLifetime(row[c.key])"
+                          :disabled="colDisabled(c, row)"
                           @update:modelValue="setLifetime(row, c, $event)"
                         />
                         Seumur hidup
                       </label>
+                      <small v-if="c.lifetime" class="text-[11px] leading-snug text-slate-600">Centang &quot;Seumur hidup&quot; bila KTP berlaku seumur hidup; kolom tanggal diganti tulisan SEUMUR HIDUP. Jika tidak dicentang, isi tanggal berakhirnya masa berlaku KTP.</small>
                     </template>
-                    <InputText v-else v-model="row[c.key]" :maxlength="isNikField(c) ? 16 : undefined" :inputmode="isNikField(c) ? 'numeric' : undefined" :invalid="rowInvalid(field, row, c) || nikInvalid(c, row[c.key])" />
+                    <InputText v-else v-model="row[c.key]" :maxlength="isNikField(c) ? 16 : undefined" :inputmode="isNikField(c) ? 'numeric' : undefined" :disabled="colDisabled(c, row)" :invalid="rowInvalid(field, row, c) || nikInvalid(c, row[c.key])" />
                     <small v-if="nikInvalid(c, row[c.key])" class="text-red-500">{{ c.label }} harus tepat 16 digit angka.</small>
                   </div>
                 </div>
