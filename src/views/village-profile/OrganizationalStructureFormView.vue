@@ -35,6 +35,7 @@ const JABATAN_OPTIONS = [
   { label: 'Kamituwa', level: 'Kepala Seksi' },
   { label: 'Ulu-Ulu', level: 'Kepala Seksi' },
   { label: 'Jagabaya', level: 'Kepala Seksi' },
+  { label: 'Staff Pamong Kalurahan', level: 'Staff Pamong Kalurahan', slider: true, centerOnDesktop: true },
   { label: 'Dukuh I Krebet', level: 'Dukuh (Kepala Padukuhan)', slider: true },
   { label: 'Dukuh II Rogobangsan', level: 'Dukuh (Kepala Padukuhan)', slider: true },
   { label: 'Dukuh III Kalibulus', level: 'Dukuh (Kepala Padukuhan)', slider: true },
@@ -47,7 +48,6 @@ const JABATAN_OPTIONS = [
   { label: 'Dukuh X Banjarharjo', level: 'Dukuh (Kepala Padukuhan)', slider: true },
   { label: 'Dukuh XI Sorasan', level: 'Dukuh (Kepala Padukuhan)', slider: true },
   { label: 'Dukuh XII Koroulon Kidul', level: 'Dukuh (Kepala Padukuhan)', slider: true },
-  { label: 'Staff Pamong Kalurahan', level: 'Staff Pamong Kalurahan', slider: true, centerOnDesktop: true },
   { label: 'Ketua RT', level: 'Ketua RT & Ketua RW', slider: true },
   { label: 'Ketua RW', level: 'Ketua RT & Ketua RW', slider: true },
 ]
@@ -143,6 +143,29 @@ function jabatanKey(value) {
   ).toLowerCase()
 }
 
+function romanToNumber(value) {
+  const numbers = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 }
+  let total = 0
+  let previous = 0
+  for (const letter of String(value ?? '').toUpperCase().split('').reverse()) {
+    const number = numbers[letter] ?? 0
+    total += number < previous ? -number : number
+    previous = Math.max(previous, number)
+  }
+  return total
+}
+
+function personOrderKey(person) {
+  if (isDukuhLabel(person?.jabatan)) {
+    const parsed = parseDukuhLabel(person.jabatan)
+    const number = /^\d+$/.test(parsed.number) ? Number(parsed.number) : romanToNumber(parsed.number)
+    return [9, number || 999]
+  }
+
+  const rank = JABATAN_OPTIONS.findIndex((option) => jabatanKey(option.label) === jabatanKey(person?.jabatan))
+  return [rank < 0 ? 999 : rank, 0]
+}
+
 /* Jabatan yang sudah ada di data tersimpan tetapi tidak ada di JABATAN_OPTIONS.
    Tidak ada form untuk menambah jabatan baru; daftar ini hanya dipakai
    supaya data lama tidak hilang saat disimpan ulang. */
@@ -169,6 +192,16 @@ const form = reactive({
   former_officials: [],
   show_former_officials: false,
 })
+
+// Tabel admin harus tetap mengikuti susunan baku meskipun data lama tersimpan
+// dengan urutan assignment yang berbeda.
+const orderedPeople = computed(() => (
+  [...form.people].sort((left, right) => {
+    const a = personOrderKey(left)
+    const b = personOrderKey(right)
+    return a[0] - b[0] || a[1] - b[1]
+  })
+))
 
 function seedCustomJabatan(existingLevels = []) {
   if (!Array.isArray(existingLevels)) return []
@@ -252,7 +285,7 @@ function seedPeople(existingLevels = []) {
       // Khusus Ketua RT / Ketua RW
       rt_number: person.rt_number ?? '',
       rw_number: person.rw_number ?? '',
-      padukuhan: person.padukuhan ?? '',
+      padukuhan: textValue(person.padukuhan).trim(),
       // SK utama
       sk_number: person.sk_number ?? '',
       sk_document: person.sk_document ?? null,
@@ -707,7 +740,7 @@ function buildLevels() {
       signature: person.signatureFile ? `upload-signature:${person.id}` : person.signature,
       rt_number: person.rt_number || '',
       rw_number: person.rw_number || '',
-      padukuhan: person.padukuhan || '',
+      padukuhan: textValue(person.padukuhan).trim(),
       sk_number: person.sk_number?.trim() ?? '',
       sk_document: person.skFile
         ? `upload-sk:${person.id}-sk-main`
@@ -780,9 +813,13 @@ async function persistStructure() {
     loadExisting(saved)
     return true
   } catch (error) {
+    const validation = Object.values(error.response?.data?.errors ?? {})
+      .flat()
+      .filter(Boolean)
+      .join(' ')
     toast.add({
       severity: 'error',
-      summary: error.response?.data?.message ?? 'Gagal menyimpan struktur organisasi',
+      summary: validation || error.response?.data?.message || 'Gagal menyimpan struktur organisasi',
       life: 3000,
     })
     return false
@@ -800,7 +837,7 @@ async function savePersonDialog() {
 
   const rtNumber = String(personForm.rt_number ?? '').trim()
   const rwNumber = String(personForm.rw_number ?? '').trim()
-  const padukuhan = String(personForm.padukuhan ?? '').trim()
+  const padukuhan = String(textValue(personForm.padukuhan)).trim()
   if (isKetuaRt.value && (!rtNumber || !rwNumber || !padukuhan)) {
     toast.add({ severity: 'error', summary: 'Nomor RT, nomor RW, dan padukuhan wajib diisi', life: 2500 })
     return
@@ -1071,6 +1108,11 @@ function calcAge(birthDate) {
 function padNumber(value) {
   const v = String(value ?? '').trim()
   return /^\d+$/.test(v) ? v.padStart(2, '0') : v
+}
+
+function textValue(value) {
+  if (value && typeof value === 'object') return value.value ?? value.label ?? ''
+  return value ?? ''
 }
 
 // Contoh: "Ketua RT 01", "Ketua RW 02". Dipakai juga di tabel pamong.
@@ -1413,7 +1455,7 @@ async function onToggleShowFormer(value) {
         <!-- Daftar anggota -->
         <DataTable
           v-model:selection="selectedPeople"
-          :value="form.people"
+          :value="orderedPeople"
           :loading="loading"
           dataKey="id"
           size="small"

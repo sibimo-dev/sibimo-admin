@@ -171,6 +171,9 @@ const familyCardNumber = ref('')
 const dusun = ref('')
 const rt = ref('')
 const rw = ref('')
+const padukuhanId = ref(null)
+const rwId = ref(null)
+const rtId = ref(null)
 const rtHeadName = ref('')
 const rwHeadName = ref('')
 const gender = ref('Laki-laki')
@@ -382,6 +385,9 @@ function applyFamilyCardData() {
     dusun.value = source?.dusun ?? ''
     rw.value = source?.rw ?? ''
     rt.value = source?.rt ?? ''
+    padukuhanId.value = source?.padukuhan_id ?? null
+    rwId.value = source?.rw_id ?? null
+    rtId.value = source?.rt_id ?? null
     rwHeadName.value = rwData?.head_name ?? source?.rw_head_name ?? ''
     rtHeadName.value = rtData?.head_name ?? source?.rt_head_name ?? ''
     nationality.value = source?.nationality ?? nationality.value
@@ -448,6 +454,9 @@ function onDusunChange(value) {
   dusun.value = value ?? ''
   rw.value = ''
   rt.value = ''
+  padukuhanId.value = regionData.value.find(item => item.dusun === dusun.value)?.region_id ?? null
+  rwId.value = null
+  rtId.value = null
   rwHeadName.value = ''
   rtHeadName.value = ''
 }
@@ -455,18 +464,36 @@ function onDusunChange(value) {
 function onRwChange(value) {
   rw.value = value ?? ''
   rt.value = ''
+  const dusunData = regionData.value.find(item => item.dusun === dusun.value)
+  const rwData = dusunData?.rws.find(item => item.rw === value)
+  padukuhanId.value = dusunData?.region_id ?? padukuhanId.value
+  rwId.value = rwData?.id ?? null
+  rtId.value = null
   rtHeadName.value = ''
-  const rwData = regionData.value.find(item => item.dusun === dusun.value)?.rws.find(item => item.rw === value)
   rwHeadName.value = rwData?.head_name ?? ''
 }
 
 function onRtChange(value) {
   rt.value = value ?? ''
+  const dusunData = regionData.value.find(item => item.dusun === dusun.value)
+  const rwData = dusunData?.rws.find(item => item.rw === rw.value)
   const rtData = regionData.value
     .find(item => item.dusun === dusun.value)
     ?.rws.find(item => item.rw === rw.value)
     ?.rts.find(item => item.rt === value)
+  padukuhanId.value = dusunData?.region_id ?? padukuhanId.value
+  rwId.value = rwData?.id ?? rwId.value
+  rtId.value = rtData?.id ?? null
   rtHeadName.value = rtData?.head_name ?? ''
+}
+
+function syncAreaIdsFromText() {
+  const dusunData = regionData.value.find(item => item.dusun === dusun.value)
+  const rwData = dusunData?.rws.find(item => item.rw === rw.value)
+  const rtData = rwData?.rts.find(item => item.rt === rt.value)
+  padukuhanId.value = padukuhanId.value ?? dusunData?.region_id ?? null
+  rwId.value = rwId.value ?? rwData?.id ?? null
+  rtId.value = rtId.value ?? rtData?.id ?? null
 }
 
 // Catatan 10: alamat lengkap dihapus. Alamat KTP otomatis dari isian dusun, RW, RT.
@@ -625,6 +652,7 @@ async function fetchCitizenDetail() {
     passportNumber.value = data.passport_number ?? ''
     passportExpiryDate.value = fromApiDate(data.passport_expiry_date)
     status.value = data.status ?? 'Active'
+    syncAreaIdsFromText()
   } catch (err) {
     errorMessage.value = err.response?.data?.message || 'Gagal memuat detail data warga.'
   } finally {
@@ -646,6 +674,7 @@ async function fetchRegions() {
   try {
     const tree = await getRegionAreas()
     regionData.value = Array.isArray(tree) ? tree : []
+    syncAreaIdsFromText()
   } catch (err) {
     console.error('Gagal memuat data dusun/RW/RT:', err)
     regionData.value = []
@@ -693,6 +722,9 @@ async function saveCitizen() {
     full_name: fullName.value,
     national_id: nationalId.value,
     family_card_number: familyCardNumber.value,
+    padukuhan_id: padukuhanId.value,
+    rw_id: rwId.value,
+    rt_id: rtId.value,
     dusun: dusun.value,
     rt: rt.value,
     rw: rw.value,
