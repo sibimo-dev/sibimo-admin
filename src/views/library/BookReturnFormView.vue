@@ -4,6 +4,8 @@ import { useToast } from 'primevue/usetoast'
 import Tag from 'primevue/tag'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
+import IconField from 'primevue/iconfield'
+import InputIcon from 'primevue/inputicon'
 import Select from 'primevue/select'
 import AppButton from '@/components/common/AppButton.vue'
 import AppDataTable from '@/components/common/AppDataTable.vue'
@@ -16,6 +18,8 @@ const loans = ref(cachedLoans ?? [])
 const loading = ref(!cachedLoans)
 const submittingReturn = ref(false)
 const keyword = ref('')
+const statusFilters = ['Semua Status', 'Dipinjam', 'Terlambat']
+const activeFilter = ref('Semua Status')
 const sortBy = ref('borrowed_desc')
 const selectedLoan = ref(null)
 const showReturnDialog = ref(false)
@@ -28,7 +32,7 @@ const columns = [
   { field: 'title', header: 'Judul Buku', sortable: true },
   { field: 'borrowed_at', header: 'Tgl Pinjam', sortable: true },
   { field: 'due_date', header: 'Jatuh Tempo', sortable: true },
-  { field: 'late_days', header: 'Status', sortable: true },
+  { field: 'late_days', header: 'Status' },
 ]
 
 const sortOptions = [
@@ -83,10 +87,13 @@ const activeLoans = computed(() => loans.value
 
 const unreturnedLoans = computed(() => {
   const q = keyword.value.trim().toLowerCase()
-  const list = q
-    ? activeLoans.value.filter(l => String(l.loan_id).includes(q) || l.full_name.toLowerCase().includes(q) || l.title.toLowerCase().includes(q))
-    : activeLoans.value
-  // urutan awal: pinjam terbaru; selanjutnya diatur klik header kolom
+  let list = activeLoans.value
+  if (activeFilter.value === 'Dipinjam') list = list.filter(l => l.late_days === 0)
+  else if (activeFilter.value === 'Terlambat') list = list.filter(l => l.late_days > 0)
+  if (q) {
+    list = list.filter(l => String(l.loan_id).includes(q) || l.full_name.toLowerCase().includes(q) || l.title.toLowerCase().includes(q))
+  }
+
   return [...list].sort((a, b) => new Date(b.borrowed_at) - new Date(a.borrowed_at))
 })
 
@@ -145,9 +152,23 @@ onMounted(() => loadLoans({ background: Boolean(cachedLoans) }))
       <h1 class="m-0 mb-1 text-[22px] font-bold text-slate-900">Pengembalian Buku</h1>
       <p class="mb-5 text-sm text-slate-500">Catat transaksi pengembalian buku perpustakaan desa.</p>
       <div class="card">
-        <div class="mb-4 flex flex-wrap items-center gap-3">
-          <InputText v-model="keyword" placeholder="Cari nomor, peminjam, atau judul..." class="w-full max-w-sm" />
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <AppButton
+              v-for="filter in statusFilters"
+              :key="filter"
+              :label="filter"
+              size="small"
+              :variant="activeFilter === filter ? 'primary' : 'outline'"
+              @click="activeFilter = filter"
+            />
+          </div>
+          <IconField>
+            <InputIcon class="pi pi-search" />
+            <InputText v-model="keyword" placeholder="Cari nomor, peminjam, atau judul..." class="w-72" />
+          </IconField>
         </div>
+        <div class="book-return-table">
         <AppDataTable :columns="columns" :rows="unreturnedLoans" :loading="loading" data-key="loan_id" empty-message="Semua buku sudah dikembalikan">
           <template #borrowed_at="{ data }">{{ formatDate(data.borrowed_at) }}</template>
           <template #due_date="{ data }">{{ formatDate(data.due_date) }}</template>
@@ -158,6 +179,7 @@ onMounted(() => loadLoans({ background: Boolean(cachedLoans) }))
             <AppButton label="Proses" icon="pi pi-replay" variant="ghost" size="small" @click="selectRow(data)" />
           </template>
         </AppDataTable>
+        </div>
       </div>
     </div>
 
@@ -186,7 +208,6 @@ onMounted(() => loadLoans({ background: Boolean(cachedLoans) }))
       </div>
     </Dialog>
 
-    <!-- Bukti cetak: hanya tampil saat mencetak, styling pakai utility class Tailwind -->
     <div v-if="returnReceipt" class="hidden print:block">
       <div class="mx-auto max-w-[480px] text-slate-900">
         <div class="mb-5 text-center">
@@ -245,6 +266,18 @@ onMounted(() => loadLoans({ background: Boolean(cachedLoans) }))
     </div>
   </div>
 </template>
+
+<style scoped>
+
+.book-return-table :deep(.p-datatable-table) { table-layout: fixed; width: 100%; }
+.book-return-table :deep(th:nth-child(1)), .book-return-table :deep(td:nth-child(1)) { width: 10%; }
+.book-return-table :deep(th:nth-child(2)), .book-return-table :deep(td:nth-child(2)) { width: 18%; }
+.book-return-table :deep(th:nth-child(3)), .book-return-table :deep(td:nth-child(3)) { width: 27%; }
+.book-return-table :deep(th:nth-child(4)), .book-return-table :deep(td:nth-child(4)) { width: 12%; }
+.book-return-table :deep(th:nth-child(5)), .book-return-table :deep(td:nth-child(5)) { width: 12%; }
+.book-return-table :deep(th:nth-child(6)), .book-return-table :deep(td:nth-child(6)) { width: 12%; }
+.book-return-table :deep(th:nth-child(7)), .book-return-table :deep(td:nth-child(7)) { width: 9%; }
+</style>
 
 <style>
 
