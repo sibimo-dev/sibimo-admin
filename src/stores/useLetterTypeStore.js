@@ -7,9 +7,11 @@ const loading = ref(false)
 const error = ref(null)
 
 function normalizeLetterType(type) {
+  const letterTypeId = type.letter_type_id ?? type.id ?? type.letterTypeId ?? null
   const signer = type.signer ?? {}
   return {
     ...type,
+    letter_type_id: letterTypeId,
     signer_name: signer.name ?? type.signer_name ?? '-',
     signer_position: signer.position ?? type.signer_position ?? '-',
     document_count: type.document_count ?? type.documents_count ?? 0,
