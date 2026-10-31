@@ -247,11 +247,7 @@ const selectAll = () => {
   if (blockedId) autoRemovedConditional.add(blockedId);
   selected.value = props.bundle.letters.filter((l) => !isBlockedLetter(l.id)).map((l) => l.id);
 };
-const clearAll = () => {
-  selectionNotice.value = "";
-  autoRemovedConditional.clear();
-  selected.value = [];
-};
+const clearAll = () => (selected.value = []);
 
 /* ---------- Navigasi ---------- */
 function resetAlerts() {
@@ -507,7 +503,6 @@ async function submit() {
         </div>
         <h2 class="text-lg font-semibold text-slate-800 mt-1">{{ fLetter.title }}</h2>
         <p class="text-sm mt-1 text-slate-500">{{ fLetter.description }}</p>
-        <Message v-if="selectionNotice" severity="info" :closable="false" class="mt-4">{{ selectionNotice }}</Message>
 
         <div v-if="sectionsOf(fLetter).flatMap((s) => s.fields).some((f) => autoFilled[f.key])" class="mt-4 flex items-start gap-2 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800">
           <i class="pi pi-bolt mt-0.5" />
