@@ -13,9 +13,14 @@ export const REGISTRATION_DOCS = [
     letters: ["ktp-application-form"],
   },
   {
-    value: "kk", code: "KK", types: ["tetap"], hue: "emerald", label: "Kartu Keluarga", icon: "pi pi-users",
-    description: "Masuk / pembuatan Kartu Keluarga.",
-    letters: ["population-occurrence-registration", "family-biodata"],
+    value: "kk", code: "KK", types: ["tetap"], hue: "emerald", label: "Formulir Pendaftaran Peristiwa Kependudukan", icon: "pi pi-users",
+    description: "Pendaftaran peristiwa kependudukan (F-1.02): Kartu Keluarga, KTP-el, KIA, dan perubahan data.",
+    letters: ["population-occurrence-registration"],
+  },
+  {
+    value: "biodata-keluarga", code: "BDK", types: ["tetap"], hue: "orange", label: "Formulir Isian Biodata Penduduk WNI (Per Keluarga)", icon: "pi pi-list",
+    description: "Formulir isian biodata penduduk WNI per keluarga untuk input data seluruh anggota KK. ",
+    letters: ["family-biodata"],
   },
   {
     value: "akta-kelahiran", code: "AKL", types: ["tetap"], hue: "rose", label: "Akta Kelahiran", icon: "pi pi-heart",

@@ -63,6 +63,7 @@ export const familyModeFor = (value, household = []) => {
    semua kolom boleh dikoreksi manual. Kolom select (kode bernomor) dicocokkan lewat `source` (nilai di Data Warga) atau label. */
 const lc = (v) => String(v ?? "").trim().toLowerCase();
 export function matchCode(column, raw) {
+  if (canon(raw) === "belumada") raw = "Tidak Ada"; // Data Warga menyimpan "Belum Ada" untuk pilihan "1. Tidak Ada"
   const options = Array.isArray(column.options) ? column.options : [];
   const src = (o) => (o && typeof o === "object" ? (o.source ?? o.value) : o);
   const lab = (o) => (o && typeof o === "object" ? o.label : o);
@@ -560,3 +561,20 @@ export function focusFirstInvalid(keys = []) {
   };
   requestAnimationFrame(() => go());
 }
+
+
+/* Pasangan kunci yang SELALU dianggap sama di semua paket surat (digabung dengan `bundle.aliases`).
+   Dipakai BundleWizard: isian yang masih kosong terisi otomatis dari surat lain yang sudah diisi, walau nama kuncinya beda.
+   Kunci yang namanya persis sama sudah otomatis dibagi antar surat (satu form untuk semua surat dalam paket).
+   Sengaja TIDAK memasukkan alamat (address ↔ originAddress): di surat pindah datang/SKTS alamat asal berbeda dengan alamat pemohon. */
+export const COMMON_ALIASES = [
+  // Nomor KK (KTP/Pindah WNI = kkNumber, F-1.02/Akta/SKTS = familyCardNumber, Pindah Datang = originKkNumber)
+  ["kkNumber", "familyCardNumber"],
+  ["kkNumber", "originKkNumber"],
+  // Nama Kepala Keluarga
+  ["headOfFamily", "headOfFamilyName"],
+  ["headOfFamily", "originHeadOfFamily"],
+  // Nomor telepon / WhatsApp pemohon
+  ["whatsapp", "phone"],
+  ["phone", "applicantPhone"],
+];

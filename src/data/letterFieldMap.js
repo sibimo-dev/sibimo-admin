@@ -215,15 +215,6 @@ export const FIELD_OVERRIDES = {
     groomAddress: "alamat_suami_terdahulu",
     groomBin: "bin_suami_terdahulu",
   },
-  // Nama wilayah "Diisi Oleh Petugas": template PDF membaca $form['province'|'regency'|'district'|'village'],
-  // sedangkan key di form adalah provinceName/regencyName/... (tidak cocok otomatis karena ada kata "nama").
-  // Field province/regency/district/village HARUS ada di letter_type_fields surat FBWNI (text, tidak wajib).
-  "family-biodata": {
-    provinceName: "province",
-    regencyName: "regency",
-    districtName: "district",
-    villageName: "village",
-  },
   "relocation-certificate-form": {
     headOfFamily: "origin_head_of_family",
     kkNumber: "origin_kk_number",

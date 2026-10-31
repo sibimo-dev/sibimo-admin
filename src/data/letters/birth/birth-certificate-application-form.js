@@ -7,7 +7,7 @@
 // Nama field (key) = variabel di blade (aturan penamaan: lihat komentar di data/letterFields.js).
 // Langkah 3 (cek ulang, ceklis dokumen asli, kirim, pop-up hasil) sudah ditangani LetterWizard.
 
-import { arrange, DOC, DOC_LAHIR, opt, PELAPOR_APPLICATION, BIRTH_MARRIAGE_APPLICATION, BIRTH_PARENT_BRIEF, birthChild, birthFather, birthDocumentsChecklist, birthMother, birthFamily, birthParentsMarriage, pelapor } from "@/data/letterFields";
+import { arrange, DOC, DOC_LAHIR, opt, PELAPOR_APPLICATION, BIRTH_MARRIAGE_APPLICATION, BIRTH_PARENT_BRIEF, birthChild, birthFather, birthDocumentsChecklist, birthMother, signerNames, birthFamily, birthParentsMarriage, pelapor } from "@/data/letterFields";
 
 // Langkah 1: isian sesuai surat yang diajukan. F. "Data Pelapor" diisi petugas/admin kalurahan (khusus admin, tidak ada di form public).
 export const sections = arrange(
@@ -19,6 +19,7 @@ export const sections = arrange(
     birthParentsMarriage(BIRTH_MARRIAGE_APPLICATION),
     pelapor(PELAPOR_APPLICATION),
     birthDocumentsChecklist(),
+    signerNames(["receivingOfficer"], "Opsional. Nama Petugas Penerima Berkas yang dicetak di bawah tanda tangan; kosongkan bila ditulis tangan."),
   ],
   {
     // Urutan blok (judul). Pindahkan baris untuk mengubah urutan.
@@ -30,6 +31,7 @@ export const sections = arrange(
       "Data Perkawinan Orang Tua",
       "Data Pelapor",
       "Dokumen yang Dilampirkan",
+      "Nama Penandatangan (Opsional)",
     ],
     // Urutan isian di tiap blok (key = variabel blade). Pindahkan baris untuk mengatur posisi.
     // Taruh key blok lain di sini untuk memindahkannya ke blok ini.
@@ -72,6 +74,9 @@ export const sections = arrange(
       ],
       "Dokumen yang Dilampirkan": [
         "documents",  // Dokumen yang dilampirkan
+      ],
+      "Nama Penandatangan (Opsional)": [
+        "receivingOfficerName",  // Nama Petugas Penerima Berkas -> $signers['receiving_officer_name']
       ],
     },
     // Ubah label/placeholder/span satu isian khusus surat ini. Contoh:

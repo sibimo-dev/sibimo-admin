@@ -5,8 +5,9 @@ import { f, OPT, DOC, opt, alamat, kodeWilayah, wilayahDropdown, BIMOMARTANI } f
 
 // Langkah 1: urutan mengikuti formulir PDF
 export const sections = [
-  // DIISI OLEH PETUGAS: kode wilayah (default). Dusun/Dukuh/Kampung diisi di blok ini (key originHamlet); Nomor KK dari "Data Daerah Asal".
-  kodeWilayah({ names: false, hamlet: true, hamletCode: true, hamletKey: "originHamlet", hamletOptional: true }, "Kode Wilayah (Diisi Oleh Petugas)"),
+  // DIISI OLEH PETUGAS: kode wilayah dipatenkan di template PDF. Dusun/Dukuh/Kampung diisi di blok ini (key originHamlet); Nomor KK dari "Data Daerah Asal".
+  // Kode Dusun + dropdown Dusun/Dukuh/Kampung asal (key originHamlet, terisi dari dusun warga) ada di blok petugas ini, untuk mengisi PDF.
+  kodeWilayah({ hamlet: true, hamletCode: true, hamletKey: "originHamlet", hamletOptional: true }, "Kode Dusun (Diisi Oleh Petugas)"),
   // DATA DAERAH ASAL: 1. Nomor KK, 2. Nama Kepala Keluarga
   {
     title: "Data Daerah Asal",
@@ -23,6 +24,7 @@ export const sections = [
       phoneFrom: "phoneNumber",
       fieldFrom: {
         rt: "rt",
+        hamlet: "dusun",
         rw: "rw",
         village: "village",
         district: "district",
@@ -32,7 +34,7 @@ export const sections = [
         phone: "phoneNumber",
       },
       defaults: BIMOMARTANI,
-      hamlet: false, // Dusun/Dukuh/Kampung asal ada di blok Kode Wilayah
+      hamlet: false, // Dusun asal sudah ada di blok "Kode Dusun" di atas (key sama: originHamlet), jangan dobel
       scopeKey: "relocationTypeLabel",
     }),
     "origin",
@@ -61,7 +63,7 @@ export const sections = [
   },
   // 2. Alamat Tujuan Pindah: dropdown (boleh diketik), kosong / dipilih sendiri. Dusun diketik manual.
   wilayahDropdown(
-    alamat("destination", "Alamat Tujuan Pindah", { hamletFree: true, scopeKey: "relocationTypeLabel" }),
+    alamat("destination", "Alamat Tujuan Pindah", { scopeKey: "relocationTypeLabel" }),
     "destination",
     "relocationTypeLabel",
     {},
