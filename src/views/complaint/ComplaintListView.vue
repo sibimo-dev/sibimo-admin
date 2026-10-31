@@ -2,9 +2,10 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import Card from "primevue/card";
-import Select from "primevue/select";
 import Tag from "primevue/tag";
 import InputText from "primevue/inputtext";
+import IconField from "primevue/iconfield";
+import InputIcon from "primevue/inputicon";
 import AppDataTable from "@/components/common/AppDataTable.vue";
 import AppButton from "@/components/common/AppButton.vue";
 import { getComplaints } from "@/services/complaint.service";
@@ -15,12 +16,18 @@ const rows = ref((cachedRows ?? []).map(mapComplaint));
 const loading = ref(!cachedRows);
 const loadError = ref("");
 const searchQuery = ref("");
-const selectedCategory = ref(null);
-const selectedStatus = ref(null);
+const statusFilters = [
+  { label: "Semua Status", value: "" },
+  { label: "Menunggu", value: "Submitted" },
+  { label: "Diproses", value: "In Progress" },
+  { label: "Selesai", value: "Resolved" },
+  { label: "Ditolak", value: "Rejected" },
+];
+const activeFilter = ref("");
 const columns = [
-  { field: "complaint_code", header: "ID / Tanggal" },
-  { field: "reporter_name", header: "Pelapor & Topik" },
-  { field: "category", header: "Kategori" },
+  { field: "complaint_code", header: "ID / Tanggal", sortable: true },
+  { field: "reporter_name", header: "Pelapor & Topik", sortable: true },
+  { field: "category", header: "Kategori", sortable: true },
   { field: "status", header: "Status" },
 ];
 const statusMeta = {
@@ -36,31 +43,15 @@ const categoryMeta = {
   Security: "Keamanan",
   Other: "Lainnya",
 };
-const statusOptions = [
-  { label: "Status: Semua", value: null },
-  ...Object.entries(statusMeta).map(([value, meta]) => ({
-    label: meta.label,
-    value,
-  })),
-];
-const categoryOptions = computed(() => [
-  { label: "Kategori: Semua", value: null },
-  ...[...new Set(rows.value.map((r) => r.category))].map((value) => ({
-    label: categoryMeta[value] ?? value,
-    value,
-  })),
-]);
 const filteredRows = computed(() => {
-  const q = searchQuery.value.toLowerCase();
-  return rows.value.filter(
-    (r) =>
-      (!q ||
-        `${r.complaint_id} ${r.reporter_name} ${r.title}`
-          .toLowerCase()
-          .includes(q)) &&
-      (!selectedCategory.value || r.category === selectedCategory.value) &&
-      (!selectedStatus.value || r.status === selectedStatus.value)
-  );
+  const q = searchQuery.value.trim().toLowerCase();
+  return rows.value.filter((r) => {
+    if (activeFilter.value && r.status !== activeFilter.value) return false;
+    if (!q) return true;
+    return `${r.complaint_id} ${r.reporter_name} ${r.title}`
+      .toLowerCase()
+      .includes(q);
+  });
 });
 const stats = computed(() => ({
   total: rows.value.length,
@@ -140,22 +131,27 @@ onMounted(() => loadComplaints({ background: Boolean(cachedRows) }));
     </div>
     <Card
       ><template #content
-        ><div class="flex flex-wrap gap-3 mb-4">
-          <InputText
-            v-model="searchQuery"
-            placeholder="Cari ID, pelapor, atau topik..."
-          /><Select
-            v-model="selectedCategory"
-            :options="categoryOptions"
-            option-label="label"
-            option-value="value"
-          /><Select
-            v-model="selectedStatus"
-            :options="statusOptions"
-            option-label="label"
-            option-value="value"
-          />
+        ><div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div class="flex flex-wrap items-center gap-2">
+            <AppButton
+              v-for="filter in statusFilters"
+              :key="filter.value"
+              :label="filter.label"
+              size="small"
+              :variant="activeFilter === filter.value ? 'primary' : 'outline'"
+              @click="activeFilter = filter.value"
+            />
+          </div>
+          <IconField>
+            <InputIcon class="pi pi-search" />
+            <InputText
+              v-model="searchQuery"
+              placeholder="Cari ID, pelapor, atau topik..."
+              class="w-72"
+            />
+          </IconField>
         </div>
+        <div class="complaint-table">
         <AppDataTable
           :columns="columns"
           :rows="filteredRows"
@@ -169,7 +165,7 @@ onMounted(() => loadComplaints({ background: Boolean(cachedRows) }));
           ><template #reporter_name="{ data }"
             ><div class="font-medium">{{ data.reporter_name }}</div>
             <div class="text-sm font-semibold">{{ data.title }}</div>
-            <div class="text-xs text-gray-500">
+            <div class="text-xs text-gray-500 line-clamp-2">
               {{ data.description }}
             </div></template
           ><template #category="{ data }"
@@ -191,7 +187,18 @@ onMounted(() => loadComplaints({ background: Boolean(cachedRows) }));
                   name: 'complaint-response',
                   params: { id: data.complaint_id },
                 })
-              " /></template></AppDataTable></template
+              " /></template></AppDataTable>
+        </div></template
     ></Card>
   </div>
 </template>
+
+<style scoped>
+
+.complaint-table :deep(.p-datatable-table) { table-layout: fixed; width: 100%; }
+.complaint-table :deep(th:nth-child(1)), .complaint-table :deep(td:nth-child(1)) { width: 18%; }
+.complaint-table :deep(th:nth-child(2)), .complaint-table :deep(td:nth-child(2)) { width: 40%; }
+.complaint-table :deep(th:nth-child(3)), .complaint-table :deep(td:nth-child(3)) { width: 16%; }
+.complaint-table :deep(th:nth-child(4)), .complaint-table :deep(td:nth-child(4)) { width: 16%; }
+.complaint-table :deep(th:nth-child(5)), .complaint-table :deep(td:nth-child(5)) { width: 10%; }
+</style>

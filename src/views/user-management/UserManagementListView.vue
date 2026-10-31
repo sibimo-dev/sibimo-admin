@@ -37,8 +37,6 @@ const form = reactive({
   is_active: true,
 })
 
-// Kolom "Role" dan "Hak Akses" sebelumnya sama-sama menampilkan nama role
-// (roleName), jadi salah satunya (Hak Akses) dihapus -- cukup 1 kolom "Role".
 function mapUser(user) {
   const roleName = user.role?.name ?? '-'
   return {
@@ -71,11 +69,14 @@ async function loadData({ background = false } = {}) {
   }
 }
 
-// --- Search ---
 const searchQuery = ref('')
+const statusFilters = [
+  { label: 'Semua Status', value: '' },
+  { label: 'Active', value: 'active' },
+  { label: 'Deactive', value: 'inactive' },
+]
+const activeStatusFilter = ref('')
 
-// Kalau datang dari Role & Hak Akses lewat tombol "Kelola" (?role=Admin Berita),
-// auto-filter tabel ke peran tersebut.
 onMounted(() => {
   if (route.query.role) {
     searchQuery.value = String(route.query.role)
@@ -84,16 +85,17 @@ onMounted(() => {
 
 const filteredUsers = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
-  if (!query) return users.value
 
-  return users.value.filter(
-    (r) =>
-      r.userName.toLowerCase().includes(query) ||
-      r.positionTitle.toLowerCase().includes(query),
-  )
+  return users.value.filter((user) => {
+    if (activeStatusFilter.value && user.status !== activeStatusFilter.value) return false
+    if (!query) return true
+    return (
+      user.userName.toLowerCase().includes(query) ||
+      user.positionTitle.toLowerCase().includes(query)
+    )
+  })
 })
 
-// --- Checkbox pilih semua / per baris ---
 const selectedIds = ref([])
 const allSelected = computed({
   get: () => filteredUsers.value.length > 0 && selectedIds.value.length === filteredUsers.value.length,
@@ -102,7 +104,6 @@ const allSelected = computed({
   },
 })
 
-// --- Status badge ---
 const statusColor = {
   active: 'success',
   inactive: 'secondary',
@@ -112,7 +113,6 @@ const statusLabel = {
   inactive: 'Deactive',
 }
 
-// Klik badge status untuk toggle. Super Admin (isProtected) dikunci.
 function handleToggleStatus(role) {
   if (role.isProtected) {
     toast.add({
@@ -138,7 +138,6 @@ function handleToggleStatus(role) {
     }))
 }
 
-// --- Navigasi ---
 function goToAddNew() {
   editingUserId.value = null
   Object.assign(form, {
@@ -229,16 +228,12 @@ function handleDelete(role) {
   })
 }
 
-// --- Bulk Action: Hapus / Nonaktifkan pengguna terpilih ---
-// Backend belum punya endpoint bulk, jadi dipanggil satu-satu (pola sama
-// seperti deleteSelected() di CitizenListView.vue).
 const bulkProcessing = ref(false)
 
 const selectedUsers = computed(() =>
   users.value.filter((user) => selectedIds.value.includes(user.id)),
 )
 
-// Super Admin tidak boleh ikut terhapus/dinonaktifkan lewat bulk action.
 const selectableSelectedUsers = computed(() =>
   selectedUsers.value.filter((user) => !user.isProtected),
 )
@@ -323,29 +318,35 @@ onMounted(() => loadData({ background: Boolean(cachedUsers || cachedRoles) }))
 
 <template>
   <div>
-    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-      <!-- Header -->
-      <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <!-- font judul disamakan ke text-2xl font-bold, konsisten
-             dengan h1 di LetterTypeListView.vue -->
-        <h1 class="text-2xl font-bold text-gray-800 mb-0">Manajemen Pengguna</h1>
+    <h1 class="text-2xl font-bold text-gray-800 mt-0 mb-4">Manajemen Pengguna</h1>
 
-        <div class="flex items-center gap-3">
-          <AppInput
-            v-model="searchQuery"
-            placeholder="Search"
-            icon="pi pi-search"
-          />
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div class="flex flex-wrap items-center gap-2">
           <AppButton
-            label="Add New"
+            label="Tambah Admin"
             icon="pi pi-plus"
             variant="dark"
             @click="goToAddNew"
           />
+
+          <AppButton
+            v-for="filter in statusFilters"
+            :key="filter.value"
+            :label="filter.label"
+            size="small"
+            :variant="activeStatusFilter === filter.value ? 'primary' : 'outline'"
+            @click="activeStatusFilter = filter.value"
+          />
         </div>
+
+        <AppInput
+          v-model="searchQuery"
+          placeholder="Search"
+          icon="pi pi-search"
+        />
       </div>
 
-      <!-- Bulk Action bar: muncul saat ada baris yang dicentang -->
       <div
         v-if="selectedIds.length > 0"
         class="flex items-center justify-between gap-3 mb-4 px-3 py-2 rounded-xl bg-gray-50 border border-gray-200"
@@ -371,7 +372,6 @@ onMounted(() => loadData({ background: Boolean(cachedUsers || cachedRoles) }))
         </div>
       </div>
 
-      <!-- Tabel: DataTable/Column PrimeVue langsung, sorting bawaan per kolom -->
       <DataTable
         :value="filteredUsers"
         :loading="loading"
@@ -403,7 +403,7 @@ onMounted(() => loadData({ background: Boolean(cachedUsers || cachedRoles) }))
           </template>
         </Column>
 
-        <Column field="status" header="Status" sortable>
+        <Column field="status" header="Status">
           <template #body="{ data }">
             <button
               class="bg-transparent border-0 p-0 leading-none"
