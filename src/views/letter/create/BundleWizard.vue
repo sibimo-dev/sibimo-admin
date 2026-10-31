@@ -62,7 +62,44 @@ const stepAlert = ref("");
 const hasChecklist = props.bundle.letters.filter((l) => !l.hidden).length > 1;
 const selected = ref(hasChecklist ? [...(props.bundle.ui?.preselected ?? [])].filter((id) => props.bundle.letters.some((l) => l.id === id)) : props.bundle.letters.map((l) => l.id));
 const selectError = ref(false);
+const selectionNotice = ref("");
+const autoRemovedConditional = new Set();
 const selectedLetters = computed(() => props.bundle.letters.filter((l) => selected.value.includes(l.id)));
+const isDudaStatus = (value) => /^(duda|cerai\s*(hidup|mati))$/i.test(String(value ?? "").trim());
+const isJandaStatus = (value) => /^(janda|cerai\s*(hidup|mati))$/i.test(String(value ?? "").trim());
+const conditionalLetterConfig = computed(() => {
+  if (props.bundle.slug === "permohonan-nikah-laki-laki") return { id: "kkn", status: form.groomStatus, allowed: isDudaStatus(form.groomStatus), label: "KKN" };
+  if (props.bundle.slug === "permohonan-nikah-perempuan") return { id: "n6", status: form.brideStatus, allowed: isJandaStatus(form.brideStatus), label: "N6" };
+  return null;
+});
+const blockedConditionalLetter = computed(() => {
+  const config = conditionalLetterConfig.value;
+  if (config?.status && !config.allowed) return config.id;
+  return "";
+});
+const isBlockedLetter = (id) => id === blockedConditionalLetter.value;
+const blockedLetterNotice = computed(() => blockedConditionalLetter.value
+  ? `Surat ${blockedConditionalLetter.value === "kkn" ? "KKN" : "N6"} tidak diperlukan karena status catin bukan duda/janda. Surat tersebut otomatis dikeluarkan dari proses.`
+  : "");
+watch([() => form.groomStatus, () => form.brideStatus], () => {
+  const config = conditionalLetterConfig.value;
+  if (!config?.status) return;
+  if (!config.allowed) {
+    if (!selected.value.includes(config.id)) return;
+    const removedIndex = selectedLetters.value.findIndex((letter) => letter.id === config.id);
+    selected.value = selected.value.filter((id) => id !== config.id);
+    autoRemovedConditional.add(config.id);
+    if (removedIndex >= 0 && removedIndex < fieldIdx.value) fieldIdx.value -= 1;
+    fieldIdx.value = Math.max(0, Math.min(fieldIdx.value, selectedLetters.value.length - 1));
+    selectionNotice.value = blockedLetterNotice.value;
+    return;
+  }
+  if (autoRemovedConditional.has(config.id) && !selected.value.includes(config.id)) {
+    selected.value = [...selected.value, config.id];
+    autoRemovedConditional.delete(config.id);
+    selectionNotice.value = `Status berubah menjadi ${config.label === "KKN" ? "Duda" : "Janda"}. Surat ${config.label} dikembalikan ke proses.`;
+  }
+});
 const selectedVisibleCount = computed(() => props.bundle.letters.filter((l) => !l.hidden && selected.value.includes(l.id)).length);
 /* Surat status-perkawinan tertentu hanya boleh diproses untuk duda/janda.
    Surat yang otomatis dikeluarkan disimpan sementara supaya dapat dikembalikan
@@ -192,7 +229,12 @@ const isSelected = (id) => selected.value.includes(id);
    Memilih kartu = memilih semuanya; tiap surat tetap punya langkah isian sendiri. */
 function toggle(id) {
   selectError.value = false;
-  if (!isConditionalLetterAllowed(id)) return;
+  selectionNotice.value = "";
+  if (isBlockedLetter(id)) {
+    selectionNotice.value = blockedLetterNotice.value;
+    return;
+  }
+  if (autoRemovedConditional.has(id)) autoRemovedConditional.delete(id);
   const ids = [id, ...(props.bundle.letters.find((l) => l.id === id)?.with ?? [])];
   selected.value = isSelected(id) ? selected.value.filter((x) => !ids.includes(x)) : [...new Set([...selected.value, ...ids])];
 }
@@ -200,9 +242,16 @@ const visibleLetters = computed(() => props.bundle.letters.filter((l) => !l.hidd
 const visibleSelected = computed(() => visibleLetters.value.filter((l) => selected.value.includes(l.id)).length);
 const selectAll = () => {
   selectError.value = false;
-  selected.value = props.bundle.letters.map((l) => l.id);
+  selectionNotice.value = "";
+  const blockedId = blockedConditionalLetter.value;
+  if (blockedId) autoRemovedConditional.add(blockedId);
+  selected.value = props.bundle.letters.filter((l) => !isBlockedLetter(l.id)).map((l) => l.id);
 };
-const clearAll = () => (selected.value = []);
+const clearAll = () => {
+  selectionNotice.value = "";
+  autoRemovedConditional.clear();
+  selected.value = [];
+};
 
 /* ---------- Navigasi ---------- */
 function resetAlerts() {
@@ -424,6 +473,7 @@ async function submit() {
         </div>
 
         <Message v-if="selectError" severity="warn" :closable="false" class="mt-5">Pilih minimal satu surat untuk melanjutkan.</Message>
+        <Message v-if="selectionNotice || blockedLetterNotice" severity="info" :closable="false" class="mt-5">{{ selectionNotice || blockedLetterNotice }}</Message>
       </div>
 
       <!-- ============ LANGKAH 2: ISIAN — 1 SURAT PER HALAMAN ============ -->
@@ -457,6 +507,7 @@ async function submit() {
         </div>
         <h2 class="text-lg font-semibold text-slate-800 mt-1">{{ fLetter.title }}</h2>
         <p class="text-sm mt-1 text-slate-500">{{ fLetter.description }}</p>
+        <Message v-if="selectionNotice" severity="info" :closable="false" class="mt-4">{{ selectionNotice }}</Message>
 
         <div v-if="sectionsOf(fLetter).flatMap((s) => s.fields).some((f) => autoFilled[f.key])" class="mt-4 flex items-start gap-2 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800">
           <i class="pi pi-bolt mt-0.5" />

@@ -8,9 +8,18 @@
 // Langkah 3 (cek ulang, ceklis dokumen asli, kirim, pop-up hasil) sudah ditangani LetterWizard.
 import { DOC, calonIstri, f, ortuNikah } from "@/data/letterFields";
 
+const onlyWhen = (section, predicate) => ({
+  ...section,
+  fields: section.fields.map((field) => ({
+    ...field,
+    showIf: (form) => predicate(form) && (!field.showIf || field.showIf(form)),
+  })),
+});
+const isJanda = (form) => /^(janda|cerai\s*(hidup|mati))$/i.test(String(form.brideStatus ?? "").trim());
+
 // Langkah 1: isian sesuai surat yang diajukan
 export const sections = [calonIstri(),
-     { title: "Status Calon Istri", fields: [f.select("brideStatus", "Status", ["Perawan", "Janda"]), f.text("exHusbandName", "Nama suami terdahulu (bila janda)", { optional: true })] },
+     { title: "Status Calon Istri", fields: [f.select("brideStatus", "Status", ["Perawan", "Janda"], { from: "maritalStatus" }), ...onlyWhen({ fields: [f.text("exHusbandName", "Nama suami terdahulu (bila janda)", { optional: true })] }, isJanda).fields] },
      ortuNikah("brideFather", "Data Ayah Calon Istri", "Bin (nama ayah dari ayah)"), ortuNikah("brideMother", "Data Ibu Calon Istri", "Binti (nama ayah dari ibu)")];
 
 // Langkah 2: dokumen pendukung (opt(...) = tidak wajib)
