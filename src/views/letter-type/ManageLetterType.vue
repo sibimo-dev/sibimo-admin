@@ -57,9 +57,11 @@ const lockedFields = computed(() => !isNew.value)
 // ====== Letter type (basic info) ======
 async function loadRelatedData() {
   if (isNew.value) return
-  const type = await store.fetchById(route.params.id)
-  Object.assign(form, type)
-  requirements.value = await store.getDocuments(route.params.id)
+  const routeId = route.params.id
+  const type = await store.fetchById(routeId)
+  const letterTypeId = type?.letter_type_id ?? type?.id ?? routeId
+  Object.assign(form, type, { letter_type_id: letterTypeId })
+  requirements.value = await store.getDocuments(letterTypeId)
 }
 
 onMounted(async () => {
@@ -100,9 +102,10 @@ async function handleSave() {
       description: form.description || null,
       is_active: form.is_active,
     }
+    const letterTypeId = form.letter_type_id ?? route.params.id
     const saved = isNew.value
       ? await store.addLetterType(payload)
-      : await store.updateLetterType(form.letter_type_id, payload)
+      : await store.updateLetterType(letterTypeId, payload)
 
     toast.add({ severity: 'success', summary: 'Tipe surat berhasil disimpan', life: 2000 })
     if (isNew.value) {
@@ -151,7 +154,9 @@ function resetRequirementForm() {
 }
 
 async function refreshRequirements() {
-  requirements.value = await store.getDocuments(form.letter_type_id)
+  const letterTypeId = form.letter_type_id ?? route.params.id
+  if (!letterTypeId) return
+  requirements.value = await store.getDocuments(letterTypeId)
 }
 
 // Create
@@ -179,7 +184,8 @@ function closeRequirementDialog() {
 
 async function saveRequirement() {
   isRequirementSubmitted.value = true
-  if (isNew.value || !requirementForm.document_name.trim()) return
+  const letterTypeId = form.letter_type_id ?? route.params.id
+  if (isNew.value || !letterTypeId || !requirementForm.document_name.trim()) return
 
   isSavingRequirement.value = true
   try {
@@ -189,7 +195,7 @@ async function saveRequirement() {
       is_required: requirementForm.is_required,
     }
     if (requirementForm.id) await store.updateDocument(requirementForm.id, payload)
-    else await store.createDocument(form.letter_type_id, payload)
+    else await store.createDocument(letterTypeId, payload)
 
     await refreshRequirements()
     toast.add({
