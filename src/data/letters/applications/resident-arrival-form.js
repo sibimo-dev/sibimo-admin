@@ -1,7 +1,7 @@
 // Disalin dari public: views/services/letters/applications/resident-arrival-form.vue (hanya bagian isian & dokumen).
 // Isian di sini harus tetap sama dengan di public. Tampilan wizard ada di views/letter/create/.
 // Formulir Permohonan Pindah Datang WNI
-import { f, OPT, pemohon, DOC, signerNames, kodeWilayahFields, wilayahByScope, wilayahDropdown, BIMOMARTANI } from "@/data/letterFields";
+import { f, OPT, pemohon, DOC, wilayahByScope, wilayahDropdown, BIMOMARTANI } from "@/data/letterFields";
 
 // scopeKey (opsional): bila diisi, Desa/Kecamatan/Kab/Provinsi berupa dropdown yang boleh diketik manual.
 // Nilai awalnya ditentukan oleh wilayahDropdown (bukan lagi otomatis menurut Cakupan Kepindahan).
@@ -43,9 +43,12 @@ const RELOCATION_TYPES = [
 
 export const sections = [
   {
-    title: "Wilayah Tujuan (Diisi Oleh Petugas)",
-    hint: "Kode wilayah sudah terisi default Kalurahan Bimomartani; ubah bila perlu. Pilih dusun/dukuh dari data yang tersedia atau ketik nama secara manual.",
-    fields: kodeWilayahFields({ names: true, hamlet: true }),
+    title: "Kode Dusun (Diisi Oleh Petugas)",
+    hint: "Kode & nama Provinsi, Kab/Kota, Kecamatan, dan Desa sudah tercetak otomatis di PDF. Petugas mengisi kode dusun dan memilih dusun/dukuh tujuan (atau ketik manual).",
+    fields: [
+      f.text("hamletCode", "Kode Dusun", { optional: true, placeholder: "Contoh: 01" }),
+      f.hamlet("hamlet", "Dusun/Dukuh/Kampung Tujuan"), // tanpa autofill: dusun tujuan bukan dusun asal pemohon
+    ],
   },
 
   pemohon(),
@@ -118,7 +121,12 @@ export const sections = [
   },
 
   // TTD (3): 1. Petugas registrasi  2. Lurah Bimomartani  3. Pemohon (= Nama Lengkap pemohon di atas)
-  signerNames(["registrar"], "Opsional. Tanda tangan Pemohon memakai Nama Lengkap di atas. Isi nama Petugas Registrasi bila ingin dicetak; kosongkan bila ditulis tangan."),
+  // Key registrationOfficer sama dengan di public (signerSection ... "registrationOfficer").
+  {
+    title: "Nama Penandatangan (Opsional)",
+    hint: "Opsional. Tanda tangan Pemohon memakai Nama Lengkap di atas. Isi nama Petugas Registrasi bila ingin dicetak; kosongkan bila ditulis tangan.",
+    fields: [f.text("registrationOfficer", "Nama Petugas Registrasi", { optional: true })],
+  },
 ];
 
 export const documents = [

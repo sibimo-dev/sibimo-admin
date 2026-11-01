@@ -125,6 +125,25 @@ const previewUrl = ref('')
 const previewLoading = ref(false)
 const previewError = ref('')
 
+// Gangguan sementara (server masih "pemanasan" saat render PDF pertama, 5xx, timeout, jaringan putus) dicoba ulang otomatis.
+// Error 4xx (data/izin salah) tidak diulang karena percuma.
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+async function withRetry(task, tries = 3) {
+  let lastError
+  for (let attempt = 0; attempt < tries; attempt++) {
+    try {
+      return await task()
+    } catch (error) {
+      lastError = error
+      const status = error.response?.status
+      const temporary = !status || status >= 500 || status === 408 || status === 429
+      if (!temporary || attempt === tries - 1) break
+      await sleep(800 * (attempt + 1))
+    }
+  }
+  throw lastError
+}
+
 async function readErrorMessage(error) {
   const data = error.response?.data
   if (data instanceof Blob) {
@@ -137,31 +156,42 @@ async function readErrorMessage(error) {
   return data?.message ?? ''
 }
 
+// Hanya hasil permintaan TERBARU yang boleh mengubah tampilan. Tanpa ini, dua permintaan yang berjalan bersamaan
+// (saat halaman dibuka) bisa saling menimpa: satu sukses, satu gagal -> muncul "Pratinjau gagal" padahal PDF sudah ada.
+let previewSeq = 0
+let previewReady = false
+
 async function loadPreview() {
   if (!record.value) return
+  const seq = ++previewSeq
   previewLoading.value = true
   previewError.value = ''
   try {
-    const blob = await getLetterPdf(record.value.id, {
-      signer_id: selectedSignerId.value,
-    })
+    const blob = await withRetry(() =>
+      getLetterPdf(record.value.id, { signer_id: selectedSignerId.value }),
+    )
+    if (seq !== previewSeq) return
     if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
     previewUrl.value = URL.createObjectURL(blob)
   } catch (error) {
+    if (seq !== previewSeq) return
     if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
     previewUrl.value = ''
     previewError.value =
       (await readErrorMessage(error)) || 'Pratinjau dokumen gagal dimuat.'
   } finally {
-    previewLoading.value = false
+    if (seq === previewSeq) previewLoading.value = false
   }
 }
 
-watch(selectedSignerId, (newId, oldId) => {
-  if (oldId !== undefined && newId !== oldId) {
-    loadPreview()
-  }
-})
+// flush: 'sync' + previewReady: pengisian awal selectedSignerId saat onMounted TIDAK memicu permintaan kedua.
+watch(
+  selectedSignerId,
+  (newId, oldId) => {
+    if (previewReady && newId !== oldId) loadPreview()
+  },
+  { flush: 'sync' },
+)
 
 onBeforeUnmount(() => {
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
@@ -181,6 +211,7 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  previewReady = true
   loadPreview()
 })
 
