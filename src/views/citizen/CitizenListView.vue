@@ -72,8 +72,6 @@ function formatDate(dateStr) {
   })
 }
 
-// Mapping field backend (snake_case) -> field yang dipakai UI (camelCase)
-// Kenapa perlu mapping: biar KODE TEMPLATE DI BAWAH (Column, dst) TIDAK PERLU DIUBAH SAMA SEKALI.
 function mapCitizenFromApi(item) {
   return {
     id: item.citizen_id,
@@ -1454,7 +1452,6 @@ function exportReportToPdf() {
 
           <Column field="name" header="Nama Lengkap" sortable />
           <Column field="nationalId" header="NIK" sortable />
-          <Column field="recordEvent" header="Peristiwa" sortable />
           <Column field="gender" header="Jenis Kelamin" sortable />
           <Column field="address" header="Alamat" />
 
@@ -1738,10 +1735,6 @@ function exportReportToPdf() {
             <div class="flex flex-col gap-1">
               <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Jenis Data</span>
               <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.recordType || '-' }}</span>
-            </div>
-            <div class="flex flex-col gap-1">
-              <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Peristiwa</span>
-              <span class="text-[13px] text-neutral-800">{{ selectedDetailResident.recordEvent || '-' }}</span>
             </div>
             <div class="flex flex-col gap-1">
               <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">NIK</span>
