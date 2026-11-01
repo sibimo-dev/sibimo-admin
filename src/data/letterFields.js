@@ -433,35 +433,20 @@ export const ortuNikah = (prefix, title, binLabel) => {
   );
 };
 
-/* ---------- Kode wilayah "Diisi Oleh Petugas" (kop formulir Dukcapil: Kode-Nama Provinsi/Kab/Kecamatan/Desa, Nama Dusun, Nomor KK) ----------
-   Kode & nama wilayah terisi default Kalurahan Bimomartani (34 / 04 / 11 / 020) dan boleh diubah petugas.
-   Opsi: names  = sertakan kolom nama (Provinsi, Kab, Kecamatan, Desa). Matikan bila nama sudah ada di blok alamat surat itu.
-         hamlet = sertakan pilihan Nama Dusun (pilih dari data dusun/dukuh atau ketik); hamletCode = kolom kode dusun. hamletKey = kunci field dusun.
+/* ---------- Blok "Diisi Oleh Petugas" (kop formulir Dukcapil: Nama Dusun, Nomor KK) ----------
+   Kode & nama Provinsi/Kab/Kecamatan/Desa TIDAK lagi jadi isian: nilainya dipatenkan di template PDF backend
+   (34 DIY / 04 Sleman / 11 Ngemplak / 020 Bimomartani). Yang tersisa di form hanya yang berbeda tiap keluarga.
+   Opsi: hamlet = sertakan pilihan Nama Dusun (pilih dari data dusun/dukuh atau ketik); hamletCode = kolom kode dusun.
+         hamletKey = kunci field dusun.
          kk     = sertakan Nomor KK (terisi otomatis dari NIK pemohon) supaya ikut tampil di pratinjau. */
-export const WILAYAH_KODE = {
-  provinceCode: "34", provinceName: "Daerah Istimewa Yogyakarta",
-  regencyCode: "04", regencyName: "Sleman",
-  districtCode: "11", districtName: "Ngemplak",
-  villageCode: "020", villageName: "Bimomartani",
-};
-export const kodeWilayahFields = ({ names = true, hamlet = true, hamletCode = hamlet, hamletKey = "hamlet", hamletOptional = false, kk = false } = {}) => {
-  const pair = (key, label) => [
-    f.text(`${key}Code`, `Kode ${label}`, { default: WILAYAH_KODE[`${key}Code`], placeholder: "Kode" }),
-    ...(names ? [f.text(`${key}Name`, `Nama ${label}`, { default: WILAYAH_KODE[`${key}Name`] })] : []),
-  ];
-  return [
-    ...pair("province", "Provinsi"),
-    ...pair("regency", "Kabupaten/Kota"),
-    ...pair("district", "Kecamatan"),
-    ...pair("village", "Desa/Kalurahan"),
-    ...(hamletCode ? [f.text("hamletCode", "Kode Dusun", { optional: true, placeholder: "Contoh: 01" })] : []),
-    ...(hamlet ? [f.hamlet(hamletKey, "Dusun/Dukuh/Kampung", { from: "dusun", ...(hamletOptional ? { optional: true } : {}) })] : []),
-    ...(kk ? [f.kk("kkNumber", "Nomor KK", { from: "familyCardNumber" })] : []),
-  ];
-};
-export const kodeWilayah = (opts = {}, title = "Diisi Oleh Petugas (Kode Wilayah)") => ({
+export const kodeWilayahFields = ({ hamlet = true, hamletCode = hamlet, hamletKey = "hamlet", hamletOptional = false, kk = false } = {}) => [
+  ...(hamletCode ? [f.text("hamletCode", "Kode Dusun", { optional: true, placeholder: "Contoh: 01" })] : []),
+  ...(hamlet ? [f.hamlet(hamletKey, "Dusun/Dukuh/Kampung", { from: "dusun", ...(hamletOptional ? { optional: true } : {}) })] : []),
+  ...(kk ? [f.kk("kkNumber", "Nomor KK", { from: "familyCardNumber" })] : []),
+];
+export const kodeWilayah = (opts = {}, title = "Diisi Oleh Petugas (Dusun & Nomor KK)") => ({
   title,
-  hint: "Kode wilayah sudah terisi default Kalurahan Bimomartani; ubah bila perlu. Nama dusun dipilih dari data dusun/dukuh atau diketik.",
+  hint: "Kode & nama Provinsi, Kab/Kota, Kecamatan, dan Desa sudah tercetak otomatis di PDF. Petugas hanya mengisi dusun/dukuh dan nomor KK.",
   fields: kodeWilayahFields(opts),
 });
 

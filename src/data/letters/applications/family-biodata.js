@@ -2,9 +2,10 @@
 // Isian di sini harus tetap sama dengan di public. Tampilan wizard ada di views/letter/create/.
 // Formulir Biodata Penduduk WNI (Per Keluarga)
 // Template PDF: letters/family-biodata-form.blade.php
-// Bagian "Diisi Oleh Petugas" (Provinsi, Kab, Kecamatan, Desa, Dusun, Nomor KK)
-// tidak diisi pemohon, dibiarkan kosong di PDF dan diisi/diedit admin.
-import { f, OPT, codeOptions, kodeWilayah, pemohonRingkas, opt, signerNames } from "@/data/letterFields";
+// Bagian "Diisi Oleh Petugas": Provinsi, Kab, Kecamatan, Desa dipatenkan di template PDF backend
+// (34 DIY / 04 Sleman / 11 Ngemplak / 020 Bimomartani) dan bagian lainnya juga sudah tetap di blade, jadi bukan field.
+// Satu-satunya yang tetap berupa isian: Nama Dusun/Dukuh/Kampung.
+import { f, OPT, codeOptions, pemohonRingkas, opt, signerNames } from "@/data/letterFields";
 
 // Kolom bernomor di formulir cetak (7, 11, 13, 14, 15, 16, 19, 22, 23, 24, 25, 26):
 // dropdown menampilkan "1. Laki-laki", tetapi NILAI yang disimpan (dan tercetak di pratinjau) hanya angkanya ("1").
@@ -21,20 +22,35 @@ const KODE = {
   education: codeOptions(OPT.educationKode),       // 25
   occupation: codeOptions(OPT.occupationKode),     // 26
 };
-const ADA = "2";            // kode "Ada" untuk akta (11, 16, 19) dan kelainan (23)
-const BELUM_KAWIN = "1";    // kode status perkawinan
-const CERAI = ["3", "4"];   // Cerai Hidup, Cerai Mati
+const ADA = "2";           // kode "Ada" untuk akta (11, 16, 19) dan kelainan (23)
+const KAWIN = "2";         // kode status perkawinan
+const CERAI_HIDUP = "3";
+const CERAI_MATI = "4";
+const PERNAH_KAWIN = [KAWIN, CERAI_HIDUP, CERAI_MATI]; // semua status selain Belum Kawin
 
-// Ketergantungan antar kolom (sama dengan form Data Warga): kolom yang tidak berlaku dinonaktifkan dan dikosongkan.
+// Ketergantungan antar kolom (sama dengan form Data Warga): kolom yang tidak berlaku DIKUNCI dan dikosongkan,
+// baru terbuka bila datanya memang ada.
+//   Belum Kawin / belum dipilih -> data kawin, cerai, dan kematian pasangan terkunci
+//   Kawin                       -> data kawin terbuka; cerai & kematian pasangan terkunci
+//   Cerai Hidup                 -> data kawin + cerai terbuka; kematian pasangan terkunci
+//   Cerai Mati                  -> data kawin + tanggal/tempat kematian pasangan terbuka; data cerai terkunci
 const noBirthCert = (row) => row.birthCertStatus !== ADA;
-const neverMarried = (row) => row.maritalStatus === BELUM_KAWIN;
-const notDivorced = (row) => !CERAI.includes(row.maritalStatus);
+const noMarriage = (row) => !PERNAH_KAWIN.includes(row.maritalStatus);
+const notDivorced = (row) => row.maritalStatus !== CERAI_HIDUP;
+const notWidowed = (row) => row.maritalStatus !== CERAI_MATI;
+// Nomor akta hanya diisi bila statusnya "Ada" (kode 2), bukan sekadar karena sudah pernah kawin/cerai.
+const noMarriageNumber = (row) => noMarriage(row) || row.marriageCertStatus !== ADA;
+const noDivorceNumber = (row) => notDivorced(row) || row.divorceCertStatus !== ADA;
 const noDisorder = (row) => row.disorder !== ADA;
 
 // Langkah 1: isian sesuai formulir
 export const sections = [
-  // DISIAN OLEH PETUGAS: kode & nama Provinsi/Kab/Kecamatan/Desa (default), Nama Dusun (pilihan), Nomor KK
-  kodeWilayah({ names: true, hamlet: true, kk: true }),
+  // DIISI OLEH PETUGAS: hanya Nama Dusun/Dukuh/Kampung (pilih dari data dusun atau ketik manual); kode wilayah dipatenkan di template PDF.
+  {
+    title: "Dusun (Diisi Oleh Petugas)",
+    hint: "Pilih dari data dusun/dukuh yang tersedia atau ketik nama secara manual.",
+    fields: [f.hamlet("hamlet", "Dusun/Dukuh/Kampung", { from: "dusun" })],
+  },
 
   // DATA KEPALA KELUARGA
   pemohonRingkas([
@@ -66,12 +82,15 @@ export const sections = [
         { key: "bloodType", label: "Golongan Darah", type: "select", options: KODE.bloodType },
         { key: "religion", label: "Agama", type: "select", options: KODE.religion },
         { key: "maritalStatus", label: "Status Perkawinan", type: "select", options: KODE.marital },
-        { key: "marriageCertStatus", label: "Akta Perkawinan/Buku Nikah", type: "select", options: KODE.certificate, optional: true, disabledWhen: neverMarried },
-        { key: "marriageCertNumber", label: "Nomor Akta Perkawinan/Buku Nikah", optional: true, disabledWhen: neverMarried },
-        { key: "marriageDate", label: "Tanggal Perkawinan", type: "date", optional: true, disabledWhen: neverMarried },
+        { key: "marriageCertStatus", label: "Akta Perkawinan/Buku Nikah", type: "select", options: KODE.certificate, optional: true, disabledWhen: noMarriage },
+        { key: "marriageCertNumber", label: "Nomor Akta Perkawinan/Buku Nikah", optional: true, disabledWhen: noMarriageNumber },
+        { key: "marriageDate", label: "Tanggal Perkawinan", type: "date", optional: true, disabledWhen: noMarriage },
         { key: "divorceCertStatus", label: "Akta Cerai/Surat Cerai", type: "select", options: KODE.certificate, optional: true, disabledWhen: notDivorced },
-        { key: "divorceCertNumber", label: "Nomor Akta Perceraian/Surat Cerai", optional: true, disabledWhen: notDivorced },
+        { key: "divorceCertNumber", label: "Nomor Akta Perceraian/Surat Cerai", optional: true, disabledWhen: noDivorceNumber },
         { key: "divorceDate", label: "Tanggal Perceraian", type: "date", optional: true, disabledWhen: notDivorced },
+        // Hanya untuk Cerai Mati (pasangan meninggal)
+        { key: "spouseDeathDate", label: "Tanggal Kematian Pasangan", type: "date", optional: true, disabledWhen: notWidowed },
+        { key: "spouseDeathPlace", label: "Tempat Kematian Pasangan", optional: true, disabledWhen: notWidowed },
 
         // Tabel 3 (kolom 22-30)
         { key: "shdk", label: "Status Hubungan dalam Keluarga", type: "select", options: KODE.shdk },

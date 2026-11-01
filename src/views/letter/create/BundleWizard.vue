@@ -12,7 +12,7 @@
 
    Isian dipakai bersama antar surat: kunci field yang sama (dan pasangan kunci di `bundle.aliases`)
    terisi otomatis dari surat di atasnya, tetap bisa direvisi. */
-import { computed, nextTick, reactive, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch, watchEffect } from "vue";
 import { useRouter } from "vue-router";
 import Button from "primevue/button";
 import Checkbox from "primevue/checkbox";
@@ -101,6 +101,74 @@ watch([() => form.groomStatus, () => form.brideStatus], () => {
   }
 });
 const selectedVisibleCount = computed(() => props.bundle.letters.filter((l) => !l.hidden && selected.value.includes(l.id)).length);
+/* Surat status-perkawinan tertentu hanya boleh diproses untuk duda/janda.
+   Surat yang otomatis dikeluarkan disimpan sementara supaya dapat dikembalikan
+   ketika status diubah lagi ke status yang sesuai. */
+const conditionalLetterRules = computed(() => {
+  if (props.bundle.slug === "permohonan-nikah-laki-laki") {
+    return [
+      { id: "pbm", statusKey: "groomStatus", allowed: ["Duda"] },
+      { id: "kkn", statusKey: "groomStatus", allowed: ["Duda"] },
+    ];
+  }
+  if (props.bundle.slug === "permohonan-nikah-perempuan") {
+    return [
+      { id: "pbn", statusKey: "brideStatus", allowed: ["Janda"] },
+      { id: "n6", statusKey: "brideStatus", allowed: ["Janda"] },
+    ];
+  }
+  return [];
+});
+const temporarilyRemoved = reactive(new Set());
+const conditionalRuleFor = (id) => conditionalLetterRules.value.find((rule) => rule.id === id) ?? null;
+const normalizedStatus = (value) => {
+  const raw = value && typeof value === "object" ? (value.value ?? value.label ?? "") : value;
+  return String(raw ?? "").trim().replace(/^\d+\.\s*/, "").toLocaleLowerCase("id-ID");
+};
+const isConditionalLetterAllowed = (letterOrId) => {
+  const id = typeof letterOrId === "string" ? letterOrId : letterOrId?.id;
+  const rule = conditionalRuleFor(id);
+  if (!rule) return true;
+  const statusValue = form[rule.statusKey];
+  return !statusValue || rule.allowed.map(normalizedStatus).includes(normalizedStatus(statusValue));
+};
+const syncConditionalLetters = () => {
+  for (const rule of conditionalLetterRules.value) {
+    const statusValue = form[rule.statusKey];
+    if (!statusValue) continue;
+
+    const eligible = rule.allowed.map(normalizedStatus).includes(normalizedStatus(statusValue));
+    if (!eligible && selected.value.includes(rule.id)) {
+      selected.value = selected.value.filter((id) => id !== rule.id);
+      temporarilyRemoved.add(rule.id);
+      continue;
+    }
+
+    if (eligible && temporarilyRemoved.has(rule.id)) {
+      if (props.bundle.letters.some((letter) => letter.id === rule.id)) {
+        selected.value = [...new Set([...selected.value, rule.id])];
+      }
+      temporarilyRemoved.delete(rule.id);
+    }
+  }
+};
+watchEffect(syncConditionalLetters);
+const conditionalNotice = computed(() => {
+  const isMale = props.bundle.slug === "permohonan-nikah-laki-laki";
+  const isFemale = props.bundle.slug === "permohonan-nikah-perempuan";
+  if (!isMale && !isFemale) return "";
+
+  const statusKey = isMale ? "groomStatus" : "brideStatus";
+  const status = normalizedStatus(form[statusKey]);
+  if (!status) return "";
+
+  const role = isMale ? "calon suami" : "calon istri";
+  const expected = isMale ? "Duda" : "Janda";
+  const letters = isMale ? "PBM dan KKN" : "PBN dan N6";
+  return status === normalizedStatus(expected)
+    ? `Status ${role} dipilih ${expected}. Surat ${letters} dapat diproses.`
+    : `Status ${role} bukan ${expected}. Surat ${letters} otomatis dikeluarkan dari proses dan akan tersedia kembali jika status diubah ke ${expected}.`;
+});
 const requiresDualCatinLookup = computed(() => selectedLetters.value.some((letter) => {
   const lookupKeys = new Set((letter.sections ?? []).filter((section) => section.lookupKey).map((section) => section.lookupKey));
   return (lookupKeys.has("groom") && lookupKeys.has("bride")) || (lookupKeys.has("child") && lookupKeys.has("childSpouse"));
@@ -179,11 +247,7 @@ const selectAll = () => {
   if (blockedId) autoRemovedConditional.add(blockedId);
   selected.value = props.bundle.letters.filter((l) => !isBlockedLetter(l.id)).map((l) => l.id);
 };
-const clearAll = () => {
-  selectionNotice.value = "";
-  autoRemovedConditional.clear();
-  selected.value = [];
-};
+const clearAll = () => (selected.value = []);
 
 /* ---------- Navigasi ---------- */
 function resetAlerts() {
@@ -386,15 +450,19 @@ async function submit() {
               v-for="l in g.letters"
               :key="l.id"
               class="relative flex cursor-pointer items-start gap-3 rounded-2xl border-2 p-4 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md"
-              :class="isSelected(l.id) ? cardHue(l, gi).selected : cardHue(l, gi).idle"
+              :class="[
+                isSelected(l.id) ? cardHue(l, gi).selected : cardHue(l, gi).idle,
+                !isConditionalLetterAllowed(l) ? 'cursor-not-allowed opacity-60 hover:translate-y-0 hover:shadow-none' : '',
+              ]"
             >
-              <Checkbox :modelValue="isSelected(l.id)" binary class="mt-0.5" @update:modelValue="toggle(l.id)" />
+              <Checkbox :modelValue="isSelected(l.id)" binary class="mt-0.5" :disabled="!isConditionalLetterAllowed(l)" @update:modelValue="toggle(l.id)" />
               <span class="min-w-0 flex-1">
                 <span class="flex items-center gap-2">
                   <span class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-wide" :class="cardHue(l, gi).icon"><i v-if="l.icon" :class="l.icon" class="text-[10px]" />{{ l.cardCode ?? l.code }}</span>
                   <span class="text-sm font-semibold text-slate-800">{{ l.cardTitle ?? l.title }}</span>
                 </span>
                 <span class="block text-xs mt-1 text-slate-500">{{ l.cardDescription ?? l.description }}</span>
+                <span v-if="!isConditionalLetterAllowed(l)" class="mt-1 block text-xs font-medium text-amber-700">Hanya tersedia untuk status {{ conditionalRuleFor(l.id)?.allowed.join("/") }}.</span>
               </span>
             </label>
           </div>
@@ -406,6 +474,9 @@ async function submit() {
 
       <!-- ============ LANGKAH 2: ISIAN — 1 SURAT PER HALAMAN ============ -->
       <div v-else-if="isFields && fLetter" :key="`f-${fLetter.id}`">
+        <Message v-if="conditionalNotice" severity="info" :closable="false" class="mb-5">
+          {{ conditionalNotice }}
+        </Message>
         <!-- Langkah pertama: NIK pemohon → data warga mengisi formulir semua surat terpilih -->
         <ApplicantLookup v-if="showApplicantLookup && fieldIdx === 0" :state="lookup.state" class="mb-5" @search="lookup.search(applicantLookupSections, form, autoFilled)" />
 
@@ -432,7 +503,6 @@ async function submit() {
         </div>
         <h2 class="text-lg font-semibold text-slate-800 mt-1">{{ fLetter.title }}</h2>
         <p class="text-sm mt-1 text-slate-500">{{ fLetter.description }}</p>
-        <Message v-if="selectionNotice" severity="info" :closable="false" class="mt-4">{{ selectionNotice }}</Message>
 
         <div v-if="sectionsOf(fLetter).flatMap((s) => s.fields).some((f) => autoFilled[f.key])" class="mt-4 flex items-start gap-2 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800">
           <i class="pi pi-bolt mt-0.5" />

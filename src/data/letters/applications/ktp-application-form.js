@@ -7,10 +7,16 @@
 // Kecamatan, Desa, tanggal surat, serta tanggal tanda tangan. Nama penandatangan Dukuh dan Camat (Mengetahui) bersifat OPSIONAL; Lurah/Petugas Kalurahan tidak jadi field (ada di otorisasi)
 // (section "Nama Penandatangan"); tanda tangan Pemohon memakai Nama Lengkap di atas.
 // Langkah 3 (cek ulang, ceklis dokumen asli, kirim, pop-up hasil) sudah ditangani LetterWizard.
-import { f, DOC, opt, signerNames } from "@/data/letterFields";
+import { f, DOC, opt, signerNames, kodeWilayah } from "@/data/letterFields";
 
-// Langkah 1: urutan mengikuti formulir: jenis permohonan, Nama Lengkap, No KK, NIK, Alamat, RT, RW
+// Tanda tangan Pemohon (key applicantName, sama dengan public): terisi otomatis dari Nama Lengkap.
+const signers = signerNames(["hamletHead", "districtHead"], "Opsional. Nama Pemohon terisi otomatis dari data warga. Isi nama Dukuh dan Camat bila ingin dicetak; kosongkan bila ditulis tangan.");
+signers.fields.unshift(f.text("applicantName", "Nama Pemohon", { optional: true, from: "fullName" }));
+
+// Langkah 1: urutan mengikuti formulir: kode dusun, jenis permohonan, Nama Lengkap, No KK, NIK, Alamat, RT, RW
 export const sections = [
+  // DIISI OLEH PETUGAS: kode & nama Provinsi/Kab/Kecamatan/Desa dipatenkan di blade; petugas mengisi Kode Dusun + memilih Dusun (dropdown).
+  kodeWilayah({ hamlet: true, hamletCode: true, hamletOptional: true }, "Kode Dusun (Diisi Oleh Petugas)"),
   { title: "Jenis Permohonan", fields: [f.select("applicationType", "Permohonan KTP", ["Baru", "Perpanjangan", "Penggantian"])] },
   {
     title: "Data Pemohon",
@@ -25,7 +31,7 @@ export const sections = [
     ],
   },
   // TTD (4): 1. Pemohon (= name di atas)  2. Dukuh  3. Camat  4. Lurah/Petugas kalurahan
-  signerNames(["hamletHead", "districtHead"], "Opsional. Tanda tangan Pemohon memakai Nama Lengkap di atas. Isi nama Dukuh dan Camat bila ingin dicetak; kosongkan bila ditulis tangan."),
+  signers,
 ];
 
 // Langkah 2: dokumen pendukung (opt(...) = tidak wajib)
