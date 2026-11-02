@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import Button from 'primevue/button'
+import AppButton from '@/components/common/AppButton.vue'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import Select from 'primevue/select'
@@ -251,20 +252,18 @@ async function removeRequirement() {
 
 <template>
   <div class="space-y-6">
-    <!-- Header (sama seperti halaman lain) -->
-    <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-      <div>
+    <!-- Header (tombol Kembali selalu di samping, termasuk di mobile) -->
+    <div class="flex items-center justify-between gap-3">
+      <div class="min-w-0">
         <h1 class="m-0 text-2xl font-bold text-primary-900">{{ isNew ? 'Tambah' : 'Kelola' }} Tipe Surat</h1>
-        <p class="m-0 mt-1 text-sm text-neutral-500">
+        <p class="m-0 mt-1 truncate text-sm text-neutral-500">
           {{ isNew ? 'Isi informasi dasar untuk membuat tipe surat baru.' : form.letter_name || 'Konfigurasi tipe surat.' }}
         </p>
       </div>
-      <Button
+      <AppButton
         label="Kembali"
-        icon="pi pi-arrow-left"
-        severity="secondary"
-        outlined
-        class="self-start sm:self-auto"
+        variant="outline"
+        class="shrink-0"
         @click="router.push({ name: 'letter-type-list' })"
       />
     </div>

@@ -210,6 +210,10 @@ function previewPotential() {
   window.open(`/village-potential/preview/${potentialId.value ?? ''}`, '_blank')
 }
 
+function goBack() {
+  router.push({ name: 'village-potential-list' })
+}
+
 function saveDraft() {
   status.value = 'Draft'
   router.push({ name: 'village-potential-list' })
@@ -289,10 +293,17 @@ function moveToTrash() {
 <template>
   <div>
 
-    <div class="mb-6">
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
       <h1 class="m-0 text-2xl font-bold text-primary-900">
         {{ pageTitle }}
       </h1>
+
+      <Button
+        label="Kembali"
+        outlined
+        type="button"
+        @click="goBack"
+      />
     </div>
 
     <div class="grid grid-cols-1 items-start gap-5 md:grid-cols-[1fr_300px]">

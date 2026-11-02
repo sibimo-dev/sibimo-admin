@@ -332,6 +332,13 @@ function handleCancel() {
       <h1 class="m-0 text-[22px] font-bold text-slate-900">
         {{ pageTitle }}
       </h1>
+
+      <Button
+        label="Kembali"
+        outlined
+        type="button"
+        @click="handleCancel"
+      />
     </div>
 
     <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">

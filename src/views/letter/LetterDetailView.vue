@@ -518,7 +518,7 @@ function sendNotification() {
 
     <div v-else-if="!record" class="max-w-md mx-auto text-center py-20">
       <p class="text-slate-500 text-base mb-4">Data surat tidak ditemukan.</p>
-      <AppButton label="Kembali ke Daftar Surat" @click="router.push('/letter')" />
+      <AppButton label="Kembali" variant="outline" @click="router.push('/letter')" />
     </div>
 
     <div v-else>
@@ -533,12 +533,7 @@ function sendNotification() {
             {{ status.label }}
           </span>
         </div>
-        <AppButton
-          label="Kembali ke Daftar"
-          icon="pi pi-arrow-left"
-          variant="outline"
-          @click="router.push('/letter')"
-        />
+        <AppButton label="Kembali" variant="outline" @click="router.push('/letter')" />
       </div>
 
       <!-- Informasi pemohon: kartu selebar halaman (landscape) -->
