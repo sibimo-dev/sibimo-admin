@@ -65,7 +65,13 @@ async function searchCatin(section) {
       emit("resident-cleared", section.lookupKey);
       return;
     }
-    const parentSections = props.sections.filter((candidate) => candidate.parentOf === section.lookupKey);
+    const targetKey = section.lookupKey;
+    const parentSections = props.sections.filter((candidate) =>
+      candidate !== section && (
+        candidate.parentOf === targetKey ||
+        (candidate.fields.length > 0 && candidate.fields.every((f) => f.key.startsWith(targetKey)))
+      )
+    );
     const filled = applyResidentToSections(props.form, section, parentSections, resident, props.autoFilled);
     Object.assign(state, { status: "found", name: resident.fullName, filled: filled.length, message: "" });
     emit("resident-found", { lookupKey: section.lookupKey, resident });
@@ -101,6 +107,25 @@ function onCatinNikInput(section, event) {
   }, 200);
   catinSearchTimers.set(section.lookupKey, timer);
 }
+
+// Sinkronkan bila NIK diketik/ditempel langsung pada field NIK form (mis. brideNik / groomNik)
+watch(
+  () => [props.form?.groomNik, props.form?.brideNik],
+  ([groomNik, brideNik]) => {
+    const groomDigits = String(groomNik ?? "").replace(/\D/g, "");
+    if (groomDigits.length === 16 && catinState("groom").nik !== groomDigits) {
+      catinState("groom").nik = groomDigits;
+      const s = props.sections.find((x) => x.lookupKey === "groom");
+      if (s) searchCatin(s);
+    }
+    const brideDigits = String(brideNik ?? "").replace(/\D/g, "");
+    if (brideDigits.length === 16 && catinState("bride").nik !== brideDigits) {
+      catinState("bride").nik = brideDigits;
+      const s = props.sections.find((x) => x.lookupKey === "bride");
+      if (s) searchCatin(s);
+    }
+  },
+);
 
 /* ---------- Surat kematian: NIK JENAZAH → data jenazah, KK, kepala keluarga, ibu & ayah ----------
    Begitu isian "NIK" pada blok Data Jenazah (key deceasedNik) berisi 16 digit, data warga dicari lewat NIK itu

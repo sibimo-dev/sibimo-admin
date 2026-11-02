@@ -16,6 +16,7 @@ const props = defineProps({
   religionOptions: { type: Array, default: () => [] },
   nationalityOptions: { type: Array, default: () => [] },
   occupationSuggestions: { type: Array, default: () => [] },
+  loading: { type: Boolean, default: false },
 })
 
 defineEmits(['update:nik', 'search-occupation'])
@@ -29,10 +30,15 @@ const datePt = { pcInputText: { root: { class: 'w-full px-3 py-2.5' } } }
 const lowerLabel = computed(() => props.label.toLowerCase())
 const nikInvalid = computed(() => props.model.nationalId !== '' && !/^\d{16}$/.test(props.model.nationalId))
 const hint = computed(() => {
+  if (props.loading) return { tone: 'warn', text: `Mencari data ${props.label} di database...` }
   if (nikInvalid.value) return { tone: 'error', text: `NIK ${props.label} harus tepat 16 digit angka.` }
-  if (props.model.fromRegistry) return { tone: 'ok', text: 'Data ditemukan di data warga. Hanya NIK yang bisa diubah.' }
-  if (/^\d{16}$/.test(props.model.nationalId)) return { tone: 'warn', text: 'NIK belum terdaftar di data warga. Lengkapi data secara manual.' }
-  return { tone: 'idle', text: 'Isi NIK terlebih dulu. Bila sudah terdaftar (termasuk beda KK), data lain terisi otomatis.' }
+  if (props.model.fromRegistry) {
+    const nameInfo = props.model.fullName ? ` (${props.model.fullName})` : ''
+    return { tone: 'ok', text: `Data ${props.label} ditemukan di data warga${nameInfo}. Data lain terisi otomatis.` }
+  }
+  // NIK 16 digit tapi tidak ditemukan → tidak bisa disimpan (sesuai ketentuan senior)
+  if (/^\d{16}$/.test(props.model.nationalId)) return { tone: 'error', text: `NIK ${props.label} tidak ditemukan di data warga. Kosongkan jika belum terdaftar, atau daftarkan terlebih dulu.` }
+  return { tone: 'idle', text: 'Isi NIK terlebih dulu. Jika sudah terdaftar, data lain terisi otomatis.' }
 })
 const hintClass = computed(() => ({
   error: 'text-red-600',
@@ -47,16 +53,23 @@ const hintClass = computed(() => ({
     <div class="text-[13px] font-semibold text-neutral-800">{{ title }}</div>
 
     <div class="flex flex-col gap-2">
-      <label :class="labelClass" :for="`${idPrefix}NationalId`">NIK {{ label }}</label>
+      <div class="flex items-center justify-between">
+        <label :class="labelClass" :for="`${idPrefix}NationalId`">NIK {{ label }}</label>
+        <span v-if="loading" class="text-xs text-amber-600 flex items-center gap-1 font-medium">
+          <i class="pi pi-spin pi-spinner text-xs" /> Mencari...
+        </span>
+      </div>
       <InputText
         :id="`${idPrefix}NationalId`"
         :modelValue="model.nationalId"
         maxlength="16"
         inputmode="numeric"
         :placeholder="`16 digit NIK ${lowerLabel}`"
-        :invalid="nikInvalid"
-        :class="[inputClass, nikInvalid ? '!border-red-500 focus:!ring-red-100' : '']"
+        :invalid="hint.tone === 'error'"
+        :class="[inputClass, hint.tone === 'error' ? '!border-red-500 focus:!ring-red-100' : '']"
         @update:modelValue="$emit('update:nik', $event)"
+        @input="$emit('update:nik', $event?.target?.value ?? $event)"
+        @change="$emit('update:nik', $event?.target?.value ?? $event)"
       />
       <small class="text-xs" :class="hintClass">{{ hint.text }}</small>
     </div>
