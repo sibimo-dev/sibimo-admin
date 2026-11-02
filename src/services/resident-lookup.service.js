@@ -141,9 +141,19 @@ export function toResident(c, citizens = []) {
     const sameGender = candidates.filter((item) => normGender(item.gender) === gender)
     return sameGender.length === 1 ? sameGender[0] : candidates.length === 1 ? candidates[0] : null
   }
-  const fallbackParent = (nik, name) => ({
+  const fallbackParent = (nik, name, gender = '') => ({
     fullName: name ?? '',
     nik: normNik(nik),
+    gender,
+    nationality: 'WNI',
+    religion: c.religion ?? 'Islam',
+    address: c.address ?? c.ktp_address ?? '',
+    birthPlace: '',
+    birthDate: null,
+    birthPlaceDate: '',
+    occupation: '',
+    education: '',
+    fatherName: '',
   })
   // Jika NIK orang tua belum tersimpan pada baris anak, tetap coba hubungkan
   // lewat nama yang sama secara unik agar detail orang tua ikut lengkap.
@@ -182,8 +192,8 @@ export function toResident(c, citizens = []) {
     nationality: c.nationality ?? 'WNI',
     address: c.address ?? c.ktp_address ?? '',
     phoneNumber: c.phone_number ?? '',
-    father: fatherRecord ? toResidentPerson(fatherRecord) : fallbackParent(c.father_national_id, c.father_name),
-    mother: motherRecord ? toResidentPerson(motherRecord) : fallbackParent(c.mother_national_id, c.mother_name),
+    father: fatherRecord ? toResidentPerson(fatherRecord) : fallbackParent(c.father_national_id, c.father_name, 'Laki-laki'),
+    mother: motherRecord ? toResidentPerson(motherRecord) : fallbackParent(c.mother_national_id, c.mother_name, 'Perempuan'),
     fatherName: fatherRecord?.full_name ?? c.father_name ?? '',
     motherName: motherRecord?.full_name ?? c.mother_name ?? '',
     spouse: spouseOf(c, citizens),

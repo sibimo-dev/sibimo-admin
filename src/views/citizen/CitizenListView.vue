@@ -1131,60 +1131,74 @@ function exportReportToExcel() {
 }
 
 function exportAllCitizensToExcel() {
+  // Kolom diurutkan sama persis dengan citizenImportColumns agar file hasil export
+  // langsung bisa di-re-import tanpa perlu mengatur ulang kolom.
   const columns = [
-    ['ID Warga', 'id'],
-    ['Jenis Data', 'recordType'],
-    ['Peristiwa', 'recordEvent'],
-    ['Tahun Peristiwa', 'recordYear'],
-    ['Kode Gelar', 'titleCode'],
-    ['Nama Lengkap', 'name'],
-    ['NIK', 'nationalId'],
+    ['JENIS DATA', 'recordType'],
+    ['PERISTIWA', 'recordEvent'],
+    ['TAHUN PERISTIWA', 'recordYear'],
+    ['GELAR', 'titleCode'],
     ['Nomor KK', 'familyCardNumber'],
-    ['Dusun', 'dusun'],
+    ['DUSUN', 'dusun'],
+    ['ALAMAT', 'address'],
     ['RT', 'rt'],
     ['RW', 'rw'],
-    ['Nama Ketua RT', 'rtHeadName'],
-    ['Nama Ketua RW', 'rwHeadName'],
-    ['Tempat Lahir', 'birthPlace'],
-    ['Tanggal Lahir', 'birthDate'],
-    ['Umur', 'age'],
-    ['Jenis Kelamin', 'gender'],
-    ['Alamat', 'address'],
-    ['Alamat sesuai KTP', 'ktpAddress'],
-    ['Nomor Telepon', 'phoneNumber'],
-    ['Status Akta Lahir', 'birthCertificateStatus'],
-    ['Nomor Akta Lahir', 'birthCertificateNumber'],
-    ['Golongan Darah', 'bloodType'],
-    ['Pekerjaan', 'occupation'],
-    ['Pendidikan', 'education'],
-    ['Status Perkawinan', 'maritalStatus'],
-    ['Status Akta Kawin', 'marriageCertificateStatus'],
-    ['Nomor Akta Kawin', 'marriageCertificateNumber'],
-    ['Tanggal Kawin', 'marriageDate'],
-    ['Status Akta Cerai', 'divorceCertificateStatus'],
-    ['Nomor Akta Cerai', 'divorceCertificateNumber'],
-    ['Tanggal Cerai', 'divorceDate'],
-    ['Hubungan Keluarga', 'familyRelationship'],
-    ['Kelainan Fisik', 'physicalDisability'],
-    ['Status Penyandang Cacat', 'disabilityStatus'],
-    ['Agama', 'religion'],
-    ['Organisasi Kepercayaan', 'beliefOrganization'],
-    ['NIK Ibu', 'motherNationalId'],
-    ['Nama Ibu', 'motherName'],
-    ['NIK Ayah', 'fatherNationalId'],
-    ['Nama Ayah', 'fatherName'],
-    ['Kewarganegaraan', 'nationality'],
-    ['Alamat Sebelumnya', 'previousAddress'],
-    ['Nomor Paspor', 'passportNumber'],
-    ['Tanggal Berakhir Paspor', 'passportExpiryDate'],
-    ['Status', 'status'],
-    ['Dibuat Pada', 'createdAt'],
-    ['Diperbarui Pada', 'updatedAt'],
+    ['NIK', 'nationalId'],
+    ['NAMA LENGKAP', 'name'],
+    ['L/P', 'gender'],
+    ['TEMPAT LAHIR', 'birthPlace'],
+    ['TANGGAL LAHIR', 'birthDate'],
+    ['UMUR', 'age'],
+    ['AKTA LAHIR', 'birthCertificateStatus'],
+    ['NOMOR AKTA LAHIR', 'birthCertificateNumber'],
+    ['GOL. DARAH', 'bloodType'],
+    ['AGAMA', 'religion'],
+    ['STATUS KAWIN', 'maritalStatus'],
+    ['AKTA KAWIN', 'marriageCertificateStatus'],
+    ['NOMOR AKTA KAWIN', 'marriageCertificateNumber'],
+    ['TANGGAL KAWIN', 'marriageDate'],
+    ['AKTA CERAI', 'divorceCertificateStatus'],
+    ['NOMOR AKTA CERAI', 'divorceCertificateNumber'],
+    ['TANGGAL CERAI', 'divorceDate'],
+    ['STATUS HUB DLM KELUARGA', 'familyRelationship'],
+    ['KELAINAN FISIK', 'physicalDisability'],
+    ['PENYANDANG CACAT', 'disabilityStatus'],
+    ['PENDIDIKAN TERAKHIR', 'education'],
+    ['JENIS PEKERJAAN', 'occupation'],
+    ['NIK IBU', 'motherNationalId'],
+    ['NAMA LENGKAP IBU', 'motherName'],
+    ['NIK AYAH', 'fatherNationalId'],
+    ['NAMA LENGKAP AYAH', 'fatherName'],
+    ['KEWARGANEGARAAN', 'nationality'],
+    ['NAMA KETUA RT', 'rtHeadName'],
+    ['NAMA KETUA RW', 'rwHeadName'],
+    ['NOMOR TELEPON', 'phoneNumber'],
+    ['ALAMAT SESUAI KTP', 'ktpAddress'],
+    ['ALAMAT SEBELUMNYA', 'previousAddress'],
+    ['NOMOR PASPOR', 'passportNumber'],
+    ['TANGGAL BERAKHIR PASPOR', 'passportExpiryDate'],
+    ['ORGANISASI KEPERCAYAAN', 'beliefOrganization'],
+    ['STATUS', 'status'],
   ]
+  // Mapping transformasi kolom khusus yang perlu dikonversi formatnya
+  // agar file hasil export langsung bisa di-re-import.
+  const columnTransforms = {
+    gender: (val) => {
+      const g = String(val ?? '').trim().toLowerCase()
+      if (g === 'laki-laki' || g === 'l') return 'L'
+      if (g === 'perempuan' || g === 'p') return 'P'
+      return val ?? ''
+    },
+  }
 
   const rows = [
     columns.map(([label]) => label),
-    ...residents.value.map((resident) => columns.map(([, key]) => resident[key] ?? '')),
+    ...residents.value.map((resident) =>
+      columns.map(([, key]) => {
+        const val = resident[key] ?? ''
+        return columnTransforms[key] ? columnTransforms[key](val) : val
+      }),
+    ),
   ]
 
   const worksheet = XLSX.utils.aoa_to_sheet(rows)
@@ -1198,6 +1212,7 @@ function exportAllCitizensToExcel() {
   XLSX.writeFile(workbook, `Data-Warga-Lengkap-${dateLabel}.xlsx`)
   downloadDialogVisible.value = false
 }
+
 
 function exportReportToPdf() {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
