@@ -91,6 +91,12 @@ async function loadComplaints({ background = false } = {}) {
     if (!background) loading.value = false;
   }
 }
+function openDetail(complaint) {
+  router.push({
+    name: "complaint-response",
+    params: { id: complaint.complaint_id },
+  });
+}
 onMounted(() => loadComplaints({ background: Boolean(cachedRows) }));
 </script>
 <template>
@@ -100,38 +106,37 @@ onMounted(() => loadComplaints({ background: Boolean(cachedRows) }));
       Kelola laporan pengaduan masyarakat.
     </p>
     <p v-if="loadError" class="text-sm text-red-600">{{ loadError }}</p>
+
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-      <Card
-        ><template #content
-          ><div class="text-xs text-gray-500">TOTAL ADUAN</div>
-          <div class="text-3xl font-bold mt-2">{{ stats.total }}</div></template
-        ></Card
-      ><Card
-        ><template #content
-          ><div class="text-xs text-gray-500">MENUNGGU VERIFIKASI</div>
-          <div class="text-3xl font-bold mt-2">
-            {{ stats.submitted }}
-          </div></template
-        ></Card
-      ><Card
-        ><template #content
-          ><div class="text-xs text-gray-500">SEDANG DIPROSES</div>
-          <div class="text-3xl font-bold mt-2">
-            {{ stats.progress }}
-          </div></template
-        ></Card
-      ><Card
-        ><template #content
-          ><div class="text-xs text-gray-500">SELESAI</div>
-          <div class="text-3xl font-bold mt-2">
-            {{ stats.resolved }}
-          </div></template
-        ></Card
-      >
+      <Card>
+        <template #content>
+          <div class="text-xs text-gray-500">TOTAL ADUAN</div>
+          <div class="text-3xl font-bold mt-2">{{ stats.total }}</div>
+        </template>
+      </Card>
+      <Card>
+        <template #content>
+          <div class="text-xs text-gray-500">MENUNGGU VERIFIKASI</div>
+          <div class="text-3xl font-bold mt-2">{{ stats.submitted }}</div>
+        </template>
+      </Card>
+      <Card>
+        <template #content>
+          <div class="text-xs text-gray-500">SEDANG DIPROSES</div>
+          <div class="text-3xl font-bold mt-2">{{ stats.progress }}</div>
+        </template>
+      </Card>
+      <Card>
+        <template #content>
+          <div class="text-xs text-gray-500">SELESAI</div>
+          <div class="text-3xl font-bold mt-2">{{ stats.resolved }}</div>
+        </template>
+      </Card>
     </div>
-    <Card
-      ><template #content
-        ><div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+
+    <Card>
+      <template #content>
+        <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div class="flex flex-wrap items-center gap-2">
             <AppButton
               v-for="filter in statusFilters"
@@ -142,63 +147,74 @@ onMounted(() => loadComplaints({ background: Boolean(cachedRows) }));
               @click="activeFilter = filter.value"
             />
           </div>
-          <IconField>
+          <IconField class="w-full md:w-auto">
             <InputIcon class="pi pi-search" />
             <InputText
               v-model="searchQuery"
               placeholder="Cari ID, pelapor, atau topik..."
-              class="w-72"
+              class="w-full md:w-72"
             />
           </IconField>
         </div>
+
         <div class="complaint-table">
-        <AppDataTable
-          :columns="columns"
-          :rows="filteredRows"
-          :loading="loading"
-          data-key="complaint_id"
-          ><template #complaint_code="{ data }"
-            ><strong>{{ data.complaint_code }}</strong>
-            <div class="text-xs text-gray-400">
-              {{ data.submitted_at }}
-            </div></template
-          ><template #reporter_name="{ data }"
-            ><div class="font-medium">{{ data.reporter_name }}</div>
-            <div class="text-sm font-semibold">{{ data.title }}</div>
-            <div class="text-xs text-gray-500 line-clamp-2">
-              {{ data.description }}
-            </div></template
-          ><template #category="{ data }"
-            ><Tag
-              :value="categoryMeta[data.category] ?? data.category"
-              severity="secondary" /></template
-          ><template #status="{ data }"
-            ><Tag
-              :value="statusMeta[data.status]?.label ?? data.status"
-              :severity="statusMeta[data.status]?.severity" /></template
-          ><template #actions="{ data }"
-            ><AppButton
-              label="Detail"
-              variant="secondary"
-              outlined
-              size="small"
-              @click="
-                router.push({
-                  name: 'complaint-response',
-                  params: { id: data.complaint_id },
-                })
-              " /></template></AppDataTable>
-        </div></template
-    ></Card>
+          <AppDataTable
+            :columns="columns"
+            :rows="filteredRows"
+            :loading="loading"
+            data-key="complaint_id"
+          >
+            <template #complaint_code="{ data }">
+              <strong>{{ data.complaint_code }}</strong>
+              <div class="text-xs text-gray-400">{{ data.submitted_at }}</div>
+            </template>
+            <template #reporter_name="{ data }">
+              <div class="font-medium">{{ data.reporter_name }}</div>
+              <div class="text-sm font-semibold">{{ data.title }}</div>
+              <div class="text-xs text-gray-500 line-clamp-2">
+                {{ data.description }}
+              </div>
+            </template>
+            <template #category="{ data }">
+              <Tag
+                :value="categoryMeta[data.category] ?? data.category"
+                severity="secondary"
+              />
+            </template>
+            <template #status="{ data }">
+              <Tag
+                :value="statusMeta[data.status]?.label ?? data.status"
+                :severity="statusMeta[data.status]?.severity"
+              />
+            </template>
+            <template #actions="{ data }">
+              <AppButton
+                label="Detail"
+                variant="secondary"
+                outlined
+                size="small"
+                @click="openDetail(data)"
+              />
+            </template>
+          </AppDataTable>
+        </div>
+      </template>
+    </Card>
   </div>
 </template>
 
 <style scoped>
+/* Mobile: tabel dibiarkan selebar isinya dan bisa digeser ke samping */
+.complaint-table :deep(.p-datatable-table-container) { overflow-x: auto; }
+.complaint-table :deep(.p-datatable-table) { min-width: 44rem; }
 
-.complaint-table :deep(.p-datatable-table) { table-layout: fixed; width: 100%; }
-.complaint-table :deep(th:nth-child(1)), .complaint-table :deep(td:nth-child(1)) { width: 18%; }
-.complaint-table :deep(th:nth-child(2)), .complaint-table :deep(td:nth-child(2)) { width: 40%; }
-.complaint-table :deep(th:nth-child(3)), .complaint-table :deep(td:nth-child(3)) { width: 16%; }
-.complaint-table :deep(th:nth-child(4)), .complaint-table :deep(td:nth-child(4)) { width: 16%; }
-.complaint-table :deep(th:nth-child(5)), .complaint-table :deep(td:nth-child(5)) { width: 10%; }
+/* Tablet/desktop: lebar kolom tetap berbasis persentase */
+@media (min-width: 768px) {
+  .complaint-table :deep(.p-datatable-table) { table-layout: fixed; width: 100%; min-width: 0; }
+  .complaint-table :deep(th:nth-child(1)), .complaint-table :deep(td:nth-child(1)) { width: 18%; }
+  .complaint-table :deep(th:nth-child(2)), .complaint-table :deep(td:nth-child(2)) { width: 40%; }
+  .complaint-table :deep(th:nth-child(3)), .complaint-table :deep(td:nth-child(3)) { width: 16%; }
+  .complaint-table :deep(th:nth-child(4)), .complaint-table :deep(td:nth-child(4)) { width: 16%; }
+  .complaint-table :deep(th:nth-child(5)), .complaint-table :deep(td:nth-child(5)) { width: 10%; }
+}
 </style>
