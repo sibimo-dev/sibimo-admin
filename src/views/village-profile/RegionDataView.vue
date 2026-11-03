@@ -13,7 +13,10 @@ import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
-import { getRegions, createRegion, updateRegion, deleteRegion } from '@/services/region.service'
+import {
+  getRegions, createRegion, updateRegion, deleteRegion,
+  getRegionAreas, createRw, deleteRw, createRt, deleteRt,
+} from '@/services/region.service'
 import { getListCache, setListCache, updateListCache } from '@/services/list-cache'
 
 const toast = useToast()
@@ -122,10 +125,12 @@ function hamletTotals(h) {
 /* ------------------------------------------------------------------ */
 function normalizeRt(rt) {
   if (typeof rt === 'number' || typeof rt === 'string') {
-    return { rtNumber: Number(rt), kk: 0, male: 0, female: 0 }
+    return { id: null, rtNumber: Number(rt), kk: 0, male: 0, female: 0 }
   }
   return {
-    rtNumber: Number(rt.rt_number ?? rt.rtNumber),
+    // `rt` = field dari /region-areas, `rt_number` = field lama, `rtNumber` = field state lokal
+    id: rt.id ?? null,
+    rtNumber: Number(rt.rt ?? rt.rt_number ?? rt.rtNumber),
     kk: toCount(rt.kk_count ?? rt.kk),
     male: toCount(rt.male_count ?? rt.male),
     female: toCount(rt.female_count ?? rt.female),
@@ -160,36 +165,20 @@ function serializeRws(rws) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Penyimpanan RW/RT sementara di browser (frontend saja).             */
-/* Dipakai selama backend belum menyimpan field `rws`.                 */
+/* Cache area: hasil /region-areas di-index per region_id             */
 /* ------------------------------------------------------------------ */
-const LOCAL_RWS_KEY = 'region-rws-local'
+const areasByRegion = ref({})
 
-function readLocalRws() {
+async function loadRegionAreas() {
   try {
-    return JSON.parse(localStorage.getItem(LOCAL_RWS_KEY)) ?? {}
+    const areas = await getRegionAreas()
+    const indexed = {}
+    ;(Array.isArray(areas) ? areas : []).forEach((area) => {
+      indexed[area.region_id] = area
+    })
+    areasByRegion.value = indexed
   } catch {
-    return {}
-  }
-}
-
-function writeLocalRws(regionId, serializedRws) {
-  try {
-    const all = readLocalRws()
-    all[regionId] = serializedRws
-    localStorage.setItem(LOCAL_RWS_KEY, JSON.stringify(all))
-  } catch {
-    // localStorage penuh atau diblokir: abaikan, data tetap tampil di sesi ini
-  }
-}
-
-function removeLocalRws(regionId) {
-  try {
-    const all = readLocalRws()
-    delete all[regionId]
-    localStorage.setItem(LOCAL_RWS_KEY, JSON.stringify(all))
-  } catch {
-    // abaikan
+    // jika gagal, RW/RT tetap kosong – tidak memblokir tampilan padukuhan
   }
 }
 
@@ -289,15 +278,17 @@ const rtForm = reactive({ rwKey: null, rtInput: '' })
 /* ------------------------------------------------------------------ */
 /* Mapping data backend -> tampilan                                    */
 /* ------------------------------------------------------------------ */
-function toHamletView(item) {
-  const sourceRws =
-    Array.isArray(item.rws) && item.rws.length > 0
-      ? item.rws
-      : (readLocalRws()[item.region_id] ?? [])
+// Gabungkan data region (statistik) dengan data area (hierarki RW/RT dari /region-areas)
+function toHamletView(item, areaIndex) {
+  const area = (areaIndex ?? areasByRegion.value)[item.region_id]
+
+  // Data RW/RT dari /region-areas (prioritas) atau field rws di item sendiri
+  const sourceRws = Array.isArray(area?.rws) && area.rws.length > 0
+    ? area.rws
+    : (Array.isArray(item.rws) && item.rws.length > 0 ? item.rws : [])
 
   const rws = sourceRws
     .map((rw) => {
-      // Data lama: hanya nomor RT (angka) atau hanya rt_count
       const rawRts = Array.isArray(rw.rts)
         ? rw.rts
         : Array.from({ length: Number(rw.rt_count) || 0 }, (_, i) => i + 1)
@@ -306,10 +297,12 @@ function toHamletView(item) {
       rawRts
         .map(normalizeRt)
         .filter((rt) => rt.rtNumber > 0)
-        .forEach((rt) => byNumber.set(rt.rtNumber, rt))
+        .forEach((rt) => byNumber.set(rt.rtNumber, { ...rt, id: rt.id ?? null }))
 
       return {
-        rwNumber: Number(rw.rw_number),
+        // id RW dari backend (dipakai untuk delete)
+        id: rw.id ?? null,
+        rwNumber: Number(rw.rw ?? rw.rw_number),
         rts: [...byNumber.values()].sort((a, b) => a.rtNumber - b.rtNumber),
       }
     })
@@ -319,7 +312,6 @@ function toHamletView(item) {
     id: item.region_id,
     name: item.name,
     headName: item.head_name ?? '',
-    // angka tersimpan, hanya dipakai bila padukuhan belum punya data RT
     kkCount: item.kk_count ?? 0,
     population: item.population ?? 0,
     maleCount: item.male_count ?? 0,
@@ -345,10 +337,19 @@ function buildPayload(source) {
 
 async function loadRegions({ background = false } = {}) {
   try {
-    const data = await getRegions()
+    // Muat statistik padukuhan dan hierarki RW/RT secara paralel
+    const [data, areas] = await Promise.all([getRegions(), getRegionAreas()])
     const normalized = Array.isArray(data) ? data : []
+
+    // Bangun index area per region_id
+    const areaIndex = {}
+    ;(Array.isArray(areas) ? areas : []).forEach((area) => {
+      areaIndex[area.region_id] = area
+    })
+    areasByRegion.value = areaIndex
+
     setListCache('regions', normalized)
-    hamlets.value = normalized.map(toHamletView)
+    hamlets.value = normalized.map((item) => toHamletView(item, areaIndex))
     regionLoadError.value = ''
   } catch (error) {
     regionLoadError.value =
@@ -440,9 +441,7 @@ function warn(summary, detail) {
   toast.add({ severity: 'warn', summary, detail, life: 3500 })
 }
 
-function persistRws(hamlet) {
-  writeLocalRws(hamlet.id, serializeRws(hamlet.rws))
-}
+// persistRws: tidak lagi dipakai karena RW/RT disimpan langsung ke backend
 
 function openStructureDialog(hamletId = null) {
   structureEditId.value = hamletId
@@ -508,8 +507,9 @@ async function deleteHamletFromDialog(h) {
   if (String(rtForm.rwKey ?? '').startsWith(`${h.id}:`)) rtForm.rwKey = null
 }
 
-// 2) RW
-function addRw() {
+// 2) RW – simpan ke backend
+const addingRw = ref(false)
+async function addRw() {
   const hamlet = hamlets.value.find((h) => h.id === rwForm.hamletId)
   if (!hamlet) return warn('Belum lengkap', 'Pilih padukuhan terlebih dahulu')
 
@@ -521,15 +521,28 @@ function addRw() {
     return warn('Sudah ada', `${rwLabel(number)} sudah ada di padukuhan ${hamlet.name}`)
   }
 
-  hamlet.rws.push({ rwNumber: number, rts: [] })
-  hamlet.rws.sort((a, b) => a.rwNumber - b.rwNumber)
-  persistRws(hamlet)
-
-  rtForm.rwKey = `${hamlet.id}:${number}`
-  rwForm.rwNumber = number + 1
+  addingRw.value = true
+  try {
+    const saved = await createRw({ region_id: hamlet.id, number: String(number) })
+    hamlet.rws.push({ id: saved.id, rwNumber: number, rts: [] })
+    hamlet.rws.sort((a, b) => a.rwNumber - b.rwNumber)
+    rtForm.rwKey = `${hamlet.id}:${number}`
+    rwForm.rwNumber = number + 1
+    toast.add({ severity: 'success', summary: 'Berhasil', detail: `${rwLabel(number)} ditambahkan`, life: 2500 })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal menambah RW',
+      detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+      life: 4000,
+    })
+  } finally {
+    addingRw.value = false
+  }
 }
 
-function removeRw(row) {
+const removingRw = ref(false)
+async function removeRw(row) {
   const hamlet = hamlets.value.find((h) => h.id === row.hamletId)
   if (!hamlet) return
   if (
@@ -538,14 +551,36 @@ function removeRw(row) {
   ) {
     return
   }
-  hamlet.rws = hamlet.rws.filter((rw) => rw.rwNumber !== row.rwNumber)
-  persistRws(hamlet)
-  if (rtForm.rwKey === row.key) rtForm.rwKey = null
+
+  const rw = hamlet.rws.find((r) => r.rwNumber === row.rwNumber)
+  if (!rw?.id) {
+    // Hanya ada di state lokal (belum sempat disimpan ke backend) — cukup hapus dari state
+    hamlet.rws = hamlet.rws.filter((r) => r.rwNumber !== row.rwNumber)
+    if (rtForm.rwKey === row.key) rtForm.rwKey = null
+    return
+  }
+
+  removingRw.value = true
+  try {
+    await deleteRw(rw.id)
+    hamlet.rws = hamlet.rws.filter((r) => r.rwNumber !== row.rwNumber)
+    if (rtForm.rwKey === row.key) rtForm.rwKey = null
+    toast.add({ severity: 'success', summary: 'Berhasil', detail: `${rwLabel(row.rwNumber)} dihapus`, life: 2500 })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal menghapus RW',
+      detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+      life: 4000,
+    })
+  } finally {
+    removingRw.value = false
+  }
 }
 
 // 3) RT: nomor boleh satu atau banyak ("1", "1-5", "6, 7, 9-10").
-// KK, jiwa, dan jenis kelamin tidak diisi manual.
-function addRt() {
+const addingRt = ref(false)
+async function addRt() {
   const row = rwRows.value.find((r) => r.key === rtForm.rwKey)
   if (!row) return warn('Belum lengkap', 'Pilih RW terlebih dahulu')
 
@@ -565,21 +600,58 @@ function addRt() {
     return warn('Sudah ada', `${formatRtList(list)} sudah ada di ${rwLabel(rw.rwNumber)}`)
   }
 
-  fresh.forEach((rtNumber) =>
-    rw.rts.push({ rtNumber, kk: 0, male: 0, female: 0 }),
-  )
-  rw.rts.sort((a, b) => a.rtNumber - b.rtNumber)
-  persistRws(hamlet)
+  if (!rw.id) {
+    return warn('RW belum tersimpan', 'Simpan RW ke backend terlebih dahulu sebelum menambah RT')
+  }
 
-  rtForm.rtInput = ''
+  addingRt.value = true
+  try {
+    for (const rtNumber of fresh) {
+      const saved = await createRt({ rw_id: rw.id, number: String(rtNumber) })
+      rw.rts.push({ id: saved.id, rtNumber, kk: 0, male: 0, female: 0 })
+    }
+    rw.rts.sort((a, b) => a.rtNumber - b.rtNumber)
+    rtForm.rtInput = ''
+    toast.add({ severity: 'success', summary: 'Berhasil', detail: `${fresh.length} RT ditambahkan ke ${rwLabel(rw.rwNumber)}`, life: 2500 })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal menambah RT',
+      detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+      life: 4000,
+    })
+  } finally {
+    addingRt.value = false
+  }
 }
 
-function removeRt(row) {
+const removingRt = ref(false)
+async function removeRt(row) {
   const hamlet = hamlets.value.find((h) => h.id === row.hamletId)
   const rw = hamlet?.rws.find((item) => item.rwNumber === row.rwNumber)
   if (!rw) return
-  rw.rts = rw.rts.filter((rt) => rt.rtNumber !== row.rt.rtNumber)
-  persistRws(hamlet)
+
+  const rt = rw.rts.find((r) => r.rtNumber === row.rt.rtNumber)
+  if (!rt?.id) {
+    rw.rts = rw.rts.filter((r) => r.rtNumber !== row.rt.rtNumber)
+    return
+  }
+
+  removingRt.value = true
+  try {
+    await deleteRt(rt.id)
+    rw.rts = rw.rts.filter((r) => r.rtNumber !== row.rt.rtNumber)
+    toast.add({ severity: 'success', summary: 'Berhasil', detail: `${rtLabel(row.rt.rtNumber)} dihapus dari ${rwLabel(row.rwNumber)}`, life: 2500 })
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal menghapus RT',
+      detail: error.response?.data?.message ?? 'Periksa koneksi ke backend.',
+      life: 4000,
+    })
+  } finally {
+    removingRt.value = false
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -593,26 +665,24 @@ async function saveHamlet() {
   const editingId = editingHamletId.value
   const current = hamlets.value.find((h) => h.id === editingId)
   const name = hamletForm.name.trim()
-  const payload = buildPayload({
+  // Hanya kirim nama; RW/RT dikelola lewat endpoint tersendiri
+  const payload = {
     name,
-    headName: current?.headName ?? '',
-    kkCount: current?.kkCount,
-    population: current?.population,
-    maleCount: current?.maleCount,
-    femaleCount: current?.femaleCount,
-    rws: current?.rws ?? [],
-  })
+    head_name: current?.headName ?? '',
+  }
 
   savingHamlet.value = true
   try {
     const saved = await updateRegion(editingId, payload)
 
-    writeLocalRws(editingId, payload.rws)
     updateListCache('regions', (items) =>
       items.map((item) => (item.region_id === editingId ? { ...item, ...saved } : item)),
     )
+    // Pertahankan RW/RT yang sudah ada di state lokal
     hamlets.value = hamlets.value.map((item) =>
-      item.id === editingId ? toHamletView({ ...saved, region_id: editingId }) : item,
+      item.id === editingId
+        ? { ...toHamletView({ ...saved, region_id: editingId }), rws: current?.rws ?? [] }
+        : item,
     )
 
     hamletDialogOpen.value = false
@@ -639,7 +709,6 @@ async function deleteHamlet(id) {
   const hamlet = hamlets.value.find((h) => h.id === id)
   try {
     await deleteRegion(id)
-    removeLocalRws(id)
     hamlets.value = hamlets.value.filter((item) => item.id !== id)
     updateListCache('regions', (items) => items.filter((item) => item.region_id !== id))
 
@@ -768,7 +837,15 @@ async function handleExcelImport(event) {
       try {
         const groupPayload = buildPayload(group)
         const saved = await createRegion(groupPayload)
-        writeLocalRws(saved.region_id, groupPayload.rws)
+        // Tambah RW dan RT ke backend
+        for (const rw of (groupPayload.rws ?? [])) {
+          const savedRw = await createRw({ region_id: saved.region_id, number: rw.rw_number })
+          for (const rt of (rw.rts ?? [])) {
+            await createRt({ rw_id: savedRw.id, number: rt.rt_number })
+          }
+        }
+        // Reload areas untuk padukuhan baru agar RW/RT tampil dengan id yang benar
+        await loadRegionAreas()
         updateListCache('regions', (items) => [saved, ...items])
         hamlets.value.unshift(toHamletView(saved))
         savedCount++
@@ -1286,7 +1363,7 @@ function saveBoundaries() {
               inputClass="w-full"
               @keyup.enter="addRw"
             />
-            <Button label="Tambah" @click="addRw" />
+            <Button label="Tambah" :loading="addingRw" @click="addRw" />
           </div>
 
           <div class="mt-3 max-h-56 overflow-auto">
@@ -1317,6 +1394,7 @@ function saveBoundaries() {
                       size="small"
                       severity="danger"
                       outlined
+                      :loading="removingRw"
                       @click="removeRw(row)"
                     />
                   </td>
@@ -1348,7 +1426,7 @@ function saveBoundaries() {
               class="w-32"
               @keyup.enter="addRt"
             />
-            <Button label="Tambah" @click="addRt" />
+            <Button label="Tambah" :loading="addingRt" @click="addRt" />
           </div>
 
           <div class="mt-3 max-h-72 overflow-auto">
@@ -1379,6 +1457,7 @@ function saveBoundaries() {
                       size="small"
                       severity="danger"
                       outlined
+                      :loading="removingRt"
                       @click="removeRt(row)"
                     />
                   </td>

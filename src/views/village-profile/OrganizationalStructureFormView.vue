@@ -19,6 +19,7 @@ import {
   getOrganizationalStructures,
   saveOrganizationalStructure,
 } from '@/services/profile.service'
+import { getRegionAreas } from '@/services/region.service'
 import { mediaUrl } from '@/services/media'
 
 const toast = useToast()
@@ -180,6 +181,25 @@ function textValue(value) {
 function padNumber(value) {
   const v = String(value ?? '').trim()
   return /^\d+$/.test(v) ? v.padStart(2, '0') : v
+}
+
+function normalizePadukuhanKey(value) {
+  return String(textValue(value) ?? '').trim().toLowerCase()
+}
+
+function numberToRoman(num) {
+  const n = Number(num)
+  if (!Number.isFinite(n) || n < 1) return ''
+  const lookup = { M: 1000, CM: 900, D: 500, CD: 400, C: 100, XC: 90, L: 50, XL: 40, X: 10, IX: 9, V: 5, IV: 4, I: 1 }
+  let roman = ''
+  let cur = n
+  for (const i in lookup) {
+    while (cur >= lookup[i]) {
+      roman += i
+      cur -= lookup[i]
+    }
+  }
+  return roman
 }
 
 function calcAge(birthDate) {
@@ -448,11 +468,20 @@ function loadExisting(structure) {
   customJabatan.splice(0, customJabatan.length, ...seedCustomJabatan(structure.levels ?? []))
 }
 
+const regionAreas = ref([])
+
 onMounted(async () => {
   loading.value = true
   try {
-    const structures = await getOrganizationalStructures()
+    const [structures, areas] = await Promise.all([
+      getOrganizationalStructures(),
+      getRegionAreas().catch((err) => {
+        console.warn('Gagal memuat data wilayah:', err)
+        return []
+      }),
+    ])
     loadExisting(structures[0])
+    regionAreas.value = Array.isArray(areas) ? areas : []
   } catch (error) {
     toast.add({
       severity: 'error',
@@ -1022,27 +1051,59 @@ const aIsDukuh = computed(() => assignForm.jabatan === JABATAN_DUKUH)
 
 const padukuhanDirectory = computed(() => {
   const map = new Map()
-  const add = (label) => {
+  const add = (label, fallbackNumber = null) => {
     if (!isDukuhLabel(label)) return
     const { number, name } = parseDukuhLabel(label)
-    if (name && !map.has(name)) map.set(name, number)
+    const key = normalizePadukuhanKey(name)
+    if (key && !map.has(key)) {
+      map.set(key, { number: number || fallbackNumber, name: String(name).trim() })
+    }
   }
   allJabatanOptions.value.forEach((option) => add(option.label))
   form.assignments.forEach((a) => add(a.jabatan))
+
+  // Ambil juga dari Data Wilayah jika ada padukuhan yang belum terdaftar di default options
+  regionAreas.value.forEach((area, index) => {
+    const dusunName = String(area.dusun ?? '').trim()
+    const key = normalizePadukuhanKey(dusunName)
+    if (key && !map.has(key)) {
+      map.set(key, { number: numberToRoman(index + 1), name: dusunName })
+    }
+  })
   return map
 })
 
 const padukuhanOptions = computed(() => {
-  const names = new Set(padukuhanDirectory.value.keys())
-  form.assignments.forEach((a) => {
-    const name = String(textValue(a.padukuhan)).trim()
-    if (name) names.add(name)
-  })
-  return [...names]
+  const names = []
+  const seen = new Set()
+
+  const pushName = (raw) => {
+    const name = String(textValue(raw) ?? '').trim()
+    if (!name) return
+    const key = normalizePadukuhanKey(name)
+    if (!seen.has(key)) {
+      seen.add(key)
+      names.push(name)
+    }
+  }
+
+  // Prioritas 1: Dari Data Wilayah (backend /api/region-areas)
+  regionAreas.value.forEach((a) => pushName(a.dusun))
+
+  // Prioritas 2: Dari JABATAN_OPTIONS / padukuhanDirectory
+  padukuhanDirectory.value.forEach((item) => pushName(item.name))
+
+  // Prioritas 3: Dari assignments yang sudah ada
+  form.assignments.forEach((a) => pushName(a.padukuhan))
+
+  return names
 })
 
 const aPadukuhanName = computed(() => String(textValue(assignForm.padukuhan)).trim())
-const aKnownDukuhNumber = computed(() => padukuhanDirectory.value.get(aPadukuhanName.value) ?? null)
+const aKnownDukuhNumber = computed(() => {
+  const key = normalizePadukuhanKey(aPadukuhanName.value)
+  return padukuhanDirectory.value.get(key)?.number ?? null
+})
 const aNeedsDukuhNumber = computed(() => (
   aIsDukuh.value && !!aPadukuhanName.value && aKnownDukuhNumber.value === null
 ))
@@ -1057,23 +1118,74 @@ function sortedNumbers(values) {
   return [...new Set(values)].sort((a, b) => a.localeCompare(b, 'id', { numeric: true }))
 }
 
-const sameText = (a, b) => jabatanKey(textValue(a)) === jabatanKey(textValue(b))
+const sameText = (a, b) => normalizePadukuhanKey(a) === normalizePadukuhanKey(b)
 
-const rwOptions = computed(() => sortedNumbers(
-  form.assignments
-    .filter((a) => a.rw_number && sameText(a.padukuhan, aPadukuhanName.value))
-    .map((a) => padNumber(a.rw_number)),
-))
+const rwOptions = computed(() => {
+  const numbers = new Set()
+  const padukuhan = aPadukuhanName.value
+  if (!padukuhan) return []
 
-const rtOptions = computed(() => sortedNumbers(
-  form.assignments
-    .filter((a) => (
-      a.rt_number
-      && sameText(a.padukuhan, aPadukuhanName.value)
-      && padNumber(a.rw_number) === padNumber(textValue(assignForm.rw_number))
-    ))
-    .map((a) => padNumber(a.rt_number)),
-))
+  // 1. Ambil RW dari Data Wilayah
+  const matchedArea = regionAreas.value.find((r) =>
+    normalizePadukuhanKey(r.dusun) === normalizePadukuhanKey(padukuhan)
+  )
+  if (matchedArea && Array.isArray(matchedArea.rws)) {
+    matchedArea.rws.forEach((rw) => {
+      const rawNum = rw.rw ?? rw.rw_number ?? rw.number
+      const num = padNumber(rawNum)
+      if (num) numbers.add(num)
+    })
+  }
+
+  // 2. Fallback dari assignments yang sudah ada
+  form.assignments.forEach((a) => {
+    if (a.rw_number && normalizePadukuhanKey(a.padukuhan) === normalizePadukuhanKey(padukuhan)) {
+      const num = padNumber(a.rw_number)
+      if (num) numbers.add(num)
+    }
+  })
+
+  return sortedNumbers([...numbers])
+})
+
+const rtOptions = computed(() => {
+  const numbers = new Set()
+  const padukuhan = aPadukuhanName.value
+  const selectedRw = padNumber(textValue(assignForm.rw_number))
+  if (!padukuhan || !selectedRw) return []
+
+  // 1. Ambil RT dari Data Wilayah
+  const matchedArea = regionAreas.value.find((r) =>
+    normalizePadukuhanKey(r.dusun) === normalizePadukuhanKey(padukuhan)
+  )
+  if (matchedArea && Array.isArray(matchedArea.rws)) {
+    const matchedRw = matchedArea.rws.find((rw) => {
+      const rawNum = rw.rw ?? rw.rw_number ?? rw.number
+      return padNumber(rawNum) === selectedRw
+    })
+    if (matchedRw && Array.isArray(matchedRw.rts)) {
+      matchedRw.rts.forEach((rt) => {
+        const rawNum = rt.rt ?? rt.rt_number ?? rt.number
+        const num = padNumber(rawNum)
+        if (num) numbers.add(num)
+      })
+    }
+  }
+
+  // 2. Fallback dari assignments yang sudah ada
+  form.assignments.forEach((a) => {
+    if (
+      a.rt_number &&
+      normalizePadukuhanKey(a.padukuhan) === normalizePadukuhanKey(padukuhan) &&
+      padNumber(a.rw_number) === selectedRw
+    ) {
+      const num = padNumber(a.rt_number)
+      if (num) numbers.add(num)
+    }
+  })
+
+  return sortedNumbers([...numbers])
+})
 
 watch(
   () => assignForm.jabatan,
@@ -1085,6 +1197,29 @@ watch(
     if (!rt && !rw) assignForm.rw_number = ''
     if (!rt && !rw && !dukuh) assignForm.padukuhan = ''
     if (!dukuh) assignForm.dukuh_number = ''
+  },
+)
+
+watch(
+  () => assignForm.padukuhan,
+  () => {
+    if (aIsRtRw.value) {
+      if (assignForm.rw_number && !rwOptions.value.includes(padNumber(assignForm.rw_number))) {
+        assignForm.rw_number = ''
+      }
+      assignForm.rt_number = ''
+    }
+  },
+)
+
+watch(
+  () => assignForm.rw_number,
+  () => {
+    if (aIsRt.value) {
+      if (assignForm.rt_number && !rtOptions.value.includes(padNumber(assignForm.rt_number))) {
+        assignForm.rt_number = ''
+      }
+    }
   },
 )
 
@@ -1207,7 +1342,7 @@ function prepareAssignment(f, person, original = null, editingId = null) {
   const padukuhan = String(textValue(f.padukuhan)).trim()
   const rt = padNumber(textValue(f.rt_number))
   const rw = padNumber(textValue(f.rw_number))
-  const knownNumber = padukuhanDirectory.value.get(padukuhan) ?? null
+  const knownNumber = padukuhanDirectory.value.get(normalizePadukuhanKey(padukuhan))?.number ?? null
   const dukuhNumber = String(knownNumber ?? f.dukuh_number ?? '').trim().toUpperCase()
 
   if (isRt && (!padukuhan || !rw || !rt)) return { error: 'Padukuhan, nomor RW, dan nomor RT wajib diisi' }

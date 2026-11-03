@@ -114,10 +114,12 @@ function mapCitizenFromApi(item) {
     familyRelationship: item.family_relationship,
     physicalDisability: item.physical_disability,
     disabilityStatus: item.disability_status,
+    disabilityType: item.disability_type,
     motherNationalId: item.mother_national_id,
     motherName: item.mother_name,
     fatherNationalId: item.father_national_id,
     fatherName: item.father_name,
+    spouseNationalId: item.spouse_national_id,
     nationality: item.nationality,
     previousAddress: item.previous_address,
     passportNumber: item.passport_number,
@@ -180,14 +182,10 @@ const ageRefreshError = ref('')
 
 const citizenImportColumns = [
   { key: 'record_type', label: 'JENIS DATA' },
-  { key: 'record_event', label: 'PERISTIWA' },
-  { key: 'record_year', label: 'TAHUN PERISTIWA' },
-  { key: 'title_code', label: 'GELAR' },
   { key: 'family_card_number', label: 'Nomor KK' },
   { key: 'dusun', label: 'DUSUN' },
-  { key: 'address', label: 'ALAMAT' },
-  { key: 'rt', label: 'RT' },
   { key: 'rw', label: 'RW' },
+  { key: 'rt', label: 'RT' },
   { key: 'national_id', label: 'NIK' },
   { key: 'full_name', label: 'NAMA LENGKAP' },
   { key: 'gender', label: 'L/P' },
@@ -206,18 +204,19 @@ const citizenImportColumns = [
   { key: 'divorce_certificate_number', label: 'NOMOR AKTA CERAI' },
   { key: 'divorce_date', label: 'TANGGAL CERAI' },
   { key: 'family_relationship', label: 'STATUS HUB DLM KELUARGA' },
-  { key: 'physical_disability', label: 'KELAINAN FISIK' },
-  { key: 'disability_status', label: 'PENYANDANG CACAT' },
+  { key: 'disability_status', label: 'KELAINAN FISIK' },
+  { key: 'disability_type', label: 'PENYANDANG CACAT' },
+  { key: 'physical_disability', label: 'KETERANGAN CACAT' },
   { key: 'education', label: 'PENDIDIKAN TERAKHIR' },
   { key: 'occupation', label: 'JENIS PEKERJAAN' },
   { key: 'mother_national_id', label: 'NIK IBU' },
   { key: 'mother_name', label: 'NAMA LENGKAP IBU' },
   { key: 'father_national_id', label: 'NIK AYAH' },
   { key: 'father_name', label: 'NAMA LENGKAP AYAH' },
+  { key: 'spouse_national_id', label: 'NIK PASANGAN' },
   { key: 'nationality', label: 'KEWARGANEGARAAN' },
-  { key: 'rt_head_name', label: 'NAMA KETUA RT' },
-  { key: 'rw_head_name', label: 'NAMA KETUA RW' },
   { key: 'phone_number', label: 'NOMOR TELEPON' },
+  { key: 'address', label: 'ALAMAT' },
   { key: 'ktp_address', label: 'ALAMAT SESUAI KTP' },
   { key: 'previous_address', label: 'ALAMAT SEBELUMNYA' },
   { key: 'passport_number', label: 'NOMOR PASPOR' },
@@ -250,17 +249,30 @@ function chooseImportFile() {
   importFileInput.value?.click()
 }
 
-function downloadCitizenImportTemplate() {
+function createTemplateWorksheet() {
   const labels = citizenImportColumns.map(column => column.label)
   const worksheet = XLSX.utils.aoa_to_sheet([labels])
   worksheet['!cols'] = labels.map(column => ({ wch: Math.min(Math.max(column.length + 3, 16), 28) }))
+  return worksheet
+}
 
+function downloadCitizenImportTemplateExcel() {
+  const worksheet = createTemplateWorksheet()
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Template Data Warga')
+  XLSX.writeFile(workbook, 'Template-Import-Data-Warga.xlsx', { bookType: 'xlsx' })
+}
+
+function downloadCitizenImportTemplateCsv() {
+  const worksheet = createTemplateWorksheet()
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Template Data Warga')
   // Excel dengan regional Indonesia memakai titik koma sebagai pemisah CSV.
-  // Dengan separator ini setiap header terbuka sebagai kolom terpisah.
   XLSX.writeFile(workbook, 'Template-Import-Data-Warga.csv', { bookType: 'csv', FS: ';' })
 }
+
+const downloadCitizenImportTemplate = downloadCitizenImportTemplateExcel
+
 
 function handleImportFileInput(event) {
   const file = event.target.files?.[0]
@@ -410,18 +422,25 @@ function mapRowToResident(row) {
     normalized[normalizeKey(key)] = row[key]
   })
 
-  const record_type = normalized['tulispendudukmatipindahorangluar'] ?? normalized['jenisdata'] ?? normalized['recordtype'] ?? 'PENDUDUK'
-  const record_event = normalized['tulislahir01dstdatang01dstpindah01dstmati01dst'] ?? normalized['peristiwa'] ?? normalized['recordevent'] ?? 'Lahir01'
-  const record_year = normalized['tahunperistiwa'] ?? normalized['recordyear'] ?? ''
-  const title_code = normalized['gelar'] ?? normalized['kodegelar'] ?? ''
+  // Jenis Data (PENDUDUK / ORANG LUAR)
+  const rawRecordType = String(normalized['jenisdata'] ?? normalized['recordtype'] ?? normalized['tulispendudukmatipindahorangluar'] ?? '').trim()
+  const record_type = /orang\s*luar/i.test(rawRecordType) ? 'ORANG LUAR' : 'PENDUDUK'
+
+  // Status (Active / Pindah / Mati)
+  let status = 'Active'
+  const rawStatus = String(normalized['status'] ?? '').trim().toLowerCase()
+  if (rawStatus === 'pindah' || /pindah/i.test(rawRecordType) || /pindah/i.test(String(normalized['peristiwa'] ?? ''))) {
+    status = 'Pindah'
+  } else if (rawStatus === 'mati' || rawStatus === 'meninggal' || /mati/i.test(rawRecordType) || /mati/i.test(String(normalized['peristiwa'] ?? ''))) {
+    status = 'Mati'
+  }
+
   const full_name = normalized['namalengkap'] ?? normalized['nama'] ?? normalized['name'] ?? ''
   const national_id = normalized['nik'] ?? normalized['nationalid'] ?? ''
   const family_card_number = normalized['nomorkk'] ?? normalized['kk'] ?? normalized['familycardnumber'] ?? ''
   const dusun = normalized['dusun'] ?? ''
   const rt = normalized['rt'] ?? ''
   const rw = normalized['rw'] ?? ''
-  const rt_head_name = normalized['namaketua rt'] ?? normalized['namaketuart'] ?? ''
-  const rw_head_name = normalized['namaketua rw'] ?? normalized['namaketuarw'] ?? ''
   const gender = normalizeGender(normalized['lp'] ?? normalized['jeniskelamin'] ?? normalized['gender'] ?? normalized['jk'] ?? '')
   const birth_place = normalized['tempatlahir'] ?? normalized['birthplace'] ?? ''
   const birth_date = excelDateToIso(normalized['tanggallahir'] ?? normalized['birthdate'] ?? null)
@@ -441,37 +460,45 @@ function mapRowToResident(row) {
   const divorce_certificate_number = normalized['nomoraktacerai'] ?? ''
   const divorce_date = excelDateToIso(normalized['tanggalcerai'] ?? null)
   const family_relationship = normalized['statushubdlmkeluarga'] ?? normalized['hubungankeluarga'] ?? ''
-  const physical_disability = normalized['kelainanfisik'] ?? ''
-  const disability_status = normalized['penyandangcacat'] ?? normalized['statuspenyandangcacat'] ?? ''
+
+  // Disabilitas / Kecacatan
+  let disability_status = normalized['kelainanfisik'] ?? normalized['statuskelainanfisik'] ?? normalized['disabilitystatus'] ?? ''
+  const disability_type = normalized['penyandangcacat'] ?? normalized['jeniscacat'] ?? normalized['jeniskecacatan'] ?? normalized['disabilitytype'] ?? ''
+  const physical_disability = normalized['keterangancacat'] ?? normalized['kelainanfisiklainnya'] ?? normalized['physicaldisability'] ?? ''
+  if (!disability_status && disability_type && disability_type !== 'Tidak Ada' && disability_type !== '-') {
+    disability_status = 'Ada'
+  }
+
   const religion = normalizeReligion(normalized['agama'] ?? '')
   const belief_organization = normalized['organisasikepercayaan'] ?? normalized['namaorganisasikepercayaan'] ?? ''
-  const mother_national_id = normalized['nikibu'] ?? ''
+
+  const rawMotherNik = String(normalized['nikibu'] ?? '').replace(/\D/g, '').slice(0, 16)
+  const mother_national_id = rawMotherNik.length === 16 ? rawMotherNik : null
   const mother_name = normalized['namalengkapibu'] ?? normalized['namaibu'] ?? ''
-  const father_national_id = normalized['nikayah'] ?? ''
+
+  const rawFatherNik = String(normalized['nikayah'] ?? '').replace(/\D/g, '').slice(0, 16)
+  const father_national_id = rawFatherNik.length === 16 ? rawFatherNik : null
   const father_name = normalized['namalengkapayah'] ?? normalized['namaayah'] ?? ''
-  const nationality = normalized['kewarganegaraan'] ?? ''
+
+  const rawSpouseNik = String(normalized['nikpasangan'] ?? normalized['spousenationalid'] ?? normalized['niksuami'] ?? normalized['nikistri'] ?? '').replace(/\D/g, '').slice(0, 16)
+  const spouse_national_id = rawSpouseNik.length === 16 ? rawSpouseNik : null
+
+  const nationality = normalized['kewarganegaraan'] ?? 'WNI'
   const ktp_address = normalized['alamatsesuaiktp'] ?? normalized['ktpaddress'] ?? address
   const previous_address = normalized['alamatsebelumnya'] ?? normalized['alamatsebelum'] ?? ''
   const passport_number = normalized['nomorpaspor'] ?? normalized['paspor'] ?? ''
   const passport_expiry_date = excelDateToIso(normalized['tanggalberakhirpaspor'] ?? normalized['tanggalakhirpaspor'] ?? null)
-  const status = String(normalized['status'] ?? '').trim().toLowerCase() === 'pindah' ? 'Pindah' : 'Active'
-
 
   if (!full_name && !national_id) return null
 
   return {
-    record_type: String(record_type).trim() || 'PENDUDUK',
-    record_event: String(record_event).trim() || 'Lahir01',
-    record_year: String(record_year).trim(),
-    title_code: String(title_code).trim(),
+    record_type,
     full_name: String(full_name).trim(),
     national_id: String(national_id).trim(),
     family_card_number: String(family_card_number).trim(),
     dusun: String(dusun).trim(),
     rt: String(rt).trim(),
     rw: String(rw).trim(),
-    rt_head_name: String(rt_head_name).trim(),
-    rw_head_name: String(rw_head_name).trim(),
     gender,
     birth_place: String(birth_place).trim(),
     birth_date,
@@ -492,14 +519,16 @@ function mapRowToResident(row) {
     divorce_certificate_number: String(divorce_certificate_number).trim(),
     divorce_date,
     family_relationship: String(family_relationship).trim(),
-    physical_disability: String(physical_disability).trim(),
     disability_status: String(disability_status).trim(),
+    disability_type: String(disability_type).trim(),
+    physical_disability: String(physical_disability).trim(),
     religion,
     belief_organization: String(belief_organization).trim(),
-    mother_national_id: String(mother_national_id).trim(),
+    mother_national_id,
     mother_name: String(mother_name).trim(),
-    father_national_id: String(father_national_id).trim(),
+    father_national_id,
     father_name: String(father_name).trim(),
+    spouse_national_id,
     nationality: String(nationality).trim(),
     previous_address: String(previous_address).trim(),
     passport_number: String(passport_number).trim(),
@@ -522,10 +551,12 @@ function readCitizenRows(workbook) {
     if (headerIndex < 0) continue
 
     const headers = matrix[headerIndex]
-    return matrix.slice(headerIndex + 1).map(values => headers.reduce((row, header, index) => {
-      if (header !== '') row[header] = values[index] ?? ''
-      return row
-    }, {}))
+    return matrix.slice(headerIndex + 1)
+      .filter(values => values && values.some(v => String(v ?? '').trim() !== ''))
+      .map(values => headers.reduce((row, header, index) => {
+        if (header !== '') row[header] = values[index] ?? ''
+        return row
+      }, {}))
   }
 
   return []
@@ -538,28 +569,61 @@ async function handleFileSelect(event) {
   importDialogVisible.value = false
   importError.value = ''
   importSuccess.value = ''
-  importProgress.value = 'Memeriksa jumlah baris CSV di server...'
+  importProgress.value = 'Membaca dan memeriksa file (Excel / CSV)...'
   importing.value = true
   importCancelled.value = false
 
   try {
-    const preflight = await validateCitizenImport(file)
-    const serverRowCount = preflight?.data?.row_count ?? 0
+    const data = new Uint8Array(await file.arrayBuffer())
+    const workbook = XLSX.read(data, { type: 'array' })
+    const rows = readCitizenRows(workbook)
+
+    if (rows.length === 0) {
+      importError.value = 'File tidak berisi data warga yang bisa diimpor. Pastikan file memiliki kolom NIK dan Nama Lengkap.'
+      return
+    }
+
+    if (rows.length > 1000) {
+      importError.value = `Import dibatalkan. File berisi ${rows.length} data warga (maksimal 1.000 data per import).`
+      return
+    }
 
     if (importCancelled.value) {
       importError.value = 'Import dibatalkan sebelum data diproses.'
       return
     }
 
-    importProgress.value = `File CSV lolos pemeriksaan (${serverRowCount} data). Membaca isi file...`
-    const data = new Uint8Array(await file.arrayBuffer())
-    const workbook = XLSX.read(data, { type: 'array' })
-    const rows = readCitizenRows(workbook)
+    importProgress.value = 'Memvalidasi data di server...'
 
-    if (rows.length === 0) {
-      importError.value = 'File tidak berisi data yang bisa diimpor.'
+    // Jika file asli Excel (.xlsx/.xls), konversi sheet warga jadi CSV untuk preflight backend
+    let preflightFile = file
+    const ext = String(file.name.split('.').pop() ?? '').toLowerCase()
+    if (ext === 'xlsx' || ext === 'xls') {
+      let targetSheetName = workbook.SheetNames[0]
+      for (const sheetName of workbook.SheetNames) {
+        const matrix = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '', raw: false })
+        const hasHeader = matrix.some(row => {
+          const keys = row.map(normalizeKey)
+          return keys.includes('nik') && (keys.includes('namalengkap') || keys.includes('nama') || keys.includes('name'))
+        })
+        if (hasHeader) {
+          targetSheetName = sheetName
+          break
+        }
+      }
+      const csvContent = XLSX.utils.sheet_to_csv(workbook.Sheets[targetSheetName], { FS: ';' })
+      preflightFile = new File([new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })], 'preflight.csv', { type: 'text/csv' })
+    }
+
+    const preflight = await validateCitizenImport(preflightFile)
+    const serverRowCount = preflight?.data?.row_count ?? rows.length
+
+    if (importCancelled.value) {
+      importError.value = 'Import dibatalkan sebelum data diproses.'
       return
     }
+
+    importProgress.value = `File lolos pemeriksaan (${serverRowCount} data). Memproses data...`
 
     const mappedRows = rows
       .map((row, index) => ({ rowNumber: index + 2, payload: mapRowToResident(row) }))
@@ -622,7 +686,7 @@ async function handleFileSelect(event) {
     }
   } catch (err) {
     importError.value = err.response?.data?.message
-      || 'Gagal membaca file. Pastikan file yang dipilih berformat CSV dan sesuai template.'
+      || 'Gagal membaca file. Pastikan file yang dipilih berformat Excel (.xlsx, .xls) atau CSV dan sesuai template.'
   } finally {
     importing.value = false
     importProgress.value = ''
@@ -1135,14 +1199,10 @@ function exportAllCitizensToExcel() {
   // langsung bisa di-re-import tanpa perlu mengatur ulang kolom.
   const columns = [
     ['JENIS DATA', 'recordType'],
-    ['PERISTIWA', 'recordEvent'],
-    ['TAHUN PERISTIWA', 'recordYear'],
-    ['GELAR', 'titleCode'],
     ['Nomor KK', 'familyCardNumber'],
     ['DUSUN', 'dusun'],
-    ['ALAMAT', 'address'],
-    ['RT', 'rt'],
     ['RW', 'rw'],
+    ['RT', 'rt'],
     ['NIK', 'nationalId'],
     ['NAMA LENGKAP', 'name'],
     ['L/P', 'gender'],
@@ -1161,18 +1221,19 @@ function exportAllCitizensToExcel() {
     ['NOMOR AKTA CERAI', 'divorceCertificateNumber'],
     ['TANGGAL CERAI', 'divorceDate'],
     ['STATUS HUB DLM KELUARGA', 'familyRelationship'],
-    ['KELAINAN FISIK', 'physicalDisability'],
-    ['PENYANDANG CACAT', 'disabilityStatus'],
+    ['KELAINAN FISIK', 'disabilityStatus'],
+    ['PENYANDANG CACAT', 'disabilityType'],
+    ['KETERANGAN CACAT', 'physicalDisability'],
     ['PENDIDIKAN TERAKHIR', 'education'],
     ['JENIS PEKERJAAN', 'occupation'],
     ['NIK IBU', 'motherNationalId'],
     ['NAMA LENGKAP IBU', 'motherName'],
     ['NIK AYAH', 'fatherNationalId'],
     ['NAMA LENGKAP AYAH', 'fatherName'],
+    ['NIK PASANGAN', 'spouseNationalId'],
     ['KEWARGANEGARAAN', 'nationality'],
-    ['NAMA KETUA RT', 'rtHeadName'],
-    ['NAMA KETUA RW', 'rwHeadName'],
     ['NOMOR TELEPON', 'phoneNumber'],
+    ['ALAMAT', 'address'],
     ['ALAMAT SESUAI KTP', 'ktpAddress'],
     ['ALAMAT SEBELUMNYA', 'previousAddress'],
     ['NOMOR PASPOR', 'passportNumber'],
@@ -1528,7 +1589,7 @@ function exportReportToPdf() {
     <input
       ref="importFileInput"
       type="file"
-      accept=".csv,text/csv"
+      accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
       class="hidden"
       @change="handleImportFileInput"
     />
@@ -1537,7 +1598,7 @@ function exportReportToPdf() {
       v-model:visible="importDialogVisible"
       header="Import Data Warga"
       modal
-      :style="{ width: '30rem' }"
+      :style="{ width: '32rem' }"
       class="rounded-lg"
       :pt="{
         header: { class: 'border-b border-neutral-100 px-5 py-4' },
@@ -1548,26 +1609,36 @@ function exportReportToPdf() {
     >
       <div class="space-y-4 text-sm text-neutral-600">
         <p class="m-0">
-          Gunakan template agar nama kolom sesuai database. Import hanya menerima file CSV dengan maksimal 1.000 data warga.
+          Gunakan template agar nama kolom sesuai database. Import menerima file <strong>Excel (.xlsx, .xls)</strong> maupun <strong>CSV</strong> dengan maksimal 1.000 data warga per upload.
         </p>
 
         <div class="rounded-lg border border-primary-100 bg-primary-50 p-3 text-xs text-primary-800">
-          Sebelum diimpor, file akan diperiksa oleh backend. Jika lebih dari 1.000 baris data, proses akan ditolak dan tidak ada data yang masuk.
+          Unduh salah satu template di bawah ini, isi data warga, lalu unggah kembali file Excel atau CSV tersebut.
         </div>
 
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-col gap-2 pt-1">
+          <div class="flex flex-wrap gap-2">
+            <Button
+              label="Download Template Excel (.xlsx)"
+              icon="pi pi-file-excel"
+              severity="success"
+              outlined
+              class="rounded-lg text-xs"
+              @click="downloadCitizenImportTemplateExcel"
+            />
+            <Button
+              label="Download Template CSV"
+              icon="pi pi-download"
+              severity="secondary"
+              outlined
+              class="rounded-lg text-xs"
+              @click="downloadCitizenImportTemplateCsv"
+            />
+          </div>
           <Button
-            label="Download Template CSV"
-            icon="pi pi-download"
-            severity="secondary"
-            outlined
-            class="rounded-lg"
-            @click="downloadCitizenImportTemplate"
-          />
-          <Button
-            label="Pilih File CSV"
+            label="Pilih File (Excel / CSV)"
             icon="pi pi-upload"
-            class="rounded-lg"
+            class="mt-2 w-full rounded-lg"
             @click="chooseImportFile"
           />
         </div>
