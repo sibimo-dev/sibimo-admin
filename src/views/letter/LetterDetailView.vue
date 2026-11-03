@@ -3,12 +3,19 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import AppButton from '@/components/common/AppButton.vue'
+import AppModal from '@/components/common/AppModal.vue'
 import AppSelect from '@/components/common/AppSelect.vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { useLetterStore } from '@/stores/useLetterStore'
 import { useLetterTypeStore } from '@/stores/useLetterTypeStore'
-import { downloadLetterPdf, getLetterPdf } from '@/services/letter-request.service'
+import {
+  downloadLetterPdf,
+  downloadPdfBlob,
+  getLetterBundlePdf,
+  getLetterPdf,
+} from '@/services/letter-request.service'
 import { mediaUrl } from '@/services/media'
+import { BUNDLES } from '@/data/letterBundles'
 
 const route = useRoute()
 const router = useRouter()
@@ -41,6 +48,10 @@ const previewFrame = ref(null)
 const pageRoot = ref(null)
 let initialScrollPending = true
 const downloading = ref(false)
+const downloadingBundle = ref(false)
+const printingBundle = ref(false)
+const actionModalVisible = ref(false)
+const actionModalType = ref('download') // 'download' | 'print'
 let previewToken = 0
 
 /* ------------------------------ Konstanta ------------------------------ */
@@ -214,6 +225,60 @@ const letterOptions = computed(() =>
 )
 const hasMultipleLetters = computed(() => letterOptions.value.length > 1)
 
+// Deteksi nama paket / bundle dari data surat atau template yang dimuat
+const bundleTitle = computed(() => {
+  if (!bundleRecords.value.length) return 'Paket Surat'
+
+  if (route.query.bundle) {
+    const found = BUNDLES.find((b) => b.slug === route.query.bundle)
+    if (found) return found.title
+  }
+
+  const templateViews = bundleRecords.value
+    .map((r) => String(r.templateView ?? '').toLowerCase())
+    .filter(Boolean)
+  if (templateViews.some((v) => v.includes('married-man'))) {
+    return 'Permohonan Nikah Laki-laki'
+  }
+  if (templateViews.some((v) => v.includes('marriage-women'))) {
+    return 'Permohonan Nikah Perempuan'
+  }
+  if (templateViews.some((v) => v.includes('death'))) {
+    return 'Permohonan Akta Kematian'
+  }
+  if (templateViews.some((v) => v.includes('birth'))) {
+    return 'Permohonan Akta Kelahiran'
+  }
+  if (templateViews.some((v) => v.includes('letter-c'))) {
+    return 'Permohonan Data Letter C'
+  }
+  if (templateViews.some((v) => v.includes('relocation') || v.includes('pindah'))) {
+    return 'Permohonan Pindah WNI'
+  }
+
+  const letterTitles = bundleRecords.value.map((r) => String(r.purpose ?? '').toLowerCase().trim())
+  let bestMatch = null
+  let maxHits = 0
+  for (const b of BUNDLES) {
+    const hits = b.letters.filter((l) =>
+      letterTitles.some((t) => t.includes(l.title.toLowerCase()) || l.title.toLowerCase().includes(t)),
+    ).length
+    if (hits > maxHits) {
+      maxHits = hits
+      bestMatch = b
+    }
+  }
+  if (bestMatch && maxHits > 0) {
+    return bestMatch.title
+  }
+
+  const cat = record.value?.category
+  if (cat && cat !== '-') {
+    return `Paket ${cat}`
+  }
+  return 'Paket Surat'
+})
+
 async function loadBundle() {
   if (!bundleIds.value.length) {
     bundleRecords.value = []
@@ -294,7 +359,25 @@ const safeFilePart = (text) =>
     .replace(/^-|-$/g, '')
     .slice(0, 60)
 
-async function downloadPdf() {
+function onClickDownload() {
+  if (hasMultipleLetters.value) {
+    actionModalType.value = 'download'
+    actionModalVisible.value = true
+  } else {
+    downloadSinglePdf()
+  }
+}
+
+function onClickPrint() {
+  if (hasMultipleLetters.value) {
+    actionModalType.value = 'print'
+    actionModalVisible.value = true
+  } else {
+    printCurrentPreview()
+  }
+}
+
+async function downloadSinglePdf() {
   if (!record.value) return
   downloading.value = true
   try {
@@ -307,6 +390,7 @@ async function downloadPdf() {
     link.click()
     link.remove()
     URL.revokeObjectURL(url)
+    actionModalVisible.value = false
   } catch {
     toast.add({
       severity: 'error',
@@ -316,6 +400,80 @@ async function downloadPdf() {
     })
   } finally {
     downloading.value = false
+  }
+}
+
+async function downloadBundlePdf() {
+  if (!bundleIds.value.length) return
+  downloadingBundle.value = true
+  try {
+    const filename = `${[
+      safeFilePart(bundleTitle.value),
+      record.value?.requestId || 'paket',
+    ].filter(Boolean).join('-')}.pdf`
+    const blob = await getLetterBundlePdf(bundleIds.value, { download: true, filename })
+    downloadPdfBlob(blob, filename)
+    actionModalVisible.value = false
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal mengunduh bundle surat',
+      detail: (await readErrorMessage(error)) || 'Terjadi kesalahan saat menggabungkan PDF surat.',
+      life: 3000,
+    })
+  } finally {
+    downloadingBundle.value = false
+  }
+}
+
+function printCurrentPreview() {
+  if (!previewUrl.value) return
+  actionModalVisible.value = false
+  try {
+    previewFrame.value?.contentWindow?.focus()
+    previewFrame.value?.contentWindow?.print()
+  } catch {
+    window.open(previewUrl.value, '_blank', 'noopener,noreferrer')
+  }
+}
+
+async function printBundle() {
+  if (!bundleIds.value.length) return
+  printingBundle.value = true
+  try {
+    const blob = await getLetterBundlePdf(bundleIds.value)
+    const url = URL.createObjectURL(blob)
+    const printIframe = document.createElement('iframe')
+    printIframe.style.position = 'fixed'
+    printIframe.style.right = '0'
+    printIframe.style.bottom = '0'
+    printIframe.style.width = '0'
+    printIframe.style.height = '0'
+    printIframe.style.border = '0'
+    printIframe.src = url
+    document.body.appendChild(printIframe)
+    printIframe.onload = () => {
+      try {
+        printIframe.contentWindow?.focus()
+        printIframe.contentWindow?.print()
+      } catch {
+        window.open(url, '_blank', 'noopener,noreferrer')
+      }
+      setTimeout(() => {
+        printIframe.remove()
+        URL.revokeObjectURL(url)
+      }, 60_000)
+    }
+    actionModalVisible.value = false
+  } catch (error) {
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal mencetak bundle surat',
+      detail: (await readErrorMessage(error)) || 'Terjadi kesalahan saat menggabungkan PDF surat.',
+      life: 3000,
+    })
+  } finally {
+    printingBundle.value = false
   }
 }
 
@@ -766,15 +924,16 @@ function sendNotification() {
                 label="Cetak"
                 icon="pi pi-print"
                 variant="light"
-                :disabled="!previewUrl"
-                @click="printPreview"
+                :disabled="!previewUrl || printingBundle"
+                :loading="printingBundle"
+                @click="onClickPrint"
               />
               <AppButton
                 :label="isAuthorized ? 'Unduh PDF' : 'Unduh Draft'"
                 icon="pi pi-download"
                 variant="light"
-                :loading="downloading"
-                @click="downloadPdf"
+                :loading="downloading || downloadingBundle"
+                @click="onClickDownload"
               />
             </div>
           </div>
@@ -831,5 +990,64 @@ function sendNotification() {
         </section>
       </div>
     </div>
+
+    <!-- Modal Pilihan Cetak / Unduh untuk Paket Bundle -->
+    <AppModal
+      v-model="actionModalVisible"
+      :title="actionModalType === 'print' ? 'Pilih Opsi Cetak' : 'Pilih Opsi Unduh'"
+      width="28rem"
+      hide-footer
+    >
+      <p class="text-sm text-slate-500 -mt-2 mb-2">
+        Surat ini merupakan bagian dari paket ({{ letterOptions.length }} surat). Silakan pilih dokumen yang ingin {{ actionModalType === 'print' ? 'dicetak' : 'diunduh' }}:
+      </p>
+      <div class="flex flex-col gap-3">
+        <!-- Opsi 1: Surat yang sedang aktif -->
+        <button
+          type="button"
+          class="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 hover:border-slate-800 hover:bg-slate-50 transition-all text-left group cursor-pointer"
+          :disabled="downloading || printingBundle"
+          @click="actionModalType === 'print' ? printCurrentPreview() : downloadSinglePdf()"
+        >
+          <div class="w-10 h-10 rounded-lg bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center shrink-0 text-slate-700">
+            <i :class="actionModalType === 'print' ? 'pi pi-print' : 'pi pi-file'" class="text-lg" />
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold text-slate-800 text-sm group-hover:text-slate-900">
+              {{ actionModalType === 'print' ? 'Cetak Surat Ini Saja' : 'Unduh Surat Ini Saja' }}
+            </p>
+            <p class="text-xs text-slate-500 truncate mt-0.5">
+              {{ record?.purpose || 'Surat yang sedang aktif' }}
+            </p>
+          </div>
+        </button>
+
+        <!-- Opsi 2: Semua surat dalam paket (Bundle) -->
+        <button
+          type="button"
+          class="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 hover:border-slate-800 hover:bg-slate-50 transition-all text-left group cursor-pointer"
+          :disabled="downloadingBundle || printingBundle"
+          @click="actionModalType === 'print' ? printBundle() : downloadBundlePdf()"
+        >
+          <div class="w-10 h-10 rounded-lg bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center shrink-0 text-slate-700">
+            <i v-if="downloadingBundle || printingBundle" class="pi pi-spinner pi-spin text-lg" />
+            <i v-else class="pi pi-copy text-lg" />
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <p class="font-semibold text-slate-800 text-sm group-hover:text-slate-900">
+                {{ actionModalType === 'print' ? `Cetak Semua Surat (${bundleTitle})` : `Unduh ${bundleTitle}` }}
+              </p>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-800">
+                {{ letterOptions.length }} Surat
+              </span>
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5">
+              Seluruh surat dalam {{ bundleTitle }} digabung menjadi 1 file PDF berurutan
+            </p>
+          </div>
+        </button>
+      </div>
+    </AppModal>
   </div>
 </template>

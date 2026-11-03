@@ -93,6 +93,9 @@ function toResidentPerson(c) {
 }
 
 function spouseOf(c, citizens) {
+  if (c?.spouse && typeof c.spouse === 'object' && (c.spouse.full_name || c.spouse.national_id)) {
+    return toResidentPerson(c.spouse)
+  }
   const familyCard = normNik(c?.family_card_number)
   if (!familyCard || !isMarriedStatus(c?.marital_status)) return null
   const allowedRelations = spouseRelationsFor(c)
@@ -152,10 +155,14 @@ export function toResident(c, citizens = []) {
     education: '',
     fatherName: '',
   })
-  // Jika NIK orang tua belum tersimpan pada baris anak, tetap coba hubungkan
-  // lewat nama yang sama secara unik agar detail orang tua ikut lengkap.
-  const fatherRecord = byParent(c.father_national_id, c.father_name, 'Laki-laki')
-  const motherRecord = byParent(c.mother_national_id, c.mother_name, 'Perempuan')
+  // Cek relasi langsung dari object (jika di-eager-load / di-resolve backend),
+  // baru cari di daftar warga / anggota KK lewat NIK dan nama.
+  const fatherRecord = (c.father && typeof c.father === 'object' && (c.father.full_name || c.father.national_id))
+    ? c.father
+    : byParent(c.father_national_id, c.father_name, 'Laki-laki')
+  const motherRecord = (c.mother && typeof c.mother === 'object' && (c.mother.full_name || c.mother.national_id))
+    ? c.mother
+    : byParent(c.mother_national_id, c.mother_name, 'Perempuan')
   const household = familyCardNumber
     ? citizens
       .filter((item) => normNik(item.family_card_number) === familyCardNumber)
@@ -225,13 +232,14 @@ export async function findResidentByNik(nik) {
     const citizen = await getCitizenByNik(normNik(nik))
     if (!citizen) return null
     // Untuk memetakan relasi keluarga (pasangan, orang tua) kita masih butuh data
-    // keluarga satu KK. Backend mengembalikan relasi melalui eager-load mother/father/spouse.
-    // Bangun daftar keluarga dari field relasi yang sudah ikut di response.
+    // keluarga satu KK. Backend mengembalikan relasi melalui eager-load mother/father/spouse
+    // dan daftar anggota keluarga dalam 1 KK (family_members).
     const family = [
       citizen,
       citizen.mother,
       citizen.father,
       citizen.spouse,
+      ...(citizen.family_members || citizen.familyMembers || citizen.household || []),
     ].filter(Boolean)
     return toResident(citizen, family)
   } catch (error) {

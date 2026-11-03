@@ -41,8 +41,10 @@ export const downloadLetterPdf = (id) => getLetterPdf(id, { download: true })
 // sesuai urutan `ids` via FPDI (setasign/fpdi).
 // Dipakai halaman Verifikasi + Otorisasi (views/letter/review/LetterBundleAuthorization.vue).
 export const getLetterBundlePdf = async (ids, options = {}) => {
+  const params = { ids: ids.join(','), download: options?.download ? 1 : 0 }
+  if (options?.filename) params.filename = options.filename
   const response = await api.get('/letter-requests/bundle/pdf', {
-    params: { ids: ids.join(','), download: options?.download ? 1 : 0 },
+    params,
     responseType: 'blob',
   })
   return response.data
