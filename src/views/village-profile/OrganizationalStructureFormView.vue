@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 
@@ -12,12 +12,14 @@ import Dialog from 'primevue/dialog'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import InputNumber from 'primevue/inputnumber'
-import ToggleSwitch from 'primevue/toggleswitch'
+import SelectButton from 'primevue/selectbutton'
+import Tag from 'primevue/tag'
 
 import {
   getOrganizationalStructures,
   saveOrganizationalStructure,
 } from '@/services/profile.service'
+import { getRegionAreas } from '@/services/region.service'
 import { mediaUrl } from '@/services/media'
 
 const toast = useToast()
@@ -25,7 +27,6 @@ const confirm = useConfirm()
 const saving = ref(false)
 const loading = ref(false)
 
-/* Daftar jabatan bawaan, sesuai struktur yang ditampilkan di halaman publik. */
 const JABATAN_OPTIONS = [
   { label: 'Lurah', level: 'Lurah', pimpinan: true },
   { label: 'Carik', level: 'Carik', pimpinan: true },
@@ -52,17 +53,11 @@ const JABATAN_OPTIONS = [
   { label: 'Ketua RW', level: 'Ketua RT & Ketua RW', slider: true },
 ]
 
-/* Jabatan yang bisa dipilih lewat "Tambah Staff". */
-const JABATAN_STAFF = 'Staff Pamong Kalurahan'
 const JABATAN_KETUA_RT = 'Ketua RT'
 const JABATAN_KETUA_RW = 'Ketua RW'
 const JABATAN_DUKUH = 'Dukuh'
 const DUKUH_LEVEL = 'Dukuh (Kepala Padukuhan)'
-const ADD_STAFF_JABATAN = [JABATAN_STAFF, JABATAN_KETUA_RT, JABATAN_KETUA_RW, JABATAN_DUKUH]
 
-/* Dukuh disimpan sebagai satu jabatan berformat "Dukuh <nomor urut> <nama padukuhan>",
-   mis. "Dukuh I Krebet". Format ini sama dengan data lama, sehingga padukuhan baru
-   (pemekaran dusun) tidak perlu didaftarkan di kode: cukup isi nomor urut & namanya. */
 function isDukuhLabel(label) {
   return /^Dukuh(\s|$)/i.test(String(label ?? '').trim())
 }
@@ -92,7 +87,6 @@ const EDUCATION_OPTIONS = [
   'S-3/Sederajat',
 ]
 
-// Jenjang perkuliahan (D-I s.d. S-3) memakai "Nama Instansi Pendidikan"; jenjang sekolah (SD/SLTP/SLTA) memakai "Nama Sekolah".
 function isHigherEducation(level) {
   return /^[DS]-/i.test(String(level ?? '').trim())
 }
@@ -113,30 +107,22 @@ function initials(name) {
     .join('') || '?'
 }
 
-// Foto lama berasal dari storage backend, sedangkan foto baru di modal masih
-// berupa data URL. Keduanya harus bisa dipakai sebagai src di admin.
 function photoSrc(value) {
   if (!value) return ''
   if (/^(data|blob):/i.test(String(value))) return value
   return mediaUrl(value)
 }
 
-// Data lama kadang tertulis "Staf Pamong Kalurahan" (satu f). Samakan ke bentuk baku
-// "Staff Pamong Kalurahan" supaya tidak muncul sebagai dua jabatan berbeda.
 function canonicalStaff(value) {
   return String(value ?? '').replace(/^\s*Staf(?=\s)/i, 'Staff')
 }
 
-// "Lurah Kalurahan Bimomartani" -> "Lurah"
 function normalizeJabatan(title) {
   return canonicalStaff(
     String(title ?? '').replace(/\s+Kalurahan\s+Bimomartani\s*$/i, '').trim(),
   )
 }
 
-// Kunci pembanding jabatan: abaikan huruf besar/kecil, spasi ganda, spasi tak terlihat
-// (mis. non-breaking space), dan ejaan "Staf"/"Staff", supaya "Staff Pamong Kalurahan"
-// tidak muncul dua kali.
 function jabatanKey(value) {
   return canonicalStaff(
     String(value ?? '').replace(/[\s\u00A0\u200B]+/g, ' ').trim(),
@@ -155,23 +141,135 @@ function romanToNumber(value) {
   return total
 }
 
-function personOrderKey(person) {
-  if (isDukuhLabel(person?.jabatan)) {
-    const parsed = parseDukuhLabel(person.jabatan)
+function personOrderKey(item) {
+  if (isDukuhLabel(item?.jabatan)) {
+    const parsed = parseDukuhLabel(item.jabatan)
     const number = /^\d+$/.test(parsed.number) ? Number(parsed.number) : romanToNumber(parsed.number)
     return [9, number || 999]
   }
 
-  const rank = JABATAN_OPTIONS.findIndex((option) => jabatanKey(option.label) === jabatanKey(person?.jabatan))
+  const rank = JABATAN_OPTIONS.findIndex((option) => jabatanKey(option.label) === jabatanKey(item?.jabatan))
   return [rank < 0 ? 999 : rank, 0]
 }
 
-/* Jabatan yang sudah ada di data tersimpan tetapi tidak ada di JABATAN_OPTIONS.
-   Tidak ada form untuk menambah jabatan baru; daftar ini hanya dipakai
-   supaya data lama tidak hilang saat disimpan ulang. */
+function compareAssignments(l, r) {
+  const a = personOrderKey(l)
+  const b = personOrderKey(r)
+  return (
+    a[0] - b[0]
+    || a[1] - b[1]
+    || String(l.padukuhan ?? '').localeCompare(String(r.padukuhan ?? ''), 'id')
+    || (parseInt(l.rw_number, 10) || 0) - (parseInt(r.rw_number, 10) || 0)
+    || (parseInt(l.rt_number, 10) || 0) - (parseInt(r.rt_number, 10) || 0)
+    || startSortKey(r).localeCompare(startSortKey(l))
+  )
+}
+
+function startSortKey(a) {
+  return a?.start_date || (a?.start_year ? `${a.start_year}-01-01` : '')
+}
+
+function endSortKey(a) {
+  return a?.end_date || (a?.end_year ? `${a.end_year}-12-31` : '')
+}
+
+function textValue(value) {
+  if (value && typeof value === 'object') return value.value ?? value.label ?? ''
+  return value ?? ''
+}
+
+function padNumber(value) {
+  const v = String(value ?? '').trim()
+  return /^\d+$/.test(v) ? v.padStart(2, '0') : v
+}
+
+function normalizePadukuhanKey(value) {
+  return String(textValue(value) ?? '').trim().toLowerCase()
+}
+
+function numberToRoman(num) {
+  const n = Number(num)
+  if (!Number.isFinite(n) || n < 1) return ''
+  const lookup = { M: 1000, CM: 900, D: 500, CD: 400, C: 100, XC: 90, L: 50, XL: 40, X: 10, IX: 9, V: 5, IV: 4, I: 1 }
+  let roman = ''
+  let cur = n
+  for (const i in lookup) {
+    while (cur >= lookup[i]) {
+      roman += i
+      cur -= lookup[i]
+    }
+  }
+  return roman
+}
+
+function calcAge(birthDate) {
+  if (!birthDate) return null
+  const b = new Date(`${String(birthDate).slice(0, 10)}T00:00:00`)
+  if (Number.isNaN(b.getTime())) return null
+  const now = new Date()
+  let age = now.getFullYear() - b.getFullYear()
+  const m = now.getMonth() - b.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age -= 1
+  return age >= 0 ? age : null
+}
+
+function yearOf(date) {
+  const year = parseInt(String(date ?? '').slice(0, 4), 10)
+  return Number.isNaN(year) ? null : year
+}
+
+function todayISO() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function formatDate(value, month = 'short') {
+  const [y, m, d] = String(value ?? '').split('-').map(Number)
+  if (!y || !m || !d) return ''
+  return new Date(y, m - 1, d).toLocaleDateString('id-ID', { day: 'numeric', month, year: 'numeric' })
+}
+
+function formatMasaJabatan(item) {
+  if (item?.start_date) {
+    return `${formatDate(item.start_date)} – ${item.end_date ? formatDate(item.end_date) : 'Sekarang'}`
+  }
+  if (!item?.start_year && !item?.end_year) return '—'
+  if (item.start_year && !item.end_year) return `${item.start_year} – Sekarang`
+  return `${item.start_year ?? '?'} – ${item.end_year}`
+}
+
+function formatJabatanFormer(item) {
+  if (item?.jabatan === JABATAN_KETUA_RT && item.rt_number) return `${item.jabatan} ${padNumber(item.rt_number)}`
+  if (item?.jabatan === JABATAN_KETUA_RW && item.rw_number) return `${item.jabatan} ${padNumber(item.rw_number)}`
+  return item?.jabatan ?? ''
+}
+
+function formatWilayahFormer(item) {
+  if (isDukuhLabel(item?.jabatan)) {
+    const name = item.padukuhan || parseDukuhLabel(item.jabatan).name
+    return name ? `Padukuhan ${name}` : '—'
+  }
+  const parts = []
+  if (item?.jabatan === JABATAN_KETUA_RT && item.rw_number) parts.push(`RW ${padNumber(item.rw_number)}`)
+  if ((item?.jabatan === JABATAN_KETUA_RT || item?.jabatan === JABATAN_KETUA_RW) && item.padukuhan) {
+    parts.push(`Padukuhan ${item.padukuhan}`)
+  }
+  return parts.length ? parts.join(', ') : '—'
+}
+
+function tingkatOf(jabatan) {
+  const key = jabatanKey(jabatan)
+  if (isDukuhLabel(jabatan)) return { label: 'Dukuh', severity: 'warn' }
+  if (key === 'lurah' || key === 'carik') return { label: 'Pimpinan', severity: 'danger' }
+  if (key.startsWith('kaur')) return { label: 'Kepala Urusan', severity: 'info' }
+  if (['kamituwa', 'ulu-ulu', 'jagabaya'].includes(key)) return { label: 'Kepala Seksi', severity: 'success' }
+  if (key.startsWith('staff')) return { label: 'Staff', severity: 'secondary' }
+  if (key === 'ketua rt' || key === 'ketua rw') return { label: 'RT / RW', severity: 'contrast' }
+  return { label: 'Lainnya', severity: 'secondary' }
+}
+
 const customJabatan = reactive([])
 
-// Gabungan jabatan bawaan + jabatan khusus, tanpa duplikat.
 const allJabatanOptions = computed(() => {
   const seen = new Set()
   return [...JABATAN_OPTIONS, ...customJabatan].filter((option) => {
@@ -182,26 +280,59 @@ const allJabatanOptions = computed(() => {
   })
 })
 
-/* form.people = satu-satunya sumber data tabel. */
 const form = reactive({
   organizational_structure_id: null,
   title: 'Struktur Organisasi Pemerintah Kalurahan',
   status: 'Published',
   published_at: null,
-  people: [],
-  former_officials: [],
+  persons: [],
+  assignments: [],
   show_former_officials: false,
 })
 
-// Tabel admin harus tetap mengikuti susunan baku meskipun data lama tersimpan
-// dengan urutan assignment yang berbeda.
-const orderedPeople = computed(() => (
-  [...form.people].sort((left, right) => {
-    const a = personOrderKey(left)
-    const b = personOrderKey(right)
-    return a[0] - b[0] || a[1] - b[1]
+function emptyPerson() {
+  return {
+    id: uid(),
+    staff_id: null,
+    nama: '',
+    gender: null,
+    birth_date: '',
+    education: null,
+    major: '',
+    school_name: '',
+    graduation_year: null,
+    photo: null,
+    photoFile: null,
+    signature: null,
+    signatureFile: null,
+  }
+}
+
+const PERSON_MERGE_KEYS = [
+  'gender', 'birth_date', 'education', 'major', 'school_name', 'graduation_year', 'photo', 'signature',
+]
+
+function mergePersonData(person, src) {
+  PERSON_MERGE_KEYS.forEach((key) => {
+    const empty = person[key] === null || person[key] === undefined || person[key] === ''
+    const has = src[key] !== null && src[key] !== undefined && src[key] !== ''
+    if (empty && has) person[key] = src[key]
   })
-))
+}
+
+function seedHistory(list = []) {
+  if (!Array.isArray(list)) return []
+  return list.map((item) => ({
+    sk: item?.sk ?? '',
+    date: item?.date ?? '',
+    official: item?.official ?? '',
+    document: item?.document ?? null,
+    document_name:
+      item?.document_name ??
+      (item?.document ? String(item.document).split('/').pop() : ''),
+    documentFile: null,
+  }))
+}
 
 function seedCustomJabatan(existingLevels = []) {
   if (!Array.isArray(existingLevels)) return []
@@ -227,122 +358,130 @@ function seedCustomJabatan(existingLevels = []) {
   return custom
 }
 
-/* Riwayat jabatan: sk (judul/nomor SK), date, official, serta dokumen opsional.
-   - document      : path file yang sudah tersimpan di backend
-   - document_name : nama file asli (ditampilkan)
-   - documentFile  : File baru yang belum diunggah */
-function seedHistory(list = []) {
-  if (!Array.isArray(list)) return []
-  return list.map((item) => ({
-    sk: item?.sk ?? '',
-    date: item?.date ?? '',
-    official: item?.official ?? '',
-    document: item?.document ?? null,
-    document_name:
-      item?.document_name ??
-      (item?.document ? String(item.document).split('/').pop() : ''),
-    documentFile: item?.documentFile ?? null,
-  }))
-}
+function deriveState(structure) {
+  const persons = []
+  const assignments = []
+  const byStaff = new Map()
+  const byName = new Map()
+  const nameKey = (value) => String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
 
-// Riwayat jabatan pejabat terdahulu: hanya teks (tanpa unggah dokumen).
-function seedFormerHistory(list = []) {
-  if (!Array.isArray(list)) return []
-  return list.map((item) => ({
-    sk: item?.sk ?? '',
-    date: item?.date ?? '',
-    official: item?.official ?? '',
-  }))
-}
+  function resolvePerson(src, name) {
+    const staffId = src.staff_id ?? null
+    const nKey = nameKey(name)
+    let person = staffId !== null ? byStaff.get(staffId) : null
 
-function seedPeople(existingLevels = []) {
-  if (!Array.isArray(existingLevels)) return []
+    if (!person && nKey) {
+      const candidate = byName.get(nKey)
+      if (candidate && (staffId === null || candidate.staff_id === null)) person = candidate
+    }
 
-  return existingLevels.flatMap((level) => (
-    (level.people ?? []).map((person) => ({
-      id: uid(),
-      staff_id: person.staff_id ?? null,
-      jabatan: normalizeJabatan(person.title) || null,
-      nama: person.name ?? '',
-      desc: person.desc ?? '',
-      gender: person.gender ?? null,
-      education: person.education ?? null,
-      major: person.major ?? '',
-      school_name: person.school_name ?? '',
-      graduation_year: person.graduation_year ?? null,
-      birth_date: person.birth_date ?? '',
-      term_end_date: person.term_end_date ?? '',
-      position_history: seedHistory(person.position_history),
-      start_date: person.start_date ?? '',
-      end_date: person.end_date ?? '',
-      // start_year / end_year = data lama (hanya tahun), dipertahankan agar tidak hilang.
-      start_year: person.start_year ?? null,
-      end_year: person.end_year ?? null,
-      photo: person.photo ?? null,
-      photoFile: null,
-      signature: person.signature ?? null,
-      signatureFile: null,
-      // Khusus Ketua RT / Ketua RW
-      rt_number: person.rt_number ?? '',
-      rw_number: person.rw_number ?? '',
-      padukuhan: textValue(person.padukuhan).trim(),
-      // SK utama
-      sk_number: person.sk_number ?? '',
-      sk_document: person.sk_document ?? null,
-      sk_document_name:
-        person.sk_document_name ??
-        (person.sk_document ? String(person.sk_document).split('/').pop() : ''),
+    if (!person) {
+      person = {
+        ...emptyPerson(),
+        id: staffId !== null ? `staff-${staffId}` : uid(),
+        staff_id: staffId,
+        nama: String(name ?? '').trim(),
+      }
+      persons.push(person)
+    }
+
+    if (staffId !== null) {
+      if (person.staff_id === null) person.staff_id = staffId
+      byStaff.set(staffId, person)
+    }
+    if (nKey && !byName.has(nKey)) byName.set(nKey, person)
+
+    mergePersonData(person, src)
+    return person
+  }
+
+  ;(structure.levels ?? []).forEach((level) => {
+    ;(level.people ?? []).forEach((src) => {
+      const person = resolvePerson(src, src.name)
+      assignments.push({
+        id: uid(),
+        person_id: person.id,
+        staff_id: src.staff_id ?? null,
+        source: 'level',
+        jabatan: normalizeJabatan(src.title) || null,
+        desc: src.desc ?? '',
+        rt_number: src.rt_number ?? '',
+        rw_number: src.rw_number ?? '',
+        padukuhan: textValue(src.padukuhan).trim(),
+        start_date: src.start_date ?? '',
+        end_date: src.end_date ?? '',
+        start_year: src.start_year ?? null,
+        end_year: src.end_year ?? null,
+        term_end_date: src.term_end_date ?? '',
+        sk_number: src.sk_number ?? '',
+        sk_document: src.sk_document ?? null,
+        sk_document_name:
+          src.sk_document_name ??
+          (src.sk_document ? String(src.sk_document).split('/').pop() : ''),
+        skFile: null,
+        position_history: seedHistory(src.position_history),
+      })
+    })
+  })
+
+  ;(structure.former_officials ?? []).forEach((src) => {
+    const person = resolvePerson(src, src.nama)
+    assignments.push({
+      id: src.id ?? uid(),
+      person_id: person.id,
+      staff_id: src.staff_id ?? null,
+      source: 'former',
+      jabatan: canonicalStaff(src.jabatan ?? ''),
+      desc: src.desc ?? '',
+      rt_number: src.rt_number ?? '',
+      rw_number: src.rw_number ?? '',
+      padukuhan: src.padukuhan ?? '',
+      start_date: src.start_date ?? '',
+      end_date: src.end_date ?? '',
+      start_year: src.start_year ?? null,
+      end_year: src.end_year ?? null,
+      term_end_date: '',
+      sk_number: src.sk_number ?? '',
+      sk_document: null,
+      sk_document_name: '',
       skFile: null,
-    }))
-  ))
-}
+      position_history: seedHistory(src.position_history),
+    })
+  })
 
-function seedFormerOfficials(list = []) {
-  if (!Array.isArray(list)) return []
-  return list.map((item) => ({
-    id: item.id ?? uid(),
-    staff_id: item.staff_id ?? null,
-    jabatan: canonicalStaff(item.jabatan ?? ''),
-    nama: item.nama ?? '',
-    rt_number: item.rt_number ?? '',
-    rw_number: item.rw_number ?? '',
-    padukuhan: item.padukuhan ?? '',
-    start_year: item.start_year ?? null,
-    end_year: item.end_year ?? null,
-    start_date: item.start_date ?? '',
-    end_date: item.end_date ?? '',
-    desc: item.desc ?? '',
-    gender: item.gender ?? null,
-    birth_date: item.birth_date ?? '',
-    education: item.education ?? null,
-    major: item.major ?? '',
-    school_name: item.school_name ?? '',
-    graduation_year: item.graduation_year ?? null,
-    sk_number: item.sk_number ?? '',
-    position_history: seedFormerHistory(item.position_history),
-  }))
+  return { persons, assignments }
 }
 
 function loadExisting(structure) {
   if (!structure) return
 
+  const { persons, assignments } = deriveState(structure)
   Object.assign(form, {
     organizational_structure_id: structure.organizational_structure_id,
     title: structure.title ?? 'Struktur Organisasi Pemerintah Kalurahan',
     status: structure.status ?? 'Published',
     published_at: structure.published_at ?? null,
-    people: seedPeople(structure.levels ?? []),
-    former_officials: seedFormerOfficials(structure.former_officials ?? []),
+    persons,
+    assignments,
     show_former_officials: !!structure.show_former_officials,
   })
   customJabatan.splice(0, customJabatan.length, ...seedCustomJabatan(structure.levels ?? []))
 }
 
+const regionAreas = ref([])
+
 onMounted(async () => {
   loading.value = true
   try {
-    const structures = await getOrganizationalStructures()
+    const [structures, areas] = await Promise.all([
+      getOrganizationalStructures(),
+      getRegionAreas().catch((err) => {
+        console.warn('Gagal memuat data wilayah:', err)
+        return []
+      }),
+    ])
     loadExisting(structures[0])
+    regionAreas.value = Array.isArray(areas) ? areas : []
   } catch (error) {
     toast.add({
       severity: 'error',
@@ -354,62 +493,255 @@ onMounted(async () => {
   }
 })
 
-/* ========================================================================
-   CRUD anggota struktur organisasi — daftar (DataTable) + modal (Dialog)
-   Setiap perubahan dikirim sebagai satu payload struktur ke API.
-   ======================================================================== */
+const personMap = computed(() => new Map(form.persons.map((p) => [p.id, p])))
 
-const selectedPeople = ref([])
+const assignmentsByPerson = computed(() => {
+  const map = new Map()
+  form.assignments.forEach((a) => {
+    if (!map.has(a.person_id)) map.set(a.person_id, [])
+    map.get(a.person_id).push(a)
+  })
+  return map
+})
+
+function isEnded(a) {
+  if (a.end_date) return a.end_date < todayISO()
+  return a.source === 'former'
+}
+
+const activeAssignments = computed(() => form.assignments.filter((a) => !isEnded(a)))
+const endedAssignments = computed(() => form.assignments.filter((a) => isEnded(a)))
+
+const personOptions = computed(() => (
+  [...form.persons]
+    .sort((l, r) => l.nama.localeCompare(r.nama, 'id'))
+    .map((p) => ({ label: p.nama || '(tanpa nama)', value: p.id }))
+))
+
+const orderedPersons = computed(() => {
+  const rank = (person) => {
+    const active = (assignmentsByPerson.value.get(person.id) ?? []).filter((a) => !isEnded(a))
+    if (!active.length) return [998, 0]
+    return active.map(personOrderKey).sort((a, b) => a[0] - b[0] || a[1] - b[1])[0]
+  }
+  return [...form.persons].sort((l, r) => {
+    const a = rank(l)
+    const b = rank(r)
+    return a[0] - b[0] || a[1] - b[1] || l.nama.localeCompare(r.nama, 'id')
+  })
+})
+
+function currentJabatanLabels(person) {
+  return (assignmentsByPerson.value.get(person.id) ?? [])
+    .filter((a) => !isEnded(a))
+    .sort(compareAssignments)
+    .map(formatJabatanFormer)
+}
+
+function buildLevels() {
+  const options = allJabatanOptions.value
+  const order = []
+  const levelMeta = new Map()
+
+  options.forEach((option) => {
+    if (!levelMeta.has(option.level)) {
+      order.push(option.level)
+      levelMeta.set(option.level, { pimpinan: false, slider: false, centerOnDesktop: false })
+    }
+
+    const meta = levelMeta.get(option.level)
+    meta.pimpinan ||= !!option.pimpinan
+    meta.slider ||= !!option.slider
+    meta.centerOnDesktop ||= !!option.centerOnDesktop
+  })
+  const buckets = new Map(order.map((level) => [level, []]))
+
+  activeAssignments.value.forEach((a) => {
+    const person = personMap.value.get(a.person_id)
+    if (!person || !a.jabatan || !person.nama.trim()) return
+
+    const key = jabatanKey(a.jabatan)
+    const option =
+      options.find((item) => jabatanKey(item.label) === key) ??
+      (isDukuhLabel(a.jabatan) ? options.find((item) => item.level === DUKUH_LEVEL) : null)
+    if (!option) return
+
+    const textOnly = a.jabatan === JABATAN_KETUA_RT || a.jabatan === JABATAN_KETUA_RW
+
+    buckets.get(option.level).push({
+      staff_id: a.staff_id ?? person.staff_id ?? null,
+      name: person.nama.trim(),
+      title: a.jabatan,
+      desc: a.desc?.trim() ?? '',
+      gender: person.gender ?? null,
+      education: person.education ?? null,
+      major: person.major?.trim() ?? '',
+      school_name: person.school_name?.trim() ?? '',
+      graduation_year: person.graduation_year ?? null,
+      birth_date: person.birth_date ?? '',
+      term_end_date: (a.start_date ? a.end_date : a.term_end_date) || null,
+      position_history: (a.position_history ?? []).map((item, index) => ({
+        sk: item.sk,
+        date: item.date,
+        official: item.official,
+
+        document: item.documentFile ? `upload-sk:${a.id}-sk-${index}` : (item.document ?? null),
+        document_name: item.document_name || null,
+      })),
+      start_date: a.start_date || null,
+      end_date: a.end_date || null,
+      start_year: a.start_year ?? null,
+      end_year: a.end_year ?? null,
+      photo: textOnly ? null : (person.photoFile ? `upload:${person.id}` : person.photo),
+      signature: textOnly ? null : (person.signatureFile ? `upload-signature:${person.id}` : person.signature),
+      rt_number: a.rt_number || '',
+      rw_number: a.rw_number || '',
+      padukuhan: textValue(a.padukuhan).trim(),
+      sk_number: a.sk_number?.trim() ?? '',
+      sk_document: a.skFile ? `upload-sk:${a.id}-sk-main` : (a.sk_document ?? null),
+      sk_document_name: a.sk_document_name || null,
+    })
+  })
+
+  return order
+    .filter((level) => buckets.get(level)?.length)
+    .map((level) => ({
+      level,
+      ...levelMeta.get(level),
+      people: buckets.get(level),
+    }))
+}
+
+function buildFormerOfficials() {
+  return endedAssignments.value.flatMap((a) => {
+    const person = personMap.value.get(a.person_id)
+    if (!person) return []
+    return [{
+      id: a.id,
+      staff_id: a.staff_id ?? person.staff_id ?? null,
+      jabatan: a.jabatan,
+      nama: person.nama,
+      rt_number: a.rt_number,
+      rw_number: a.rw_number,
+      padukuhan: a.padukuhan,
+      start_year: a.start_year,
+      end_year: a.end_year,
+      start_date: a.start_date || null,
+      end_date: a.end_date || null,
+      desc: a.desc,
+      gender: person.gender ?? null,
+      birth_date: person.birth_date ?? '',
+      education: person.education ?? null,
+      major: person.major?.trim() ?? '',
+      school_name: person.school_name?.trim() ?? '',
+      graduation_year: person.graduation_year ?? null,
+      sk_number: a.sk_number?.trim() ?? '',
+      position_history: (a.position_history ?? []).map((h) => ({
+        sk: h.sk,
+        date: h.date,
+        official: h.official,
+      })),
+    }]
+  })
+}
+
+async function persistStructure() {
+  saving.value = true
+  try {
+
+    const withoutAssignment = form.persons.filter((p) => !form.assignments.some((a) => a.person_id === p.id))
+
+    const activeByPerson = new Map()
+    activeAssignments.value.forEach((a) => {
+      if (!activeByPerson.has(a.person_id)) activeByPerson.set(a.person_id, [])
+      activeByPerson.get(a.person_id).push(a)
+    })
+    const carriesMedia = (person) => (activeByPerson.get(person.id) ?? []).some(
+      (a) => a.jabatan !== JABATAN_KETUA_RT && a.jabatan !== JABATAN_KETUA_RW,
+    )
+
+    const files = [
+      ...form.persons.flatMap((person) => (carriesMedia(person)
+        ? [
+            person.photoFile ? { token: person.id, file: person.photoFile } : null,
+            person.signatureFile ? { token: person.id, file: person.signatureFile, type: 'signature' } : null,
+          ]
+        : [])),
+      ...activeAssignments.value.map((a) => (
+        a.skFile ? { token: `${a.id}-sk-main`, file: a.skFile, type: 'sk' } : null
+      )),
+      ...activeAssignments.value.flatMap((a) => (a.position_history ?? []).map((item, index) => (
+        item.documentFile ? { token: `${a.id}-sk-${index}`, file: item.documentFile, type: 'sk' } : null
+      ))),
+    ].filter(Boolean)
+
+    const saved = await saveOrganizationalStructure({
+      id: form.organizational_structure_id,
+      payload: {
+        title: form.title,
+        status: form.status,
+        published_at: form.published_at,
+        levels: buildLevels(),
+        former_officials: buildFormerOfficials(),
+        show_former_officials: form.show_former_officials,
+      },
+      files,
+    })
+
+    loadExisting(saved)
+    withoutAssignment.forEach((p) => {
+      if (!form.persons.some((x) => x.id === p.id)) form.persons.push(p)
+    })
+    return true
+  } catch (error) {
+    const validation = Object.values(error.response?.data?.errors ?? {})
+      .flat()
+      .filter(Boolean)
+      .join(' ')
+    toast.add({
+      severity: 'error',
+      summary: validation || error.response?.data?.message || 'Gagal menyimpan struktur organisasi',
+      life: 3000,
+    })
+    return false
+  } finally {
+    saving.value = false
+  }
+}
+
+async function commit(mutate, { remote = true } = {}) {
+  const previous = { persons: form.persons, assignments: form.assignments }
+  mutate()
+  if (!remote) return true
+  const ok = await persistStructure()
+  if (!ok) {
+    form.persons = previous.persons
+    form.assignments = previous.assignments
+  }
+  return ok
+}
+
+const selectedPersons = ref([])
 
 const personDialogVisible = ref(false)
 const editingPersonId = ref(null)
-const personDialogTitle = computed(() => (editingPersonId.value ? 'Edit Data Pamong' : 'Tambah Staff'))
-
-// Tambah: Staff Pamong Kalurahan, Ketua RT, Ketua RW.
-// Edit: semua jabatan.
-const jabatanDropdownOptions = computed(() => {
-  if (!editingPersonId.value) {
-    return ADD_STAFF_JABATAN.map((label) => ({ label }))
-  }
-  const labels = allJabatanOptions.value
-    .map((option) => option.label)
-    .filter((label) => !isDukuhLabel(label))
-  return [...labels, JABATAN_DUKUH].map((label) => ({ label }))
-})
+const personDialogTitle = computed(() => (editingPersonId.value ? 'Edit Data Diri' : 'Tambah Pejabat / Staff'))
 
 const emptyPersonForm = () => ({
-  jabatan: null,
   nama: '',
-  desc: '',
   gender: null,
+  birth_date: '',
   education: null,
   major: '',
   school_name: '',
   graduation_year: null,
-  birth_date: '',
-  term_end_date: '',
-  position_history: [],
-  start_date: '',
-  end_date: '',
-  start_year: null,
-  end_year: null,
   photo: null,
   photoFile: null,
   signature: null,
   signatureFile: null,
-  rt_number: '',
-  rw_number: '',
-  padukuhan: '',
-  dukuh_number: '',
-  sk_number: '',
-  sk_document: null,
-  sk_document_name: '',
-  skFile: null,
 })
 const personForm = reactive(emptyPersonForm())
 
-/* Deteksi perubahan form: klik di luar modal / Escape hanya menutup modal
-   jika belum ada isian yang diubah dibanding kondisi saat modal dibuka. */
 const personSnapshot = ref('')
 
 function serializePersonForm() {
@@ -431,123 +763,15 @@ const schoolNamePlaceholder = computed(() => (
   isHigherEducation(personForm.education) ? 'mis. Universitas Negeri Yogyakarta' : 'mis. SMA Negeri 1 Yogyakarta'
 ))
 
-const isKetuaRt = computed(() => personForm.jabatan === JABATAN_KETUA_RT)
-const isKetuaRw = computed(() => personForm.jabatan === JABATAN_KETUA_RW)
-const isRtRw = computed(() => isKetuaRt.value || isKetuaRw.value)
-const isDukuh = computed(() => personForm.jabatan === JABATAN_DUKUH)
-
-// Ketua RT/RW: tanpa foto & tanda tangan (di publik hanya data teks).
-// Dukuh: foto saja (tampil di hierarki). Staff Pamong & lainnya: foto + tanda tangan.
-const showPhoto = computed(() => !isRtRw.value)
-const showSignature = computed(() => !isRtRw.value && !isDukuh.value)
-
-// Contoh hasil: "Dukuh XIII Krebet Baru".
-const dukuhLabelPreview = computed(() => composeDukuhLabel(personForm.dukuh_number, personForm.padukuhan))
-
-// Bersihkan isian yang tidak relevan saat jabatan berganti.
-watch(
-  () => personForm.jabatan,
-  (jabatan) => {
-    const rt = jabatan === JABATAN_KETUA_RT
-    const rw = jabatan === JABATAN_KETUA_RW
-    const dukuh = jabatan === JABATAN_DUKUH
-    if (!rt) personForm.rt_number = ''
-    if (!rt && !rw) personForm.rw_number = ''
-    if (!rt && !rw && !dukuh) personForm.padukuhan = ''
-    if (!dukuh) personForm.dukuh_number = ''
-  },
-)
-
-/* ---- Preview detail pamong / pejabat terdahulu (pop up, hanya baca) ---- */
-const previewDialogVisible = ref(false)
-const previewPerson = ref(null)
-// 'person' = Daftar Pamong Kalurahan, 'former' = Pejabat Terdahulu
-const previewKind = ref('person')
-
-function openPreview(person) {
-  previewKind.value = 'person'
-  previewPerson.value = person
-  previewDialogVisible.value = true
-}
-
-function openPreviewFormer(item) {
-  previewKind.value = 'former'
-  previewPerson.value = item
-  previewDialogVisible.value = true
-}
-
-function closePreview() {
-  previewDialogVisible.value = false
-  previewPerson.value = null
-}
-
-function editFromPreview() {
-  const person = previewPerson.value
-  const kind = previewKind.value
-  closePreview()
-  if (!person) return
-  if (kind === 'former') openEditFormer(person)
-  else openEditPerson(person)
-}
-
-const previewIsRtRw = computed(() => {
-  const jabatan = previewPerson.value?.jabatan
-  return jabatan === JABATAN_KETUA_RT || jabatan === JABATAN_KETUA_RW
-})
-
-// Jabatan lengkap untuk chip, mis. "LURAH KALURAHAN BIMOMARTANI".
-const previewJabatanFull = computed(() => {
-  const label = formatJabatanFormer(previewPerson.value)
-  return label ? `${label} Kalurahan Bimomartani` : ''
-})
-
-// Kartu "Informasi Pamong": selalu tampil, nilai kosong ditulis "—" (sama seperti halaman publik).
-const previewInfoCards = computed(() => {
-  const p = previewPerson.value
-  if (!p) return []
-
-  const masaJabatan = formatMasaJabatan(p)
-  const common = [
-    { label: 'Jenis Kelamin', value: p.gender, icon: 'pi-user' },
-    { label: 'Usia', value: calcAge(p.birth_date) !== null ? `${calcAge(p.birth_date)} tahun` : '', icon: 'pi-id-card' },
-  ]
-
-  // Kartu wilayah: RT/RW (nomor & padukuhan) atau Dukuh (padukuhan).
-  const region = previewIsRtRw.value
-    ? [
-        ...(p.jabatan === JABATAN_KETUA_RT
-          ? [{ label: 'Nomor RT', value: padNumber(p.rt_number), icon: 'pi-hashtag' }]
-          : []),
-        { label: 'Nomor RW', value: padNumber(p.rw_number), icon: 'pi-hashtag' },
-        { label: 'Padukuhan', value: p.padukuhan, icon: 'pi-map-marker' },
-      ]
-    : isDukuhLabel(p.jabatan)
-      ? [{ label: 'Padukuhan', value: p.padukuhan || parseDukuhLabel(p.jabatan).name, icon: 'pi-map-marker' }]
-      : []
-
-  const education = [
-    { label: 'Jenjang Pendidikan', value: p.education, icon: 'pi-book' },
-    { label: 'Jurusan', value: p.major, icon: 'pi-bookmark' },
-    {
-      label: isHigherEducation(p.education) ? 'Nama Instansi Pendidikan' : 'Nama Sekolah',
-      value: p.school_name,
-      icon: 'pi-building',
-    },
-    { label: 'Tahun Lulus', value: p.graduation_year, icon: 'pi-graduation-cap' },
-  ]
-
-  const middle = [...region, ...education]
-
-  return [
-    ...common,
-    ...middle,
-    { label: 'Masa Jabatan', value: masaJabatan === '—' ? '' : masaJabatan, icon: 'pi-calendar' },
-  ]
+const showPersonMedia = computed(() => {
+  if (!editingPersonId.value) return true
+  const list = assignmentsByPerson.value.get(editingPersonId.value) ?? []
+  return !(list.length && list.every((a) => a.jabatan === JABATAN_KETUA_RT || a.jabatan === JABATAN_KETUA_RW))
 })
 
 function openNewPerson() {
   editingPersonId.value = null
-  Object.assign(personForm, emptyPersonForm(), { jabatan: JABATAN_STAFF })
+  Object.assign(personForm, emptyPersonForm())
   personSnapshot.value = serializePersonForm()
   personDialogVisible.value = true
 }
@@ -555,33 +779,17 @@ function openNewPerson() {
 function openEditPerson(person) {
   editingPersonId.value = person.id
   Object.assign(personForm, {
-    jabatan: isDukuhLabel(person.jabatan) ? JABATAN_DUKUH : person.jabatan,
-    dukuh_number: isDukuhLabel(person.jabatan) ? parseDukuhLabel(person.jabatan).number : '',
     nama: person.nama,
-    desc: person.desc,
     gender: person.gender ?? null,
+    birth_date: person.birth_date ?? '',
     education: person.education ?? null,
     major: person.major ?? '',
     school_name: person.school_name ?? '',
     graduation_year: person.graduation_year ?? null,
-    birth_date: person.birth_date ?? '',
-    term_end_date: person.term_end_date ?? '',
-    position_history: seedHistory(person.position_history),
-    start_date: person.start_date ?? '',
-    end_date: person.end_date ?? '',
-    start_year: person.start_year ?? null,
-    end_year: person.end_year ?? null,
     photo: person.photo,
     photoFile: null,
     signature: person.signature,
     signatureFile: null,
-    rt_number: person.rt_number ?? '',
-    rw_number: person.rw_number ?? '',
-    padukuhan: person.padukuhan || (isDukuhLabel(person.jabatan) ? parseDukuhLabel(person.jabatan).name : ''),
-    sk_number: person.sk_number ?? '',
-    sk_document: person.sk_document ?? null,
-    sk_document_name: person.sk_document_name ?? '',
-    skFile: null,
   })
   personSnapshot.value = serializePersonForm()
   personDialogVisible.value = true
@@ -594,384 +802,107 @@ function closePersonDialog() {
   Object.assign(personForm, emptyPersonForm())
 }
 
-/* ---- Riwayat jabatan (SK, tanggal, pejabat, dokumen opsional) ---- */
-function addHistoryRow() {
-  personForm.position_history.push({
-    sk: '',
-    date: '',
-    official: '',
-    document: null,
-    document_name: '',
-    documentFile: null,
-  })
-}
-
-function removeHistoryRow(index) {
-  personForm.position_history.splice(index, 1)
-}
-
-function hasSkDocument(item) {
-  return !!(item?.documentFile || item?.document)
-}
-
-const skFileInput = ref(null)
-let skTargetIndex = null
-
-function triggerSkUpload(index) {
-  skTargetIndex = index
-  skFileInput.value?.click()
-}
-
-// Jika dokumen diunggah, judul SK otomatis diambil dari nama file (tanpa ekstensi).
-function onSkFileChange(event) {
-  const file = event.target.files?.[0]
-  event.target.value = ''
-  if (!file) return
-
-  if (file.size > SK_MAX_SIZE_MB * 1024 * 1024) {
-    toast.add({ severity: 'error', summary: `Ukuran dokumen maksimal ${SK_MAX_SIZE_MB} MB`, life: 2500 })
-    return
-  }
-
-  const item = personForm.position_history[skTargetIndex]
-  if (!item) return
-
-  item.documentFile = file
-  item.document_name = file.name
-  item.sk = file.name.replace(/\.[^.]+$/, '')
-}
-
-function removeSkDocument(index) {
-  const item = personForm.position_history[index]
-  if (!item) return
-  item.documentFile = null
-  item.document = null
-  item.document_name = ''
-  item.sk = ''
-}
-
-/* ---- SK utama (nomor SK + dokumen) ---- */
-const mainSkInput = ref(null)
-
-function triggerMainSkUpload() {
-  mainSkInput.value?.click()
-}
-
-function onMainSkChange(event) {
-  const file = event.target.files?.[0]
-  event.target.value = ''
-  if (!file) return
-
-  if (file.size > SK_MAX_SIZE_MB * 1024 * 1024) {
-    toast.add({ severity: 'error', summary: `Ukuran dokumen maksimal ${SK_MAX_SIZE_MB} MB`, life: 2500 })
-    return
-  }
-
-  personForm.skFile = file
-  personForm.sk_document_name = file.name
-  if (!personForm.sk_number.trim()) {
-    personForm.sk_number = file.name.replace(/\.[^.]+$/, '')
-  }
-}
-
-function removeMainSk() {
-  personForm.skFile = null
-  personForm.sk_document = null
-  personForm.sk_document_name = ''
-}
-
-function buildLevels() {
-  const options = allJabatanOptions.value
-  const order = []
-  const levelMeta = new Map()
-
-  options.forEach((option) => {
-    if (!levelMeta.has(option.level)) {
-      order.push(option.level)
-      levelMeta.set(option.level, {
-        pimpinan: false,
-        slider: false,
-        centerOnDesktop: false,
-      })
-    }
-
-    const meta = levelMeta.get(option.level)
-    meta.pimpinan ||= !!option.pimpinan
-    meta.slider ||= !!option.slider
-    meta.centerOnDesktop ||= !!option.centerOnDesktop
-  })
-  const buckets = new Map(order.map((level) => [level, []]))
-  form.people.forEach((person) => {
-    if (!person.jabatan || !person.nama.trim()) return
-
-    const personKey = jabatanKey(person.jabatan)
-    const option =
-      options.find((item) => jabatanKey(item.label) === personKey) ??
-      (isDukuhLabel(person.jabatan) ? options.find((item) => item.level === DUKUH_LEVEL) : null)
-    if (!option) return
-
-    buckets.get(option.level).push({
-      staff_id: person.staff_id ?? null,
-      name: person.nama.trim(),
-      title: person.jabatan,
-      desc: person.desc?.trim() ?? '',
-      gender: person.gender ?? null,
-      education: person.education ?? null,
-      major: person.major?.trim() ?? '',
-      school_name: person.school_name?.trim() ?? '',
-      graduation_year: person.graduation_year ?? null,
-      birth_date: person.birth_date ?? '',
-      term_end_date: person.term_end_date || null,
-      position_history: (person.position_history ?? []).map((item, index) => ({
-        sk: item.sk,
-        date: item.date,
-        official: item.official,
-        // File baru ditandai placeholder; backend mengganti dengan path hasil upload.
-        document: item.documentFile
-          ? `upload-sk:${person.id}-sk-${index}`
-          : (item.document ?? null),
-        document_name: item.document_name || null,
-      })),
-      start_date: person.start_date || null,
-      end_date: person.end_date || null,
-      start_year: person.start_year ?? null,
-      end_year: person.end_year ?? null,
-      photo: person.photoFile ? `upload:${person.id}` : person.photo,
-      signature: person.signatureFile ? `upload-signature:${person.id}` : person.signature,
-      rt_number: person.rt_number || '',
-      rw_number: person.rw_number || '',
-      padukuhan: textValue(person.padukuhan).trim(),
-      sk_number: person.sk_number?.trim() ?? '',
-      sk_document: person.skFile
-        ? `upload-sk:${person.id}-sk-main`
-        : (person.sk_document ?? null),
-      sk_document_name: person.sk_document_name || null,
-    })
-  })
-
-  return order
-    .filter((level) => buckets.get(level)?.length)
-    .map((level) => ({
-      level,
-      ...levelMeta.get(level),
-      people: buckets.get(level),
-    }))
-}
-
-async function persistStructure() {
-  saving.value = true
-  try {
-    const files = form.people.flatMap((person) => [
-      person.photoFile ? { token: person.id, file: person.photoFile } : null,
-      person.signatureFile ? { token: person.id, file: person.signatureFile, type: 'signature' } : null,
-      person.skFile ? { token: `${person.id}-sk-main`, file: person.skFile, type: 'sk' } : null,
-      ...(person.position_history ?? []).map((item, index) => (
-        item.documentFile
-          ? { token: `${person.id}-sk-${index}`, file: item.documentFile, type: 'sk' }
-          : null
-      )),
-    ].filter(Boolean))
-
-    const saved = await saveOrganizationalStructure({
-      id: form.organizational_structure_id,
-      payload: {
-        title: form.title,
-        status: form.status,
-        published_at: form.published_at,
-        levels: buildLevels(),
-        former_officials: form.former_officials.map((item) => ({
-          id: item.id,
-          staff_id: item.staff_id ?? null,
-          jabatan: item.jabatan,
-          nama: item.nama,
-          rt_number: item.rt_number,
-          rw_number: item.rw_number,
-          padukuhan: item.padukuhan,
-          start_year: item.start_year,
-          end_year: item.end_year,
-          start_date: item.start_date || null,
-          end_date: item.end_date || null,
-          desc: item.desc,
-          gender: item.gender ?? null,
-          birth_date: item.birth_date ?? '',
-          education: item.education ?? null,
-          major: item.major?.trim() ?? '',
-          school_name: item.school_name?.trim() ?? '',
-          graduation_year: item.graduation_year ?? null,
-          sk_number: item.sk_number?.trim() ?? '',
-          position_history: (item.position_history ?? []).map((h) => ({
-            sk: h.sk,
-            date: h.date,
-            official: h.official,
-          })),
-        })),
-        show_former_officials: form.show_former_officials,
-      },
-      files,
-    })
-
-    loadExisting(saved)
-    return true
-  } catch (error) {
-    const validation = Object.values(error.response?.data?.errors ?? {})
-      .flat()
-      .filter(Boolean)
-      .join(' ')
-    toast.add({
-      severity: 'error',
-      summary: validation || error.response?.data?.message || 'Gagal menyimpan struktur organisasi',
-      life: 3000,
-    })
-    return false
-  } finally {
-    saving.value = false
-  }
-}
-
 async function savePersonDialog() {
   const nama = personForm.nama.trim()
-  if (!personForm.jabatan || !nama) {
-    toast.add({ severity: 'error', summary: 'Jabatan dan nama wajib diisi', life: 2500 })
+  if (!nama) {
+    toast.add({ severity: 'error', summary: 'Nama wajib diisi', life: 2500 })
     return
   }
 
-  const rtNumber = String(personForm.rt_number ?? '').trim()
-  const rwNumber = String(personForm.rw_number ?? '').trim()
-  const padukuhan = String(textValue(personForm.padukuhan)).trim()
-  if (isKetuaRt.value && (!rtNumber || !rwNumber || !padukuhan)) {
-    toast.add({ severity: 'error', summary: 'Nomor RT, nomor RW, dan padukuhan wajib diisi', life: 2500 })
-    return
-  }
-  if (isKetuaRw.value && (!rwNumber || !padukuhan)) {
-    toast.add({ severity: 'error', summary: 'Nomor RW dan padukuhan wajib diisi', life: 2500 })
-    return
-  }
-
-  const dukuhNumber = String(personForm.dukuh_number ?? '').trim().toUpperCase()
-  if (isDukuh.value) {
-    if (!padukuhan) {
-      toast.add({ severity: 'error', summary: 'Nama padukuhan wajib diisi', life: 2500 })
-      return
-    }
-    if (dukuhNumber && !/^([IVXLCDM]+|\d+)$/.test(dukuhNumber)) {
-      toast.add({ severity: 'error', summary: 'Nomor urut dukuh harus angka Romawi (mis. I, II, XIII)', life: 2500 })
-      return
-    }
-  }
-
-  if (personForm.end_date && !personForm.start_date) {
-    toast.add({ severity: 'error', summary: 'Tanggal mulai wajib diisi jika tanggal selesai diisi', life: 2500 })
-    return
-  }
-  if (personForm.start_date && personForm.end_date && personForm.end_date < personForm.start_date) {
-    toast.add({ severity: 'error', summary: 'Tanggal selesai tidak boleh lebih awal dari tanggal mulai', life: 2500 })
-    return
-  }
-
-  const rtRw = isRtRw.value
-  // Jika tanggal diisi, tahun diturunkan dari tanggal; jika tidak, data tahun lama dipertahankan.
-  const usesDates = !!personForm.start_date
+  const wasEditing = !!editingPersonId.value
+  const id = wasEditing ? editingPersonId.value : uid()
 
   const data = {
-    jabatan: isDukuh.value ? composeDukuhLabel(dukuhNumber, padukuhan) : personForm.jabatan,
     nama,
-    desc: personForm.desc.trim(),
     gender: personForm.gender,
+    birth_date: personForm.birth_date,
     education: personForm.education,
     major: personForm.major.trim(),
     school_name: personForm.school_name.trim(),
     graduation_year: personForm.graduation_year,
-    birth_date: personForm.birth_date,
-    // Tanggal habis jabatan = tanggal selesai masa jabatan (dikirim juga agar halaman publik tetap terbaca).
-    term_end_date: usesDates ? (personForm.end_date || '') : (personForm.term_end_date || ''),
-    // Baris riwayat yang benar-benar kosong tidak ikut disimpan.
-    position_history: personForm.position_history
-      .map((item) => ({
-        sk: item.sk.trim(),
-        date: item.date,
-        official: item.official.trim(),
-        document: item.document ?? null,
-        document_name: item.document_name ?? '',
-        documentFile: item.documentFile ?? null,
-      }))
-      .filter((item) => item.sk || item.date || item.official || item.document || item.documentFile),
-    start_date: personForm.start_date || '',
-    end_date: personForm.end_date || '',
-    start_year: usesDates ? yearOf(personForm.start_date) : personForm.start_year,
-    end_year: usesDates ? yearOf(personForm.end_date) : personForm.end_year,
-    photo: rtRw ? null : personForm.photo,
-    photoFile: rtRw ? null : personForm.photoFile,
-    signature: rtRw ? null : personForm.signature,
-    signatureFile: rtRw ? null : personForm.signatureFile,
-    rt_number: isKetuaRt.value ? rtNumber : '',
-    rw_number: rtRw ? rwNumber : '',
-    padukuhan: rtRw || isDukuh.value ? padukuhan : '',
-    sk_number: personForm.sk_number.trim(),
-    sk_document: personForm.sk_document,
-    sk_document_name: personForm.sk_document_name ?? '',
-    skFile: personForm.skFile,
+    photo: personForm.photo,
+    photoFile: personForm.photoFile,
+    signature: personForm.signature,
+    signatureFile: personForm.signatureFile,
   }
 
-  const wasEditing = !!editingPersonId.value
   if (wasEditing) {
-    form.people = form.people.map((p) => (p.id === editingPersonId.value ? { ...p, ...data } : p))
-  } else {
-    form.people = [...form.people, { id: uid(), ...data }]
+    const hasAssignments = form.assignments.some((a) => a.person_id === id)
+    const ok = await commit(() => {
+      form.persons = form.persons.map((p) => (p.id === id ? { ...p, ...data } : p))
+    }, { remote: hasAssignments })
+    if (!ok) return
+    closePersonDialog()
+    toast.add({ severity: 'success', summary: 'Data diri diperbarui', life: 2500 })
+    return
   }
 
-  const saved = await persistStructure()
-  if (!saved) return
+  await commit(() => {
+    form.persons = [...form.persons, { ...emptyPerson(), id, ...data }]
+  }, { remote: false })
 
+  closePersonDialog()
+  if (!editingAssignmentId.value) {
+    assignForm.person_id = id
+    scrollToAssignForm()
+  }
   toast.add({
     severity: 'success',
-    summary: wasEditing ? 'Data pamong diperbarui' : 'Staff ditambahkan',
-    life: 2500,
+    summary: 'Data diri ditambahkan. Lengkapi jabatannya di Riwayat Jabatan agar tersimpan.',
+    life: 4000,
   })
-  closePersonDialog()
 }
 
 function deletePerson(person) {
+  const count = (assignmentsByPerson.value.get(person.id) ?? []).length
   confirm.require({
-    message: `Hapus "${person.nama}" dari struktur organisasi?`,
+    message: count
+      ? `Hapus "${person.nama}" beserta ${count} riwayat jabatannya?`
+      : `Hapus "${person.nama}"?`,
     header: 'Konfirmasi Hapus',
     icon: 'pi pi-exclamation-triangle',
     acceptLabel: 'Hapus',
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
     accept: async () => {
-      form.people = form.people.filter((p) => p.id !== person.id)
-      selectedPeople.value = selectedPeople.value.filter((p) => p.id !== person.id)
-
-      if (await persistStructure()) {
-        toast.add({ severity: 'success', summary: 'Pamong dihapus', life: 2000 })
-      }
+      const ok = await commit(() => {
+        form.persons = form.persons.filter((p) => p.id !== person.id)
+        form.assignments = form.assignments.filter((a) => a.person_id !== person.id)
+      }, { remote: count > 0 })
+      if (!ok) return
+      selectedPersons.value = selectedPersons.value.filter((p) => p.id !== person.id)
+      if (assignForm.person_id === person.id) resetAssignForm()
+      toast.add({ severity: 'success', summary: 'Data pejabat / staff dihapus', life: 2000 })
     },
   })
 }
 
-function deleteSelectedPeople() {
-  if (!selectedPeople.value.length) return
+function deleteSelectedPersons() {
+  if (!selectedPersons.value.length) return
   confirm.require({
-    message: `Hapus ${selectedPeople.value.length} pamong terpilih?`,
+    message: `Hapus ${selectedPersons.value.length} pejabat / staff terpilih beserta riwayat jabatannya?`,
     header: 'Konfirmasi Hapus',
     icon: 'pi pi-exclamation-triangle',
     acceptLabel: 'Hapus',
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
     accept: async () => {
-      const idsToRemove = new Set(selectedPeople.value.map((p) => p.id))
-      form.people = form.people.filter((p) => !idsToRemove.has(p.id))
-      selectedPeople.value = []
-
-      if (await persistStructure()) {
-        toast.add({ severity: 'success', summary: 'Pamong terpilih dihapus', life: 2000 })
-      }
+      const ids = new Set(selectedPersons.value.map((p) => p.id))
+      const hadAssignments = form.assignments.some((a) => ids.has(a.person_id))
+      const ok = await commit(() => {
+        form.persons = form.persons.filter((p) => !ids.has(p.id))
+        form.assignments = form.assignments.filter((a) => !ids.has(a.person_id))
+      }, { remote: hadAssignments })
+      if (!ok) return
+      selectedPersons.value = []
+      if (ids.has(assignForm.person_id)) resetAssignForm()
+      toast.add({ severity: 'success', summary: 'Pejabat / staff terpilih dihapus', life: 2000 })
     },
   })
 }
 
-/* ---- Unggah foto (dipakai di dalam modal) ---- */
 const personPhotoInput = ref(null)
+const personSignatureInput = ref(null)
 
 function triggerPersonPhotoUpload() {
   personPhotoInput.value?.click()
@@ -998,8 +929,6 @@ function onPersonPhotoChange(event) {
   }
   reader.readAsDataURL(file)
 }
-
-const personSignatureInput = ref(null)
 
 function triggerPersonSignatureUpload() {
   personSignatureInput.value?.click()
@@ -1060,356 +989,547 @@ async function onPersonSignatureChange(event) {
   }
 }
 
-/* ========================================================================
-   CRUD pejabat terdahulu (RT/RW hingga Lurah) + toggle tampil di publik.
-   Disimpan bersama payload struktur yang sama (persistStructure).
-   ======================================================================== */
+const assignSectionRef = ref(null)
+const editingAssignmentId = ref(null)
+const editingOriginal = ref(null)
 
-// Nama padukuhan diambil dari semua jabatan Dukuh (termasuk padukuhan baru hasil pemekaran).
-const padukuhanOptions = computed(() => {
-  const names = [
-    ...allJabatanOptions.value.map((option) => option.label),
-    ...form.people.map((person) => person.jabatan),
-  ]
-    .filter(isDukuhLabel)
-    .map((label) => parseDukuhLabel(label).name)
-    .filter(Boolean)
-  return [...new Set(names)]
+const emptyAssignForm = () => ({
+  person_id: null,
+  jabatan: null,
+  padukuhan: '',
+  dukuh_number: '',
+  rw_number: '',
+  rt_number: '',
+  start_date: todayISO(),
+  end_date: '',
+  desc: '',
+  sk_number: '',
+  sk_document: null,
+  sk_document_name: '',
+  skFile: null,
+  position_history: [],
 })
+const assignForm = reactive(emptyAssignForm())
 
-const formerIsKetuaRt = computed(() => formerForm.jabatan === JABATAN_KETUA_RT)
-const formerIsKetuaRw = computed(() => formerForm.jabatan === JABATAN_KETUA_RW)
-const formerIsDukuh = computed(() => formerForm.jabatan === JABATAN_DUKUH)
-
-// Contoh hasil: "Dukuh XIII Krebet Baru".
-const formerDukuhLabelPreview = computed(() =>
-  composeDukuhLabel(formerForm.dukuh_number, formerForm.padukuhan),
-)
-
-const formerSchoolNameLabel = computed(() => (
-  isHigherEducation(formerForm.education) ? 'Nama Instansi Pendidikan' : 'Nama Sekolah'
-))
-const formerSchoolNamePlaceholder = computed(() => (
-  isHigherEducation(formerForm.education) ? 'mis. Universitas Negeri Yogyakarta' : 'mis. SMA Negeri 1 Yogyakarta'
-))
-
-// Usia dihitung dari tanggal lahir (tidak disimpan di database).
-function calcAge(birthDate) {
-  if (!birthDate) return null
-  const b = new Date(`${String(birthDate).slice(0, 10)}T00:00:00`)
-  if (Number.isNaN(b.getTime())) return null
-  const now = new Date()
-  let age = now.getFullYear() - b.getFullYear()
-  const m = now.getMonth() - b.getMonth()
-  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age -= 1
-  return age >= 0 ? age : null
+function scrollToAssignForm() {
+  nextTick(() => assignSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' }))
 }
 
-function padNumber(value) {
-  const v = String(value ?? '').trim()
-  return /^\d+$/.test(v) ? v.padStart(2, '0') : v
+function resetAssignForm() {
+  Object.assign(assignForm, emptyAssignForm())
+  editingAssignmentId.value = null
+  editingOriginal.value = null
 }
 
-function textValue(value) {
-  if (value && typeof value === 'object') return value.value ?? value.label ?? ''
-  return value ?? ''
-}
-
-// Contoh: "Ketua RT 01", "Ketua RW 02". Dipakai juga di tabel pamong.
-function formatJabatanFormer(item) {
-  if (item?.jabatan === JABATAN_KETUA_RT && item.rt_number) return `${item.jabatan} ${padNumber(item.rt_number)}`
-  if (item?.jabatan === JABATAN_KETUA_RW && item.rw_number) return `${item.jabatan} ${padNumber(item.rw_number)}`
-  return item?.jabatan ?? ''
-}
-
-// Contoh: "RW 02, Padukuhan Krebet" (RT) atau "Padukuhan Krebet" (RW).
-function formatWilayahFormer(item) {
-  if (isDukuhLabel(item?.jabatan)) {
-    const name = item.padukuhan || parseDukuhLabel(item.jabatan).name
-    return name ? `Padukuhan ${name}` : '—'
-  }
-  const parts = []
-  if (item?.jabatan === JABATAN_KETUA_RT && item.rw_number) parts.push(`RW ${padNumber(item.rw_number)}`)
-  if ((item?.jabatan === JABATAN_KETUA_RT || item?.jabatan === JABATAN_KETUA_RW) && item.padukuhan) {
-    parts.push(`Padukuhan ${item.padukuhan}`)
-  }
-  return parts.length ? parts.join(', ') : '—'
-}
-
-// Urutan mengikuti JABATAN_OPTIONS (Lurah dst.); semua Dukuh digabung jadi satu opsi "Dukuh".
-// Duplikat (termasuk beda huruf besar/kecil, spasi, atau ejaan Staf/Staff) dibuang.
-const formerJabatanOptions = computed(() => {
+const jabatanSelectOptions = computed(() => {
   const list = []
   const seen = new Set()
-  allJabatanOptions.value.forEach(({ label }) => {
-    const value = isDukuhLabel(label) ? JABATAN_DUKUH : canonicalStaff(label)
+  const push = (label, value = label) => {
     const key = jabatanKey(value)
     if (!key || seen.has(key)) return
     seen.add(key)
-    list.push(value)
+    list.push({ label, value })
+  }
+  const special = (label) => isDukuhLabel(label) || label === JABATAN_KETUA_RT || label === JABATAN_KETUA_RW
+
+  allJabatanOptions.value.forEach((option) => {
+    if (!special(option.label)) push(option.label)
   })
+  form.assignments.forEach((a) => {
+    if (a.jabatan && !special(a.jabatan)) push(a.jabatan)
+  })
+  push('Ketua Dukuh', JABATAN_DUKUH)
+  push('Ketua RW', JABATAN_KETUA_RW)
+  push('Ketua RT', JABATAN_KETUA_RT)
   return list
 })
 
-function yearOf(date) {
-  const year = parseInt(String(date ?? '').slice(0, 4), 10)
-  return Number.isNaN(year) ? null : year
-}
+const aIsRt = computed(() => assignForm.jabatan === JABATAN_KETUA_RT)
+const aIsRw = computed(() => assignForm.jabatan === JABATAN_KETUA_RW)
+const aIsRtRw = computed(() => aIsRt.value || aIsRw.value)
+const aIsDukuh = computed(() => assignForm.jabatan === JABATAN_DUKUH)
 
-// "2022-02-22" -> "22 Feb 2022" (tanpa konversi zona waktu).
-function formatDate(value, month = 'short') {
-  const [y, m, d] = String(value ?? '').split('-').map(Number)
-  if (!y || !m || !d) return ''
-  return new Date(y, m - 1, d).toLocaleDateString('id-ID', { day: 'numeric', month, year: 'numeric' })
-}
-
-function formatMasaJabatan(item) {
-  if (item?.start_date) {
-    return `${formatDate(item.start_date)} – ${item.end_date ? formatDate(item.end_date) : 'Sekarang'}`
+const padukuhanDirectory = computed(() => {
+  const map = new Map()
+  const add = (label, fallbackNumber = null) => {
+    if (!isDukuhLabel(label)) return
+    const { number, name } = parseDukuhLabel(label)
+    const key = normalizePadukuhanKey(name)
+    if (key && !map.has(key)) {
+      map.set(key, { number: number || fallbackNumber, name: String(name).trim() })
+    }
   }
-  if (!item?.start_year && !item?.end_year) return '—'
-  if (item.start_year && !item.end_year) return `${item.start_year} – Sekarang`
-  return `${item.start_year ?? '?'} – ${item.end_year}`
+  allJabatanOptions.value.forEach((option) => add(option.label))
+  form.assignments.forEach((a) => add(a.jabatan))
+
+  // Ambil juga dari Data Wilayah jika ada padukuhan yang belum terdaftar di default options
+  regionAreas.value.forEach((area, index) => {
+    const dusunName = String(area.dusun ?? '').trim()
+    const key = normalizePadukuhanKey(dusunName)
+    if (key && !map.has(key)) {
+      map.set(key, { number: numberToRoman(index + 1), name: dusunName })
+    }
+  })
+  return map
+})
+
+const padukuhanOptions = computed(() => {
+  const names = []
+  const seen = new Set()
+
+  const pushName = (raw) => {
+    const name = String(textValue(raw) ?? '').trim()
+    if (!name) return
+    const key = normalizePadukuhanKey(name)
+    if (!seen.has(key)) {
+      seen.add(key)
+      names.push(name)
+    }
+  }
+
+  // Prioritas 1: Dari Data Wilayah (backend /api/region-areas)
+  regionAreas.value.forEach((a) => pushName(a.dusun))
+
+  // Prioritas 2: Dari JABATAN_OPTIONS / padukuhanDirectory
+  padukuhanDirectory.value.forEach((item) => pushName(item.name))
+
+  // Prioritas 3: Dari assignments yang sudah ada
+  form.assignments.forEach((a) => pushName(a.padukuhan))
+
+  return names
+})
+
+const aPadukuhanName = computed(() => String(textValue(assignForm.padukuhan)).trim())
+const aKnownDukuhNumber = computed(() => {
+  const key = normalizePadukuhanKey(aPadukuhanName.value)
+  return padukuhanDirectory.value.get(key)?.number ?? null
+})
+const aNeedsDukuhNumber = computed(() => (
+  aIsDukuh.value && !!aPadukuhanName.value && aKnownDukuhNumber.value === null
+))
+const aDukuhNumber = computed(() => (
+  String(aKnownDukuhNumber.value ?? assignForm.dukuh_number ?? '').trim().toUpperCase()
+))
+const aDukuhPreview = computed(() => (
+  aIsDukuh.value && aPadukuhanName.value ? composeDukuhLabel(aDukuhNumber.value, aPadukuhanName.value) : ''
+))
+
+function sortedNumbers(values) {
+  return [...new Set(values)].sort((a, b) => a.localeCompare(b, 'id', { numeric: true }))
 }
 
-const selectedFormer = ref([])
-const formerDialogVisible = ref(false)
-const editingFormerId = ref(null)
-const formerDialogTitle = computed(() =>
-  editingFormerId.value ? 'Edit Pejabat Terdahulu' : 'Tambah Pejabat Terdahulu',
-)
+const sameText = (a, b) => normalizePadukuhanKey(a) === normalizePadukuhanKey(b)
 
-const emptyFormerForm = () => ({
-  jabatan: null,
-  nama: '',
-  desc: '',
-  rt_number: '',
-  rw_number: '',
-  padukuhan: '',
-  dukuh_number: '',
-  start_date: '',
-  end_date: '',
-  // start_year / end_year = data lama (hanya tahun), dipertahankan agar tidak hilang.
-  start_year: null,
-  end_year: null,
-  sk_number: '',
-  gender: null,
-  birth_date: '',
-  education: null,
-  major: '',
-  school_name: '',
-  graduation_year: null,
-  position_history: [],
+const rwOptions = computed(() => {
+  const numbers = new Set()
+  const padukuhan = aPadukuhanName.value
+  if (!padukuhan) return []
+
+  // 1. Ambil RW dari Data Wilayah
+  const matchedArea = regionAreas.value.find((r) =>
+    normalizePadukuhanKey(r.dusun) === normalizePadukuhanKey(padukuhan)
+  )
+  if (matchedArea && Array.isArray(matchedArea.rws)) {
+    matchedArea.rws.forEach((rw) => {
+      const rawNum = rw.rw ?? rw.rw_number ?? rw.number
+      const num = padNumber(rawNum)
+      if (num) numbers.add(num)
+    })
+  }
+
+  // 2. Fallback dari assignments yang sudah ada
+  form.assignments.forEach((a) => {
+    if (a.rw_number && normalizePadukuhanKey(a.padukuhan) === normalizePadukuhanKey(padukuhan)) {
+      const num = padNumber(a.rw_number)
+      if (num) numbers.add(num)
+    }
+  })
+
+  return sortedNumbers([...numbers])
 })
-const formerForm = reactive(emptyFormerForm())
 
-// Bersihkan isian yang tidak relevan saat jabatan berganti.
-// Harus diletakkan SETELAH formerForm dibuat.
+const rtOptions = computed(() => {
+  const numbers = new Set()
+  const padukuhan = aPadukuhanName.value
+  const selectedRw = padNumber(textValue(assignForm.rw_number))
+  if (!padukuhan || !selectedRw) return []
+
+  // 1. Ambil RT dari Data Wilayah
+  const matchedArea = regionAreas.value.find((r) =>
+    normalizePadukuhanKey(r.dusun) === normalizePadukuhanKey(padukuhan)
+  )
+  if (matchedArea && Array.isArray(matchedArea.rws)) {
+    const matchedRw = matchedArea.rws.find((rw) => {
+      const rawNum = rw.rw ?? rw.rw_number ?? rw.number
+      return padNumber(rawNum) === selectedRw
+    })
+    if (matchedRw && Array.isArray(matchedRw.rts)) {
+      matchedRw.rts.forEach((rt) => {
+        const rawNum = rt.rt ?? rt.rt_number ?? rt.number
+        const num = padNumber(rawNum)
+        if (num) numbers.add(num)
+      })
+    }
+  }
+
+  // 2. Fallback dari assignments yang sudah ada
+  form.assignments.forEach((a) => {
+    if (
+      a.rt_number &&
+      normalizePadukuhanKey(a.padukuhan) === normalizePadukuhanKey(padukuhan) &&
+      padNumber(a.rw_number) === selectedRw
+    ) {
+      const num = padNumber(a.rt_number)
+      if (num) numbers.add(num)
+    }
+  })
+
+  return sortedNumbers([...numbers])
+})
+
 watch(
-  () => formerForm.jabatan,
+  () => assignForm.jabatan,
   (jabatan) => {
     const rt = jabatan === JABATAN_KETUA_RT
     const rw = jabatan === JABATAN_KETUA_RW
     const dukuh = jabatan === JABATAN_DUKUH
-    if (!rt) formerForm.rt_number = ''
-    if (!rt && !rw) formerForm.rw_number = ''
-    if (!rt && !rw && !dukuh) formerForm.padukuhan = ''
-    if (!dukuh) formerForm.dukuh_number = ''
+    if (!rt) assignForm.rt_number = ''
+    if (!rt && !rw) assignForm.rw_number = ''
+    if (!rt && !rw && !dukuh) assignForm.padukuhan = ''
+    if (!dukuh) assignForm.dukuh_number = ''
   },
 )
 
-function openNewFormer() {
-  editingFormerId.value = null
-  Object.assign(formerForm, emptyFormerForm())
-  formerDialogVisible.value = true
+watch(
+  () => assignForm.padukuhan,
+  () => {
+    if (aIsRtRw.value) {
+      if (assignForm.rw_number && !rwOptions.value.includes(padNumber(assignForm.rw_number))) {
+        assignForm.rw_number = ''
+      }
+      assignForm.rt_number = ''
+    }
+  },
+)
+
+watch(
+  () => assignForm.rw_number,
+  () => {
+    if (aIsRt.value) {
+      if (assignForm.rt_number && !rtOptions.value.includes(padNumber(assignForm.rt_number))) {
+        assignForm.rt_number = ''
+      }
+    }
+  },
+)
+
+const willBePurna = computed(() => !!assignForm.end_date && assignForm.end_date < todayISO())
+
+const assignLegacyYears = computed(() => {
+  const o = editingOriginal.value
+  return !assignForm.start_date && o && (o.start_year || o.end_year)
+    ? formatMasaJabatan({ start_year: o.start_year, end_year: o.end_year })
+    : ''
+})
+const assignLegacyTermEnd = computed(() => {
+  const o = editingOriginal.value
+  return o?.term_end_date && !assignForm.end_date ? formatDate(o.term_end_date, 'long') : ''
+})
+
+const editingPersonName = computed(() => personMap.value.get(assignForm.person_id)?.nama ?? '')
+
+const skInputRef = ref(null)
+let skTarget = null
+
+function triggerSk(formObj, index = null) {
+  skTarget = { formObj, index }
+  skInputRef.value?.click()
 }
 
-function openEditFormer(item) {
-  editingFormerId.value = item.id
-  Object.assign(formerForm, {
-    // Data lama "Dukuh I Krebet" dipetakan ke opsi "Dukuh" + nomor urut + nama padukuhan.
-    jabatan: isDukuhLabel(item.jabatan) ? JABATAN_DUKUH : item.jabatan,
-    dukuh_number: isDukuhLabel(item.jabatan) ? parseDukuhLabel(item.jabatan).number : '',
-    nama: item.nama,
-    desc: item.desc ?? '',
-    rt_number: item.rt_number ?? '',
-    rw_number: item.rw_number ?? '',
-    padukuhan: item.padukuhan || (isDukuhLabel(item.jabatan) ? parseDukuhLabel(item.jabatan).name : ''),
-    start_date: item.start_date ?? '',
-    end_date: item.end_date ?? '',
-    start_year: item.start_year ?? null,
-    end_year: item.end_year ?? null,
-    sk_number: item.sk_number ?? '',
-    gender: item.gender ?? null,
-    birth_date: item.birth_date ?? '',
-    education: item.education ?? null,
-    major: item.major ?? '',
-    school_name: item.school_name ?? '',
-    graduation_year: item.graduation_year ?? null,
-    position_history: seedFormerHistory(item.position_history),
+function onSkPicked(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file || !skTarget) return
+
+  if (file.size > SK_MAX_SIZE_MB * 1024 * 1024) {
+    toast.add({ severity: 'error', summary: `Ukuran dokumen maksimal ${SK_MAX_SIZE_MB} MB`, life: 2500 })
+    return
+  }
+
+  const { formObj, index } = skTarget
+  const baseName = file.name.replace(/\.[^.]+$/, '')
+  if (index === null) {
+    formObj.skFile = file
+    formObj.sk_document_name = file.name
+    if (!formObj.sk_number.trim()) formObj.sk_number = baseName
+    return
+  }
+
+  const item = formObj.position_history[index]
+  if (!item) return
+  item.documentFile = file
+  item.document_name = file.name
+  item.sk = baseName
+}
+
+function removeMainSk(formObj) {
+  formObj.skFile = null
+  formObj.sk_document = null
+  formObj.sk_document_name = ''
+}
+
+function addHistoryRow(formObj) {
+  formObj.position_history.push({
+    sk: '', date: '', official: '', document: null, document_name: '', documentFile: null,
   })
-  formerDialogVisible.value = true
 }
 
-function closeFormerDialog() {
-  formerDialogVisible.value = false
-  editingFormerId.value = null
-  Object.assign(formerForm, emptyFormerForm())
+function removeHistoryRow(formObj, index) {
+  formObj.position_history.splice(index, 1)
 }
 
-/* ---- Riwayat jabatan pejabat terdahulu (SK, tanggal, pejabat penerbit) ---- */
-function addFormerHistoryRow() {
-  formerForm.position_history.push({ sk: '', date: '', official: '' })
+function hasSkDocument(item) {
+  return !!(item?.documentFile || item?.document)
 }
 
-function removeFormerHistoryRow(index) {
-  formerForm.position_history.splice(index, 1)
+function removeHistoryDoc(formObj, index) {
+  const item = formObj.position_history[index]
+  if (!item) return
+  item.documentFile = null
+  item.document = null
+  item.document_name = ''
+  item.sk = ''
 }
 
-async function saveFormerDialog() {
-  const selectedJabatan = (formerForm.jabatan || '').trim()
-  const nama = formerForm.nama.trim()
-  if (!selectedJabatan || !nama) {
-    toast.add({ severity: 'error', summary: 'Jabatan dan nama wajib diisi', life: 2500 })
-    return
-  }
-  const rtNumber = String(formerForm.rt_number ?? '').trim()
-  const rwNumber = String(formerForm.rw_number ?? '').trim()
-  const padukuhan = String(formerForm.padukuhan ?? '').trim()
-  const dukuhNumber = String(formerForm.dukuh_number ?? '').trim().toUpperCase()
+function startEditAssignment(a) {
+  const dukuh = isDukuhLabel(a.jabatan)
+  editingAssignmentId.value = a.id
+  editingOriginal.value = a
+  Object.assign(assignForm, {
+    person_id: a.person_id,
+    jabatan: dukuh ? JABATAN_DUKUH : a.jabatan,
+    dukuh_number: dukuh ? parseDukuhLabel(a.jabatan).number : '',
+    padukuhan: a.padukuhan || (dukuh ? parseDukuhLabel(a.jabatan).name : ''),
+    rw_number: a.rw_number ?? '',
+    rt_number: a.rt_number ?? '',
+    start_date: a.start_date ?? '',
+    end_date: a.end_date ?? '',
+    desc: a.desc ?? '',
+    sk_number: a.sk_number ?? '',
+    sk_document: a.sk_document ?? null,
+    sk_document_name: a.sk_document_name ?? '',
+    skFile: null,
+    position_history: seedHistory(a.position_history),
+  })
+  scrollToAssignForm()
+}
 
-  if (selectedJabatan === JABATAN_KETUA_RT && (!rtNumber || !rwNumber || !padukuhan)) {
-    toast.add({ severity: 'error', summary: 'Nomor RT, nomor RW, dan padukuhan wajib diisi', life: 2500 })
-    return
-  }
-  if (selectedJabatan === JABATAN_KETUA_RW && (!rwNumber || !padukuhan)) {
-    toast.add({ severity: 'error', summary: 'Nomor RW dan padukuhan wajib diisi', life: 2500 })
-    return
-  }
-  if (selectedJabatan === JABATAN_DUKUH) {
-    if (!padukuhan) {
-      toast.add({ severity: 'error', summary: 'Nama padukuhan wajib diisi', life: 2500 })
-      return
-    }
+function exclusiveKey(a) {
+  const key = jabatanKey(a.jabatan)
+  if (!key || key.startsWith('staff')) return null
+  const area = jabatanKey(textValue(a.padukuhan))
+  if (a.jabatan === JABATAN_KETUA_RT) return `rt|${area}|${padNumber(a.rw_number)}|${padNumber(a.rt_number)}`
+  if (a.jabatan === JABATAN_KETUA_RW) return `rw|${area}|${padNumber(a.rw_number)}`
+  return key
+}
+
+function prepareAssignment(f, person, original = null, editingId = null) {
+  const isRt = f.jabatan === JABATAN_KETUA_RT
+  const isRw = f.jabatan === JABATAN_KETUA_RW
+  const isRtRw = isRt || isRw
+  const isDukuh = f.jabatan === JABATAN_DUKUH
+
+  const padukuhan = String(textValue(f.padukuhan)).trim()
+  const rt = padNumber(textValue(f.rt_number))
+  const rw = padNumber(textValue(f.rw_number))
+  const knownNumber = padukuhanDirectory.value.get(normalizePadukuhanKey(padukuhan))?.number ?? null
+  const dukuhNumber = String(knownNumber ?? f.dukuh_number ?? '').trim().toUpperCase()
+
+  if (isRt && (!padukuhan || !rw || !rt)) return { error: 'Padukuhan, nomor RW, dan nomor RT wajib diisi' }
+  if (isRw && (!padukuhan || !rw)) return { error: 'Padukuhan dan nomor RW wajib diisi' }
+  if (isDukuh) {
+    if (!padukuhan) return { error: 'Padukuhan wajib dipilih' }
     if (dukuhNumber && !/^([IVXLCDM]+|\d+)$/.test(dukuhNumber)) {
-      toast.add({ severity: 'error', summary: 'Nomor urut dukuh harus angka Romawi (mis. I, II, XIII)', life: 2500 })
-      return
+      return { error: 'Nomor urut dukuh harus angka Romawi (mis. I, II, XIII)' }
     }
   }
 
-  // Label final: "Dukuh XIII Krebet Baru" untuk dukuh, selain itu apa adanya.
-  const jabatan = selectedJabatan === JABATAN_DUKUH
-    ? composeDukuhLabel(dukuhNumber, padukuhan)
-    : selectedJabatan
-
-  // Masa jabatan: pejabat terdahulu wajib punya tanggal mulai & selesai.
-  // Data lama yang hanya berisi tahun tetap boleh disimpan apa adanya.
-  const hasStart = !!formerForm.start_date
-  const hasEnd = !!formerForm.end_date
-  if (hasStart !== hasEnd) {
-    toast.add({ severity: 'error', summary: 'Tanggal mulai dan tanggal selesai harus diisi keduanya', life: 2500 })
-    return
-  }
-  const usesDates = hasStart && hasEnd
-  const hasLegacyYears = !!formerForm.start_year && !!formerForm.end_year
-  if (!usesDates && !hasLegacyYears) {
-    toast.add({ severity: 'error', summary: 'Masa jabatan (tanggal mulai & selesai) wajib diisi', life: 2500 })
-    return
-  }
-  if (usesDates && formerForm.end_date < formerForm.start_date) {
-    toast.add({ severity: 'error', summary: 'Tanggal selesai tidak boleh lebih awal dari tanggal mulai', life: 2500 })
-    return
-  }
-  if (!usesDates && formerForm.end_year < formerForm.start_year) {
-    toast.add({ severity: 'error', summary: 'Tahun selesai tidak boleh lebih kecil dari tahun mulai', life: 2500 })
-    return
+  const usesDates = !!f.start_date
+  if (!usesDates && !original?.start_year) return { error: 'Tanggal mulai wajib diisi' }
+  if (f.end_date && !usesDates) return { error: 'Tanggal mulai wajib diisi jika tanggal akhir diisi' }
+  if (usesDates && f.end_date && f.end_date < f.start_date) {
+    return { error: 'Tanggal akhir tidak boleh lebih awal dari tanggal mulai' }
   }
 
-  const isRtRwFormer = selectedJabatan === JABATAN_KETUA_RT || selectedJabatan === JABATAN_KETUA_RW
+  const history = (f.position_history ?? [])
+    .map((h) => ({
+      sk: (h.sk ?? '').trim(),
+      date: h.date ?? '',
+      official: (h.official ?? '').trim(),
+      document: h.document ?? null,
+      document_name: h.document_name ?? '',
+      documentFile: h.documentFile ?? null,
+    }))
+    .filter((h) => h.sk || h.date || h.official || h.document || h.documentFile)
+
+  const label = isDukuh ? composeDukuhLabel(dukuhNumber, padukuhan) : f.jabatan
+  const sameOwner = original && original.person_id === person.id
 
   const entry = {
-    jabatan, // sudah berupa label final
-    nama,
-    desc: formerForm.desc.trim(),
-    rt_number: selectedJabatan === JABATAN_KETUA_RT ? rtNumber : '',
-    rw_number: isRtRwFormer ? rwNumber : '',
-    padukuhan: isRtRwFormer || selectedJabatan === JABATAN_DUKUH ? padukuhan : '',
-    start_date: usesDates ? formerForm.start_date : '',
-    end_date: usesDates ? formerForm.end_date : '',
-    // Jika tanggal diisi, tahun diturunkan dari tanggal (dipakai tabel & halaman publik).
-    start_year: usesDates ? yearOf(formerForm.start_date) : formerForm.start_year,
-    end_year: usesDates ? yearOf(formerForm.end_date) : formerForm.end_year,
-    sk_number: formerForm.sk_number.trim(),
-    gender: formerForm.gender,
-    birth_date: formerForm.birth_date,
-    education: formerForm.education,
-    major: formerForm.major.trim(),
-    school_name: formerForm.school_name.trim(),
-    graduation_year: formerForm.graduation_year,
-    // Baris riwayat yang benar-benar kosong tidak ikut disimpan.
-    position_history: formerForm.position_history
-      .map((h) => ({ sk: h.sk.trim(), date: h.date, official: h.official.trim() }))
-      .filter((h) => h.sk || h.date || h.official),
+    person_id: person.id,
+    staff_id: sameOwner ? (original.staff_id ?? person.staff_id ?? null) : (person.staff_id ?? null),
+    jabatan: label,
+    desc: (f.desc ?? '').trim(),
+    rt_number: isRt ? rt : '',
+    rw_number: isRtRw ? rw : '',
+    padukuhan: isRtRw || isDukuh ? padukuhan : '',
+    start_date: f.start_date || '',
+    end_date: f.end_date || '',
+
+    start_year: usesDates ? yearOf(f.start_date) : (original?.start_year ?? null),
+    end_year: usesDates ? yearOf(f.end_date) : (original?.end_year ?? null),
+    term_end_date: original?.term_end_date ?? '',
+    source: usesDates ? null : (original?.source ?? null),
+    position_history: history,
+    sk_number: (f.sk_number ?? '').trim(),
+    sk_document: f.sk_document ?? null,
+    sk_document_name: f.sk_document_name ?? '',
+    skFile: f.skFile ?? null,
+  }
+  const ended = isEnded(entry)
+
+  if (!ended && !isDukuh && !isRtRw
+    && !allJabatanOptions.value.some((o) => jabatanKey(o.label) === jabatanKey(label))) {
+    return { error: `Jabatan "${label}" belum dikenal di struktur publik. Isi tanggal akhir atau pilih jabatan lain.` }
   }
 
-  const wasEditing = !!editingFormerId.value
-  if (wasEditing) {
-    form.former_officials = form.former_officials.map((p) =>
-      p.id === editingFormerId.value ? { ...p, ...entry } : p,
-    )
-  } else {
-    form.former_officials = [...form.former_officials, { id: uid(), ...entry }]
+  const key = exclusiveKey(entry)
+  if (key && !ended) {
+    const clash = form.assignments.find((a) => (
+      a.id !== editingId && !isEnded(a) && exclusiveKey(a) === key
+    ))
+    if (clash) {
+      const holder = personMap.value.get(clash.person_id)?.nama ?? 'pejabat lain'
+      return {
+        error: `${formatJabatanFormer(entry)} masih dijabat ${holder}. Isi tanggal akhir pada riwayat jabatan sebelumnya terlebih dahulu.`,
+      }
+    }
   }
 
-  if (!(await persistStructure())) return
+  return { entry, ended }
+}
+
+async function saveAssignment() {
+  const person = personMap.value.get(assignForm.person_id)
+  if (!person) {
+    toast.add({ severity: 'error', summary: 'Pilih pejabat / staff terlebih dahulu', life: 2500 })
+    return
+  }
+  if (!assignForm.jabatan) {
+    toast.add({ severity: 'error', summary: 'Pilih jabatan terlebih dahulu', life: 2500 })
+    return
+  }
+
+  const editingId = editingAssignmentId.value
+  const result = prepareAssignment({ ...assignForm }, person, editingOriginal.value, editingId)
+  if (result.error) {
+    toast.add({ severity: 'error', summary: result.error, life: 4500 })
+    return
+  }
+  const { entry, ended } = result
+
+  const ok = await commit(() => {
+    form.assignments = editingId
+      ? form.assignments.map((a) => (a.id === editingId ? { ...a, ...entry } : a))
+      : [...form.assignments, { id: uid(), ...entry }]
+  })
+  if (!ok) return
 
   toast.add({
     severity: 'success',
-    summary: wasEditing ? 'Pejabat terdahulu diperbarui' : 'Pejabat terdahulu ditambahkan',
+    summary: editingId ? 'Riwayat jabatan diperbarui' : 'Riwayat jabatan disimpan',
     life: 2500,
   })
-  closeFormerDialog()
+  if (ended && (entry.skFile || entry.sk_document)) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Dokumen SK tidak ikut tersimpan untuk pejabat purna (hanya nomor SK).',
+      life: 4000,
+    })
+  }
+  resetAssignForm()
 }
 
-function deleteFormer(item) {
+const search = ref('')
+const expandedRows = ref({})
+
+const publicViewOptions = [
+  { label: 'Struktur aktif saja', value: false },
+  { label: 'Aktif + pejabat terdahulu', value: true },
+]
+
+function statusOf(person) {
+  const list = assignmentsByPerson.value.get(person.id) ?? []
+  if (!list.length) return { label: 'Belum ada jabatan · belum tersimpan', severity: 'warn', rank: 2 }
+  return list.some((a) => !isEnded(a))
+    ? { label: 'Aktif', severity: 'success', rank: 0 }
+    : { label: 'Purna tugas', severity: 'secondary', rank: 1 }
+}
+
+function visibleAssignments(person) {
+  const list = assignmentsByPerson.value.get(person.id) ?? []
+  return [...list].sort((l, r) => (
+    Number(isEnded(l)) - Number(isEnded(r))
+    || (isEnded(l) ? endSortKey(r).localeCompare(endSortKey(l)) : 0)
+    || compareAssignments(l, r)
+  ))
+}
+
+const personRows = computed(() => {
+  const keyword = search.value.trim().toLowerCase()
+  return orderedPersons.value.map((person) => ({ ...person, status_rank: statusOf(person).rank })).filter((person) => {
+    if (!keyword) return true
+    const haystack = [
+      person.nama,
+      ...(assignmentsByPerson.value.get(person.id) ?? []).flatMap((a) => [
+        formatJabatanFormer(a),
+        a.jabatan,
+        textValue(a.padukuhan),
+        a.sk_number,
+      ]),
+    ]
+    return haystack.some((value) => String(value ?? '').toLowerCase().includes(keyword))
+  })
+})
+
+function expandAll() {
+  expandedRows.value = Object.fromEntries(personRows.value.map((p) => [p.id, true]))
+}
+
+function collapseAll() {
+  expandedRows.value = {}
+}
+
+function deleteAssignment(row) {
+  const nama = personMap.value.get(row.person_id)?.nama ?? ''
   confirm.require({
-    message: `Hapus "${item.nama}" dari daftar pejabat terdahulu?`,
+    message: `Hapus riwayat jabatan "${formatJabatanFormer(row)}" milik "${nama}"?`,
     header: 'Konfirmasi Hapus',
     icon: 'pi pi-exclamation-triangle',
     acceptLabel: 'Hapus',
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
     accept: async () => {
-      form.former_officials = form.former_officials.filter((p) => p.id !== item.id)
-      selectedFormer.value = selectedFormer.value.filter((p) => p.id !== item.id)
-      if (await persistStructure()) {
-        toast.add({ severity: 'success', summary: 'Pejabat terdahulu dihapus', life: 2000 })
-      }
+      const ok = await commit(() => {
+        form.assignments = form.assignments.filter((a) => a.id !== row.id)
+      })
+      if (!ok) return
+      if (editingAssignmentId.value === row.id) resetAssignForm()
+      toast.add({ severity: 'success', summary: 'Riwayat jabatan dihapus', life: 2000 })
     },
   })
 }
 
-function deleteSelectedFormer() {
-  if (!selectedFormer.value.length) return
-  confirm.require({
-    message: `Hapus ${selectedFormer.value.length} pejabat terdahulu terpilih?`,
-    header: 'Konfirmasi Hapus',
-    icon: 'pi pi-exclamation-triangle',
-    acceptLabel: 'Hapus',
-    rejectLabel: 'Batal',
-    acceptClass: 'p-button-danger',
-    accept: async () => {
-      const ids = new Set(selectedFormer.value.map((p) => p.id))
-      form.former_officials = form.former_officials.filter((p) => !ids.has(p.id))
-      selectedFormer.value = []
-      if (await persistStructure()) {
-        toast.add({ severity: 'success', summary: 'Pejabat terdahulu terpilih dihapus', life: 2000 })
-      }
-    },
-  })
-}
-
-// Toggle tampil di halaman publik: langsung disimpan, dikembalikan jika gagal.
 async function onToggleShowFormer(value) {
   const previous = !value
   form.show_former_officials = value
@@ -1417,45 +1537,169 @@ async function onToggleShowFormer(value) {
     toast.add({
       severity: 'success',
       summary: value
-        ? 'Pejabat terdahulu akan ditampilkan di halaman profil'
-        : 'Pejabat terdahulu disembunyikan dari halaman profil',
+        ? 'Pejabat purna akan ditampilkan di halaman profil'
+        : 'Pejabat purna disembunyikan dari halaman profil',
       life: 2500,
     })
   } else {
     form.show_former_officials = previous
   }
 }
+
+const previewDialogVisible = ref(false)
+const previewPerson = ref(null)
+const previewAssignment = ref(null)
+
+function openPreviewPerson(person) {
+  previewPerson.value = person
+  previewAssignment.value = null
+  previewDialogVisible.value = true
+}
+
+function openPreviewAssignment(row) {
+  previewPerson.value = row.person ?? personMap.value.get(row.person_id) ?? null
+  previewAssignment.value = row
+  previewDialogVisible.value = true
+}
+
+function closePreview() {
+  previewDialogVisible.value = false
+  previewPerson.value = null
+  previewAssignment.value = null
+}
+
+function editPersonFromPreview() {
+  const person = previewPerson.value
+  closePreview()
+  if (person) openEditPerson(person)
+}
+
+function editAssignmentFromPreview() {
+  const a = previewAssignment.value
+  closePreview()
+  if (a) startEditAssignment(a)
+}
+
+const previewChip = computed(() => {
+  const a = previewAssignment.value
+  if (a) return formatJabatanFormer(a)
+  const labels = previewPerson.value ? currentJabatanLabels(previewPerson.value) : []
+  return labels.length ? labels.join(' · ') : 'Pejabat / Staff'
+})
+
+const previewChipFull = computed(() => {
+  const a = previewAssignment.value
+  if (a) return `${formatJabatanFormer(a)} Kalurahan Bimomartani`
+  const count = previewRiwayat.value.length
+  return count ? `${count} riwayat jabatan` : 'Belum ada riwayat jabatan'
+})
+
+const previewRiwayat = computed(() => {
+  const p = previewPerson.value
+  if (!p) return []
+  return [...(assignmentsByPerson.value.get(p.id) ?? [])]
+    .sort((l, r) => startSortKey(r).localeCompare(startSortKey(l)))
+})
+
+const previewInfoCards = computed(() => {
+  const p = previewPerson.value
+  if (!p) return []
+  const a = previewAssignment.value
+
+  const cards = [
+    { label: 'Jenis Kelamin', value: p.gender, icon: 'pi-user' },
+    { label: 'Usia', value: calcAge(p.birth_date) !== null ? `${calcAge(p.birth_date)} tahun` : '', icon: 'pi-id-card' },
+  ]
+
+  if (a) {
+    if (a.jabatan === JABATAN_KETUA_RT) cards.push({ label: 'Nomor RT', value: padNumber(a.rt_number), icon: 'pi-hashtag' })
+    if (a.jabatan === JABATAN_KETUA_RT || a.jabatan === JABATAN_KETUA_RW) {
+      cards.push({ label: 'Nomor RW', value: padNumber(a.rw_number), icon: 'pi-hashtag' })
+      cards.push({ label: 'Padukuhan', value: a.padukuhan, icon: 'pi-map-marker' })
+    } else if (isDukuhLabel(a.jabatan)) {
+      cards.push({ label: 'Padukuhan', value: a.padukuhan || parseDukuhLabel(a.jabatan).name, icon: 'pi-map-marker' })
+    }
+  }
+
+  cards.push(
+    { label: 'Jenjang Pendidikan', value: p.education, icon: 'pi-book' },
+    { label: 'Jurusan', value: p.major, icon: 'pi-bookmark' },
+    {
+      label: isHigherEducation(p.education) ? 'Nama Instansi Pendidikan' : 'Nama Sekolah',
+      value: p.school_name,
+      icon: 'pi-building',
+    },
+    { label: 'Tahun Lulus', value: p.graduation_year, icon: 'pi-graduation-cap' },
+  )
+
+  if (a) {
+    const masa = formatMasaJabatan(a)
+    cards.push({ label: 'Masa Jabatan', value: masa === '—' ? '' : masa, icon: 'pi-calendar' })
+  }
+  return cards
+})
 </script>
 
 <template>
   <div class="min-h-full text-slate-800">
-    <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-      <h1 class="m-0 text-[22px] font-bold text-slate-900">Struktur Organisasi</h1>
+    <input ref="skInputRef" type="file" :accept="SK_ACCEPT" class="hidden" @change="onSkPicked" />
+
+    <div class="mb-6">
+      <h1 class="m-0 text-[22px] font-bold text-slate-800">Struktur Organisasi</h1>
+      <p class="m-0 mt-1 text-sm text-slate-500">
+        Kelola data diri pejabat / staff, riwayat jabatan, dan tampilan struktur Kalurahan.
+      </p>
     </div>
 
     <Card>
       <template #title>
-        <span class="text-sm font-semibold text-slate-700">Daftar Pamong Kalurahan</span>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <span class="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">1</span>
+            <span class="text-sm font-semibold text-slate-700">Data Pejabat / Staff &amp; Struktur Organisasi</span>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-medium text-slate-600">Tampilan di halaman publik:</span>
+            <SelectButton
+              :modelValue="form.show_former_officials"
+              :options="publicViewOptions"
+              optionLabel="label"
+              optionValue="value"
+              :allowEmpty="false"
+              :disabled="saving || loading"
+              size="small"
+              @update:modelValue="onToggleShowFormer"
+            />
+          </div>
+        </div>
       </template>
       <template #content>
-        <!-- Toolbar CRUD -->
-        <div class="mb-3 flex items-center gap-2">
-          <Button label="Tambah Staff" icon="pi pi-plus" size="small" @click="openNewPerson" />
-          <Button
-            label="Hapus"
-            icon="pi pi-trash"
-            size="small"
-            severity="danger"
-            outlined
-            :disabled="!selectedPeople.length"
-            @click="deleteSelectedPeople"
-          />
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <Button label="Tambah Pejabat / Staff" icon="pi pi-plus" size="small" @click="openNewPerson" />
+            <Button
+              label="Hapus"
+              icon="pi pi-trash"
+              size="small"
+              severity="danger"
+              outlined
+              :disabled="!selectedPersons.length"
+              @click="deleteSelectedPersons"
+            />
+          </div>
+
+          <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <InputText v-model="search" placeholder="Cari nama / jabatan / padukuhan / SK" size="small" class="min-w-0 flex-1 sm:w-64 sm:flex-none" />
+            <Button icon="pi pi-angle-double-down" size="small" text severity="secondary" title="Buka semua riwayat" aria-label="Buka semua riwayat" @click="expandAll" />
+            <Button icon="pi pi-angle-double-up" size="small" text severity="secondary" title="Tutup semua riwayat" aria-label="Tutup semua riwayat" @click="collapseAll" />
+          </div>
         </div>
 
-        <!-- Daftar anggota -->
         <DataTable
-          v-model:selection="selectedPeople"
-          :value="orderedPeople"
+          v-model:selection="selectedPersons"
+          v-model:expandedRows="expandedRows"
+          removableSort
+          :value="personRows"
           :loading="loading"
           dataKey="id"
           size="small"
@@ -1463,44 +1707,55 @@ async function onToggleShowFormer(value) {
           :rows="10"
           paginator
           paginatorTemplate="PrevPageLink PageLinks NextPageLink"
-          responsiveLayout="scroll"
         >
           <template #empty>
             <div class="py-6 text-center text-sm text-slate-400">
-              Belum ada pamong. Klik "Tambah Staff" untuk mulai.
+              {{ search
+                ? 'Tidak ada hasil yang cocok.'
+                : 'Belum ada data diri. Klik "Tambah Pejabat / Staff" untuk mulai.' }}
             </div>
           </template>
 
           <Column selectionMode="multiple" headerStyle="width: 3rem" />
+          <Column expander headerStyle="width: 3rem" />
 
-          <Column header="Foto" headerStyle="width: 4rem">
+          <Column header="Foto" headerStyle="width: 4rem" headerClass="hidden sm:table-cell" bodyClass="hidden sm:table-cell">
             <template #body="{ data }">
               <Avatar
                 :image="photoSrc(data.photo) || undefined"
                 :label="!photoSrc(data.photo) ? initials(data.nama) : undefined"
                 shape="circle"
                 class="!bg-blue-100 !text-blue-700"
+                :pt="{ image: { class: 'object-cover' } }"
               />
             </template>
           </Column>
 
-          <Column field="jabatan" header="Jabatan">
+          <Column field="nama" header="Nama">
             <template #body="{ data }">
-              <span :class="{ 'text-slate-400 italic': !data.jabatan }">
-                {{ formatJabatanFormer(data) || 'Belum dipilih' }}
-              </span>
+              <div class="flex flex-col leading-snug">
+                <span class="font-medium text-slate-800">{{ data.nama }}</span>
+                <span class="text-xs text-slate-500 md:hidden">{{ currentJabatanLabels(data)[0] || '—' }}</span>
+              </div>
             </template>
           </Column>
 
-          <Column header="Wilayah">
+          <Column header="Jabatan Saat Ini" headerClass="hidden md:table-cell" bodyClass="hidden md:table-cell">
             <template #body="{ data }">
-              <span class="whitespace-nowrap text-slate-600">{{ formatWilayahFormer(data) }}</span>
+              <template v-if="currentJabatanLabels(data).length">
+                <span class="text-slate-700">{{ currentJabatanLabels(data)[0] }}</span>
+                <Tag
+                  v-if="currentJabatanLabels(data).length > 1"
+                  :value="`+${currentJabatanLabels(data).length - 1}`"
+                  severity="secondary"
+                  class="ml-1.5 !text-[10px]"
+                />
+              </template>
+              <span v-else class="text-slate-400">—</span>
             </template>
           </Column>
 
-          <Column field="nama" header="Nama" />
-
-          <Column field="education" header="Jenjang Pendidikan">
+          <Column field="education" header="Jenjang Pendidikan" headerClass="hidden lg:table-cell" bodyClass="hidden lg:table-cell">
             <template #body="{ data }">
               <div v-if="data.education" class="leading-snug">
                 <span class="text-slate-700">{{ data.education }}</span>
@@ -1510,500 +1765,360 @@ async function onToggleShowFormer(value) {
             </template>
           </Column>
 
-          <Column field="birth_date" header="Usia" headerStyle="width: 5rem">
+          <Column field="birth_date" header="Usia" headerStyle="width: 5rem" headerClass="hidden lg:table-cell" bodyClass="hidden lg:table-cell">
             <template #body="{ data }">
               <span class="whitespace-nowrap text-slate-600">{{ calcAge(data.birth_date) !== null ? `${calcAge(data.birth_date)} th` : '—' }}</span>
             </template>
           </Column>
 
-          <Column field="start_year" header="Masa Jabatan">
+          <Column header="Riwayat" headerStyle="width: 5.5rem" headerClass="hidden lg:table-cell" bodyClass="hidden lg:table-cell">
             <template #body="{ data }">
-              <span class="whitespace-nowrap text-slate-600">{{ formatMasaJabatan(data) }}</span>
+              <Tag :value="`${(assignmentsByPerson.get(data.id) ?? []).length} jabatan`" severity="info" class="!text-[10px]" />
             </template>
           </Column>
 
-          <Column field="desc" header="Deskripsi">
+          <Column header="Status" field="status_rank" sortable headerStyle="width: 9rem">
             <template #body="{ data }">
-              <span class="line-clamp-1 text-slate-500">{{ data.desc || '—' }}</span>
+              <Tag :value="statusOf(data).label" :severity="statusOf(data).severity" class="!whitespace-normal !text-[10px]" />
             </template>
           </Column>
 
           <Column header="Aksi" headerStyle="width: 8.5rem">
             <template #body="{ data }">
               <div class="flex items-center gap-1">
-                <Button icon="pi pi-eye" text rounded size="small" severity="secondary" @click="openPreview(data)" aria-label="Lihat detail pamong" />
-                <Button icon="pi pi-pencil" text rounded size="small" @click="openEditPerson(data)" aria-label="Edit pamong" />
-                <Button icon="pi pi-trash" text rounded size="small" severity="danger" @click="deletePerson(data)" aria-label="Hapus pamong" />
+                <Button icon="pi pi-eye" text rounded size="small" severity="secondary" @click="openPreviewPerson(data)" aria-label="Lihat detail" />
+                <Button icon="pi pi-pencil" text rounded size="small" @click="openEditPerson(data)" aria-label="Edit data diri" />
+                <Button icon="pi pi-trash" text rounded size="small" severity="danger" @click="deletePerson(data)" aria-label="Hapus" />
               </div>
             </template>
           </Column>
+
+          <template #expansion="{ data }">
+            <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-2 sm:p-3">
+              <div class="mb-2 flex flex-wrap items-center gap-2">
+                <i class="pi pi-briefcase text-xs text-blue-600" />
+                <span class="text-xs font-bold uppercase tracking-wider text-blue-700">Riwayat Jabatan · {{ data.nama }}</span>
+              </div>
+
+              <div
+                v-if="!visibleAssignments(data).length"
+                class="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-4 text-center text-xs text-slate-400"
+              >
+                {{ (assignmentsByPerson.get(data.id) ?? []).length
+                  ? 'Tidak ada riwayat jabatan pada filter ini.'
+                  : 'Belum ada riwayat jabatan. Tambahkan lewat form Riwayat Jabatan di bawah.' }}
+              </div>
+
+              <DataTable v-else :value="visibleAssignments(data)" dataKey="id" size="small" class="bg-white">
+                <Column header="Jabatan">
+                  <template #body="{ data: a }">
+                    <div class="flex flex-col items-start gap-1 leading-snug">
+                      <span class="font-medium text-slate-700">{{ formatJabatanFormer(a) || 'Belum dipilih' }}</span>
+                      <span v-if="formatWilayahFormer(a) !== '—'" class="text-xs text-slate-500 md:hidden">{{ formatWilayahFormer(a) }}</span>
+                      <Tag :value="tingkatOf(a.jabatan).label" :severity="tingkatOf(a.jabatan).severity" class="!text-[10px]" />
+                    </div>
+                  </template>
+                </Column>
+
+                <Column header="Wilayah" headerClass="hidden md:table-cell" bodyClass="hidden md:table-cell">
+                  <template #body="{ data: a }">
+                    <span class="whitespace-nowrap text-slate-600">{{ formatWilayahFormer(a) }}</span>
+                  </template>
+                </Column>
+
+                <Column header="Masa Jabatan">
+                  <template #body="{ data: a }">
+                    <div class="flex flex-col items-start gap-1 leading-snug">
+                      <span class="text-slate-600 md:whitespace-nowrap">{{ formatMasaJabatan(a) }}</span>
+                      <Tag
+                        :value="isEnded(a) ? 'Purna' : 'Aktif'"
+                        :severity="isEnded(a) ? 'secondary' : 'success'"
+                        class="!text-[10px]"
+                      />
+                    </div>
+                  </template>
+                </Column>
+
+                <Column header="Nomor SK" headerClass="hidden md:table-cell" bodyClass="hidden md:table-cell">
+                  <template #body="{ data: a }">
+                    <span class="line-clamp-1 text-slate-500">{{ a.sk_number || '—' }}</span>
+                  </template>
+                </Column>
+
+                <Column header="Aksi" headerStyle="width: 8.5rem">
+                  <template #body="{ data: a }">
+                    <div class="flex items-center gap-1">
+                      <Button icon="pi pi-eye" text rounded size="small" severity="secondary" @click="openPreviewAssignment(a)" aria-label="Lihat detail" />
+                      <Button icon="pi pi-pencil" text rounded size="small" @click="startEditAssignment(a)" aria-label="Edit riwayat jabatan" />
+                      <Button icon="pi pi-trash" text rounded size="small" severity="danger" @click="deleteAssignment(a)" aria-label="Hapus riwayat jabatan" />
+                    </div>
+                  </template>
+                </Column>
+              </DataTable>
+            </div>
+          </template>
         </DataTable>
       </template>
     </Card>
 
-    <!-- ===== Pejabat Terdahulu (termasuk Ketua RT / Ketua RW) ===== -->
     <Card class="mt-6">
       <template #title>
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <span class="text-sm font-semibold text-slate-700">Pejabat Terdahulu</span>
-          <div class="flex items-center gap-2">
-            <ToggleSwitch
-              inputId="showFormer"
-              :modelValue="form.show_former_officials"
-              :disabled="saving || loading"
-              @update:modelValue="onToggleShowFormer"
-            />
-            <label for="showFormer" class="cursor-pointer text-xs font-medium text-slate-600">
-              Tampilkan di halaman profil publik
-            </label>
-          </div>
+        <div class="flex items-center gap-2.5">
+          <span class="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">2</span>
+          <span class="text-sm font-semibold text-slate-700">Riwayat Jabatan</span>
         </div>
       </template>
       <template #content>
-        <div class="mb-3 flex items-center gap-2">
-          <Button label="Tambah Pejabat" icon="pi pi-plus" size="small" @click="openNewFormer" />
-          <Button
-            label="Hapus"
-            icon="pi pi-trash"
-            size="small"
-            severity="danger"
-            outlined
-            :disabled="!selectedFormer.length"
-            @click="deleteSelectedFormer"
-          />
-        </div>
-
-        <DataTable
-          v-model:selection="selectedFormer"
-          :value="form.former_officials"
-          :loading="loading"
-          dataKey="id"
-          size="small"
-          stripedRows
-          :rows="10"
-          paginator
-          paginatorTemplate="PrevPageLink PageLinks NextPageLink"
-          responsiveLayout="scroll"
-        >
-          <template #empty>
-            <div class="py-6 text-center text-sm text-slate-400">
-              Belum ada data pejabat terdahulu. Klik "Tambah Pejabat" untuk mulai.
-            </div>
-          </template>
-
-          <Column selectionMode="multiple" headerStyle="width: 3rem" />
-          <Column field="jabatan" header="Jabatan" sortable>
-            <template #body="{ data }">{{ formatJabatanFormer(data) }}</template>
-          </Column>
-          <Column field="nama" header="Nama" sortable />
-          <Column header="Wilayah">
-            <template #body="{ data }">{{ formatWilayahFormer(data) }}</template>
-          </Column>
-          <Column field="start_year" header="Masa Jabatan" sortable>
-            <template #body="{ data }">{{ formatMasaJabatan(data) }}</template>
-          </Column>
-          <Column field="desc" header="Keterangan">
-            <template #body="{ data }">
-              <span class="line-clamp-1 text-slate-500">{{ data.desc || '—' }}</span>
-            </template>
-          </Column>
-          <Column header="Aksi" headerStyle="width: 8.5rem">
-            <template #body="{ data }">
-              <div class="flex items-center gap-1">
-                <Button icon="pi pi-eye" text rounded size="small" severity="secondary" @click="openPreviewFormer(data)" aria-label="Lihat detail pejabat terdahulu" />
-                <Button icon="pi pi-pencil" text rounded size="small" @click="openEditFormer(data)" aria-label="Edit pejabat terdahulu" />
-                <Button icon="pi pi-trash" text rounded size="small" severity="danger" @click="deleteFormer(data)" aria-label="Hapus pejabat terdahulu" />
-              </div>
-            </template>
-          </Column>
-        </DataTable>
-      </template>
-    </Card>
-
-    <!-- Modal Tambah / Edit Pejabat Terdahulu (isian mengikuti form Tambah Staff) -->
-    <Dialog
-      v-model:visible="formerDialogVisible"
-      modal
-      :header="formerDialogTitle"
-      :style="{ width: '640px' }"
-      :breakpoints="{ '700px': '95vw' }"
-      :closable="true"
-      @hide="closeFormerDialog"
-    >
-      <div class="flex flex-col gap-5">
-        <!-- ===== Data jabatan ===== -->
-        <section class="flex flex-col gap-3">
-          <h3 class="m-0 text-xs font-bold uppercase tracking-wider text-blue-700">Data Jabatan</h3>
-
-          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-semibold text-slate-700">Nama</label>
-              <InputText v-model="formerForm.nama" placeholder="Nama lengkap" fluid />
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-semibold text-slate-700">Jabatan</label>
-              <Select
-                v-model="formerForm.jabatan"
-                :options="formerJabatanOptions"
-                editable
-                filter
-                placeholder="Pilih atau ketik jabatan (mis. Ketua RT)"
-                fluid
-              />
-            </div>
-          </div>
-
-          <!-- Isian khusus Ketua RT / Ketua RW -->
-          <div v-if="formerIsKetuaRt || formerIsKetuaRw" class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div v-if="formerIsKetuaRt" class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-semibold text-slate-700">Nomor RT</label>
-              <InputText v-model="formerForm.rt_number" placeholder="mis. 01" fluid />
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-semibold text-slate-700">Nomor RW</label>
-              <InputText v-model="formerForm.rw_number" placeholder="mis. 02" fluid />
-            </div>
-            <div class="flex flex-col gap-1.5 sm:col-span-2">
-              <label class="text-[13px] font-semibold text-slate-700">Padukuhan</label>
-              <Select
-                v-model="formerForm.padukuhan"
-                :options="padukuhanOptions"
-                editable
-                filter
-                placeholder="Pilih atau ketik padukuhan"
-                fluid
-              />
-            </div>
-          </div>
-
-          <!-- Isian khusus Dukuh -->
-          <div v-if="formerIsDukuh" class="flex flex-col gap-1.5">
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div class="flex flex-col gap-1.5">
-                <label class="text-[13px] font-semibold text-slate-700">Nomor Urut Dukuh</label>
-                <InputText v-model="formerForm.dukuh_number" placeholder="mis. XIII" fluid />
-              </div>
-              <div class="flex flex-col gap-1.5 sm:col-span-2">
-                <label class="text-[13px] font-semibold text-slate-700">Nama Padukuhan</label>
-                <InputText v-model="formerForm.padukuhan" placeholder="mis. Krebet" fluid />
-              </div>
-            </div>
-            <small class="text-xs text-slate-400">
-              Nomor urut memakai angka Romawi.
-              <template v-if="formerDukuhLabelPreview">
-                Jabatan akan tampil sebagai <strong class="text-slate-600">{{ formerDukuhLabelPreview }}</strong>.
-              </template>
-            </small>
-          </div>
-
-          <div class="flex flex-col gap-1.5">
-            <label class="text-[13px] font-semibold text-slate-700">Keterangan</label>
-            <InputText v-model="formerForm.desc" placeholder="Keterangan (opsional)" fluid />
-          </div>
-
-          <div class="flex flex-col gap-1.5">
-            <label class="text-[13px] font-semibold text-slate-700">Masa Jabatan</label>
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div class="flex flex-col gap-1">
-                <small class="text-xs text-slate-500">Tanggal mulai</small>
-                <InputText v-model="formerForm.start_date" type="date" fluid />
-              </div>
-              <div class="flex flex-col gap-1">
-                <small class="text-xs text-slate-500">Tanggal selesai</small>
-                <InputText v-model="formerForm.end_date" type="date" :min="formerForm.start_date || undefined" fluid />
-              </div>
-            </div>
-            <small class="text-xs text-slate-400">Kedua tanggal wajib diisi karena pejabat ini sudah tidak menjabat.</small>
-            <small
-              v-if="!formerForm.start_date && !formerForm.end_date && (formerForm.start_year || formerForm.end_year)"
-              class="text-xs text-amber-600"
-            >
-              Data lama hanya berisi tahun ({{ formatMasaJabatan({ start_year: formerForm.start_year, end_year: formerForm.end_year }) }}).
-              Isi tanggal lengkap untuk memperbarui.
-            </small>
-          </div>
-        </section>
-
-        <!-- ===== Surat Keputusan (SK) ===== -->
-        <section class="flex flex-col gap-3">
-          <h3 class="m-0 text-xs font-bold uppercase tracking-wider text-blue-700">Surat Keputusan (SK)</h3>
-
-          <div class="flex flex-col gap-1.5">
-            <label class="text-[13px] font-semibold text-slate-700">
-              Nomor SK <span class="font-normal text-slate-400">(opsional)</span>
-            </label>
-            <InputText v-model="formerForm.sk_number" placeholder="mis. 1/Kep.Lurah/2014" fluid />
-          </div>
-        </section>
-
-        <!-- ===== Data pribadi & pendidikan ===== -->
-        <section class="flex flex-col gap-3">
-          <h3 class="m-0 text-xs font-bold uppercase tracking-wider text-blue-700">Data Pribadi &amp; Pendidikan</h3>
-
-          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-semibold text-slate-700">Jenis Kelamin</label>
-              <Select v-model="formerForm.gender" :options="GENDER_OPTIONS" placeholder="Pilih jenis kelamin" fluid />
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-semibold text-slate-700">Tanggal Lahir</label>
-              <InputText v-model="formerForm.birth_date" type="date" fluid />
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-semibold text-slate-700">Jenjang Pendidikan</label>
-              <Select
-                v-model="formerForm.education"
-                :options="EDUCATION_OPTIONS"
-                editable
-                placeholder="Pilih atau ketik jenjang pendidikan"
-                fluid
-              />
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-semibold text-slate-700">Jurusan</label>
-              <InputText v-model="formerForm.major" placeholder="mis. Manajemen" fluid />
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-semibold text-slate-700">{{ formerSchoolNameLabel }}</label>
-              <InputText v-model="formerForm.school_name" :placeholder="formerSchoolNamePlaceholder" fluid />
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-semibold text-slate-700">Tahun Lulus</label>
-              <InputNumber v-model="formerForm.graduation_year" :useGrouping="false" :min="1900" :max="2100" placeholder="mis. 1995" fluid />
-            </div>
-          </div>
-        </section>
-
-        <!-- ===== Riwayat jabatan ===== -->
-        <section class="flex flex-col gap-3">
-          <div class="flex items-center justify-between">
-            <h3 class="m-0 text-xs font-bold uppercase tracking-wider text-blue-700">Riwayat Jabatan</h3>
-            <Button label="Tambah Riwayat" icon="pi pi-plus" size="small" text @click="addFormerHistoryRow" />
-          </div>
-
+        <div ref="assignSectionRef" class="flex flex-col gap-4">
           <div
-            v-if="!formerForm.position_history.length"
-            class="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-xs text-slate-400"
+            v-if="editingAssignmentId"
+            class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
           >
-            Belum ada riwayat jabatan.
+            <span>
+              <i class="pi pi-pencil mr-1.5 text-xs" />
+              Mengubah riwayat jabatan <strong>{{ editingPersonName }}</strong>
+            </span>
+            <Button label="Batal" icon="pi pi-times" size="small" text severity="secondary" @click="resetAssignForm" />
           </div>
 
-          <div
-            v-for="(item, index) in formerForm.position_history"
-            :key="index"
-            class="rounded-lg border border-slate-200 bg-slate-50/60 p-3"
-          >
-            <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+          <section class="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+            <div class="mb-3 flex items-center gap-2">
+              <span class="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-blue-600"><i class="pi pi-user text-xs" /></span>
+              <h3 class="m-0 text-xs font-bold uppercase tracking-wider text-blue-700">Pejabat &amp; Jabatan</h3>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div class="flex flex-col gap-1.5">
-                <label class="text-xs font-semibold text-slate-600">Judul / Nomor SK</label>
-                <InputText v-model="item.sk" placeholder="mis. 1/Kep.Lurah/2014" size="small" fluid />
+                <label class="text-xs font-semibold text-slate-600">Pejabat / Staff</label>
+                <Select
+                  v-model="assignForm.person_id"
+                  :options="personOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  filter
+                  placeholder="Pilih pejabat / staff"
+                  fluid
+                />
               </div>
+
               <div class="flex flex-col gap-1.5">
-                <label class="text-xs font-semibold text-slate-600">Tanggal SK</label>
-                <InputText v-model="item.date" type="date" size="small" fluid />
+                <label class="text-xs font-semibold text-slate-600">Jabatan</label>
+                <Select
+                  v-model="assignForm.jabatan"
+                  :options="jabatanSelectOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  filter
+                  placeholder="Pilih jabatan"
+                  fluid
+                />
               </div>
-              <div class="flex flex-col gap-1.5">
-                <label class="text-xs font-semibold text-slate-600">Pejabat Penerbit</label>
-                <InputText v-model="item.official" placeholder="mis. Lurah" size="small" fluid />
+
+              <div v-if="aIsDukuh || aIsRtRw" class="flex flex-col gap-1.5">
+                <label class="text-xs font-semibold text-slate-600">Padukuhan</label>
+                <Select
+                  v-model="assignForm.padukuhan"
+                  :options="padukuhanOptions"
+                  editable
+                  filter
+                  placeholder="Pilih / ketik padukuhan"
+                  fluid
+                />
+              </div>
+
+              <div v-if="aNeedsDukuhNumber" class="flex flex-col gap-1.5">
+                <label class="text-xs font-semibold text-slate-600">No. Urut Dukuh</label>
+                <InputText v-model="assignForm.dukuh_number" placeholder="mis. XIII" fluid />
+              </div>
+
+              <div v-if="aIsRtRw" class="flex flex-col gap-1.5">
+                <label class="text-xs font-semibold text-slate-600">Nomor RW</label>
+                <Select v-model="assignForm.rw_number" :options="rwOptions" editable placeholder="mis. 01" fluid />
+              </div>
+
+              <div v-if="aIsRt" class="flex flex-col gap-1.5">
+                <label class="text-xs font-semibold text-slate-600">Nomor RT</label>
+                <Select v-model="assignForm.rt_number" :options="rtOptions" editable placeholder="mis. 01" fluid />
               </div>
             </div>
 
-            <div class="mt-2 flex justify-end">
-              <Button
-                label="Hapus Riwayat"
-                icon="pi pi-trash"
-                size="small"
-                text
-                severity="danger"
-                @click="removeFormerHistoryRow(index)"
-              />
+            <p v-if="aDukuhPreview" class="m-0 mt-3 text-xs text-slate-500">
+              Jabatan akan tampil sebagai
+              <strong class="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">{{ aDukuhPreview }}</strong>
+            </p>
+          </section>
+
+          <section class="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+            <div class="mb-3 flex items-center gap-2">
+              <span class="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-blue-600"><i class="pi pi-calendar text-xs" /></span>
+              <h3 class="m-0 text-xs font-bold uppercase tracking-wider text-blue-700">Masa Jabatan</h3>
             </div>
-          </div>
-        </section>
-      </div>
 
-      <template #footer>
-        <Button label="Cancel" icon="pi pi-times" text severity="secondary" :disabled="saving" @click="closeFormerDialog" />
-        <Button label="Save" icon="pi pi-check" :loading="saving" @click="saveFormerDialog" />
-      </template>
-    </Dialog>
-
-    <!-- Modal Preview Detail Pamong / Pejabat Terdahulu (gaya mengikuti pop up halaman publik) -->
-    <Dialog
-      v-model:visible="previewDialogVisible"
-      modal
-      dismissableMask
-      :showHeader="false"
-      :style="{ width: '600px' }"
-      :breakpoints="{ '700px': '95vw' }"
-      :pt="{
-        root: { class: '!overflow-hidden !rounded-3xl' },
-        content: { class: '!p-0' },
-        footer: { class: '!border-t !border-slate-100 !pt-3' },
-      }"
-      @hide="closePreview"
-    >
-      <div v-if="previewPerson" class="relative pb-6">
-        <!-- Latar header: ganti kelas gradient di bawah untuk mengubah warna -->
-        <div class="absolute inset-x-0 top-0 h-40 bg-gradient-to-br from-[#2a9fd8] to-[#1a5a8a]" />
-
-        <Button
-          icon="pi pi-times"
-          rounded
-          text
-          severity="secondary"
-          class="!absolute right-3 top-3 z-20 !bg-white/20 !text-white hover:!bg-white/30"
-          aria-label="Tutup"
-          @click="closePreview"
-        />
-
-        <div class="relative z-10 flex flex-col items-center px-6 pt-6 text-center">
-          <span class="rounded-full bg-amber-400 px-4 py-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-900">
-            {{ formatJabatanFormer(previewPerson) }}
-          </span>
-
-          <div class="mt-4 h-36 w-36 overflow-hidden rounded-3xl border-4 border-white bg-blue-100 shadow-lg">
-            <img
-              v-if="previewPerson.photo"
-              :src="photoSrc(previewPerson.photo)"
-              :alt="previewPerson.nama"
-              class="h-full w-full object-cover"
-            />
-            <div v-else class="flex h-full w-full items-center justify-center text-4xl font-bold text-blue-700">
-              {{ initials(previewPerson.nama) }}
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-semibold text-slate-600">Tanggal Mulai</label>
+                <InputText v-model="assignForm.start_date" type="date" fluid />
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-semibold text-slate-600">
+                  Tanggal Akhir <span class="font-normal text-slate-400">(kosongkan jika masih menjabat)</span>
+                </label>
+                <InputText v-model="assignForm.end_date" type="date" :min="assignForm.start_date || undefined" fluid />
+              </div>
             </div>
-          </div>
 
-          <h2 class="m-0 mt-4 text-2xl font-extrabold text-slate-900">{{ previewPerson.nama }}</h2>
+            <div v-if="willBePurna || assignLegacyYears || assignLegacyTermEnd" class="mt-3 flex flex-col gap-2">
+              <div v-if="willBePurna" class="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                <i class="pi pi-info-circle mt-0.5" />
+                <span>Tanggal akhir sudah lewat, jadi riwayat ini masuk daftar Purna Tugas. Dokumen SK tidak disimpan untuk pejabat purna (hanya nomor SK).</span>
+              </div>
+              <div v-if="assignLegacyYears" class="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                <i class="pi pi-info-circle mt-0.5" />
+                <span>Data lama hanya berisi tahun ({{ assignLegacyYears }}). Isi tanggal lengkap untuk memperbarui.</span>
+              </div>
+              <div v-if="assignLegacyTermEnd" class="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                <i class="pi pi-info-circle mt-0.5" />
+                <span>Data lama mencatat tanggal habis jabatan {{ assignLegacyTermEnd }}. Isi kolom Tanggal Akhir jika ingin menggantinya.</span>
+              </div>
+            </div>
+          </section>
 
-          <span class="mt-2 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold uppercase text-blue-700">
-            <i class="pi pi-briefcase text-xs" />
-            {{ previewJabatanFull }}
-          </span>
-
-          <p v-if="previewPerson.desc" class="m-0 mt-3 text-sm text-slate-500">{{ previewPerson.desc }}</p>
-        </div>
-
-        <div class="relative z-10 mt-6 flex flex-col gap-6 px-6">
-          <!-- Informasi pamong -->
-          <section class="flex flex-col gap-3">
-            <div class="flex items-center gap-3">
-              <span class="h-px w-6 bg-blue-600" />
-              <h3 class="m-0 text-xs font-bold uppercase tracking-widest text-blue-700">
-                {{ previewKind === 'former' ? 'Informasi Pejabat' : 'Informasi Pamong' }}
+          <section class="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+            <div class="mb-3 flex items-center gap-2">
+              <span class="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-blue-600"><i class="pi pi-file text-xs" /></span>
+              <h3 class="m-0 text-xs font-bold uppercase tracking-wider text-blue-700">
+                Surat Keputusan &amp; Keterangan <span class="font-normal normal-case tracking-normal text-slate-400">(opsional)</span>
               </h3>
             </div>
 
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div
-                v-for="card in previewInfoCards"
-                :key="card.label"
-                class="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3"
-              >
-                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
-                  <i :class="['pi', card.icon]" />
-                </span>
-                <div class="min-w-0">
-                  <p class="m-0 text-[11px] font-bold uppercase tracking-wider text-slate-400">{{ card.label }}</p>
-                  <p class="m-0 break-words text-sm font-semibold text-slate-700">{{ card.value || '—' }}</p>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-semibold text-slate-600">Nomor SK</label>
+                <InputText v-model="assignForm.sk_number" placeholder="mis. 1/Kep.Lurah/2022" fluid />
+              </div>
+
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs font-semibold text-slate-600">Dokumen SK</label>
+                <div
+                  v-if="assignForm.skFile || assignForm.sk_document"
+                  class="flex items-center gap-2 rounded-lg border border-blue-100 bg-white px-3 py-1.5"
+                >
+                  <i class="pi pi-file text-blue-600" />
+                  <span class="min-w-0 flex-1 truncate text-sm font-medium text-slate-700" :title="assignForm.sk_document_name">
+                    {{ assignForm.sk_document_name || 'Dokumen SK' }}
+                  </span>
+                  <Button label="Ganti" size="small" text :disabled="willBePurna" @click="triggerSk(assignForm)" />
+                  <Button icon="pi pi-times" size="small" text rounded severity="danger" aria-label="Hapus dokumen" @click="removeMainSk(assignForm)" />
+                </div>
+                <div v-else class="flex items-center gap-3">
+                  <Button label="Upload Dokumen" icon="pi pi-upload" size="small" outlined :disabled="willBePurna" @click="triggerSk(assignForm)" />
+                  <small class="text-xs text-slate-400">PDF, Word, atau gambar (maks. {{ SK_MAX_SIZE_MB }} MB)</small>
                 </div>
               </div>
-            </div>
 
-            <div class="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
-              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-                <i class="pi pi-clock" />
-              </span>
-              <div>
-                <p class="m-0 text-[11px] font-bold uppercase tracking-wider text-amber-700">Tanggal Habis Jabatan</p>
-                <p class="m-0 text-sm font-semibold text-slate-700">
-                  {{ formatDate(previewPerson.end_date || previewPerson.term_end_date, 'long') || '—' }}
-                </p>
+              <div class="flex flex-col gap-1.5 md:col-span-2">
+                <label class="text-xs font-semibold text-slate-600">Keterangan</label>
+                <InputText v-model="assignForm.desc" placeholder="Deskripsi jabatan" fluid />
               </div>
             </div>
           </section>
 
-          <!-- Surat keputusan -->
-          <section class="flex flex-col gap-3">
-            <div class="flex items-center gap-3">
-              <span class="h-px w-6 bg-blue-600" />
-              <h3 class="m-0 text-xs font-bold uppercase tracking-widest text-blue-700">Surat Keputusan (SK)</h3>
-            </div>
-
-            <div class="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
-                <i class="pi pi-file" />
-              </span>
-              <div class="min-w-0 flex-1">
-                <p class="m-0 text-[11px] font-bold uppercase tracking-wider text-slate-400">Nomor SK</p>
-                <p class="m-0 break-words text-sm font-semibold text-slate-700">{{ previewPerson.sk_number || '—' }}</p>
-                <p v-if="previewPerson.sk_document_name" class="m-0 truncate text-xs text-slate-400" :title="previewPerson.sk_document_name">
-                  {{ previewPerson.sk_document_name }}
-                </p>
+          <section class="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span class="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-blue-600"><i class="pi pi-history text-xs" /></span>
+                <h3 class="m-0 text-xs font-bold uppercase tracking-wider text-blue-700">
+                  Riwayat SK <span class="font-normal normal-case tracking-normal text-slate-400">(opsional)</span>
+                </h3>
               </div>
-              <a
-                v-if="previewPerson.sk_document"
-                :href="photoSrc(previewPerson.sk_document)"
-                target="_blank"
-                rel="noopener"
-                class="shrink-0 text-xs font-semibold text-blue-600 hover:underline"
-              >
-                Buka dokumen
-              </a>
-            </div>
-          </section>
-
-          <!-- Riwayat jabatan -->
-          <section class="flex flex-col gap-3">
-            <div class="flex items-center gap-3">
-              <span class="h-px w-6 bg-blue-600" />
-              <h3 class="m-0 text-xs font-bold uppercase tracking-widest text-blue-700">Riwayat Jabatan</h3>
+              <Button label="Tambah Riwayat SK" icon="pi pi-plus" size="small" outlined @click="addHistoryRow(assignForm)" />
             </div>
 
             <div
-              v-if="!previewPerson.position_history?.length"
-              class="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-6 text-center text-sm text-slate-400"
+              v-if="!assignForm.position_history.length"
+              class="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-4 text-center text-xs text-slate-400"
             >
-              Belum ada riwayat jabatan.
+              Belum ada riwayat SK.
             </div>
 
-            <ul v-else class="m-0 flex list-none flex-col gap-2 p-0">
-              <li
-                v-for="(item, index) in previewPerson.position_history"
+            <div class="flex flex-col gap-3">
+              <div
+                v-for="(item, index) in assignForm.position_history"
                 :key="index"
-                class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"
+                class="rounded-lg border border-slate-200 bg-white p-3"
               >
-                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
-                  <i class="pi pi-history text-sm" />
-                </span>
-                <div class="min-w-0 flex-1">
-                  <p class="m-0 font-semibold">SK: {{ item.sk || '—' }}</p>
-                  <p class="m-0 text-xs text-slate-500">
-                    Tgl: {{ item.date ? formatDate(item.date, 'long') : '—' }} · Pejabat: {{ item.official || '—' }}
-                  </p>
+                <div class="mb-2.5 flex items-center justify-between">
+                  <span class="text-xs font-bold text-slate-500">SK #{{ index + 1 }}</span>
+                  <Button icon="pi pi-trash" size="small" text rounded severity="danger" aria-label="Hapus riwayat SK" @click="removeHistoryRow(assignForm, index)" />
                 </div>
-                <a
-                  v-if="item.document"
-                  :href="photoSrc(item.document)"
-                  target="_blank"
-                  rel="noopener"
-                  class="shrink-0 text-xs font-semibold text-blue-600 hover:underline"
-                >
-                  Dokumen
-                </a>
-              </li>
-            </ul>
+
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-xs font-semibold text-slate-600">Judul / Nomor SK</label>
+                    <InputText v-model="item.sk" placeholder="mis. 1/Kep.Lurah/2022" size="small" :readonly="hasSkDocument(item)" fluid />
+                  </div>
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-xs font-semibold text-slate-600">Tanggal SK</label>
+                    <InputText v-model="item.date" type="date" size="small" fluid />
+                  </div>
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-xs font-semibold text-slate-600">Pejabat Penerbit</label>
+                    <InputText v-model="item.official" placeholder="mis. Lurah" size="small" fluid />
+                  </div>
+                </div>
+
+                <div class="mt-3 flex flex-col gap-1.5">
+                  <label class="text-xs font-semibold text-slate-600">Dokumen SK</label>
+                  <div
+                    v-if="hasSkDocument(item)"
+                    class="flex items-center gap-2 rounded-lg border border-blue-100 bg-slate-50 px-3 py-2"
+                  >
+                    <i class="pi pi-file text-blue-600" />
+                    <span class="min-w-0 flex-1 truncate text-sm font-medium text-slate-700" :title="item.document_name">
+                      {{ item.document_name || 'Dokumen SK' }}
+                    </span>
+                    <span v-if="item.documentFile" class="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                      Belum disimpan
+                    </span>
+                    <Button label="Ganti" size="small" text :disabled="willBePurna" @click="triggerSk(assignForm, index)" />
+                    <Button icon="pi pi-times" size="small" text rounded severity="danger" aria-label="Hapus dokumen" @click="removeHistoryDoc(assignForm, index)" />
+                  </div>
+                  <div v-else class="flex flex-wrap items-center gap-3">
+                    <Button label="Upload Dokumen" icon="pi pi-upload" size="small" outlined :disabled="willBePurna" @click="triggerSk(assignForm, index)" />
+                    <small class="text-xs text-slate-400">
+                      PDF, Word, atau gambar (maks. {{ SK_MAX_SIZE_MB }} MB). Nama file menjadi judul SK.
+                    </small>
+                  </div>
+                </div>
+              </div>
+            </div>
           </section>
+
+          <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+            <p class="m-0 max-w-xl text-xs text-slate-500">
+              Ketua dukuh cukup memilih padukuhan, ketua RW sampai RW, ketua RT sampai RT.
+            </p>
+            <div class="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+              <Button
+                v-if="editingAssignmentId"
+                label="Batal"
+                text
+                severity="secondary"
+                :disabled="saving"
+                @click="resetAssignForm"
+              />
+              <Button
+                :label="editingAssignmentId ? 'Perbarui Riwayat Jabatan' : 'Simpan Riwayat Jabatan'"
+                icon="pi pi-check"
+                :loading="saving"
+                @click="saveAssignment"
+              />
+            </div>
+          </div>
         </div>
-      </div>
-
-      <template #footer>
-        <Button label="Tutup" icon="pi pi-times" text severity="secondary" @click="closePreview" />
-        <Button label="Edit" icon="pi pi-pencil" @click="editFromPreview" />
       </template>
-    </Dialog>
+    </Card>
 
-    <!-- Modal Tambah Staff / Edit Pamong -->
     <Dialog
       v-model:visible="personDialogVisible"
       modal
@@ -2017,30 +2132,33 @@ async function onToggleShowFormer(value) {
     >
       <input ref="personPhotoInput" type="file" accept="image/*" class="hidden" @change="onPersonPhotoChange" />
       <input ref="personSignatureInput" type="file" accept="image/*" class="hidden" @change="onPersonSignatureChange" />
-      <input ref="skFileInput" type="file" :accept="SK_ACCEPT" class="hidden" @change="onSkFileChange" />
-      <input ref="mainSkInput" type="file" :accept="SK_ACCEPT" class="hidden" @change="onMainSkChange" />
 
       <div class="flex flex-col gap-5">
-        <!-- ===== Foto & tanda tangan ===== -->
-        <section v-if="showPhoto" class="flex flex-col gap-3">
-          <h3 class="m-0 text-xs font-bold uppercase tracking-wider text-blue-700">
-            {{ showSignature ? 'Foto & Tanda Tangan' : 'Foto' }}
-          </h3>
+        <div
+          v-if="!editingPersonId"
+          class="flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800"
+        >
+          <i class="pi pi-info-circle mt-0.5" />
+          <span>Jabatan, masa jabatan, nomor SK, dan riwayat SK diisi di bagian Riwayat Jabatan setelah data diri ditambahkan.</span>
+        </div>
+
+        <section v-if="showPersonMedia" class="flex flex-col gap-3">
+          <h3 class="m-0 text-xs font-bold uppercase tracking-wider text-blue-700">Foto &amp; Tanda Tangan</h3>
 
           <div class="flex flex-col gap-1.5">
             <label class="text-[13px] font-semibold text-slate-700">Foto</label>
-            <div class="flex items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
+            <div class="flex flex-col gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 sm:flex-row sm:items-center">
               <div
-                class="flex h-44 flex-1 cursor-pointer items-center justify-center overflow-hidden rounded bg-white hover:ring-1 hover:ring-blue-400"
+                class="flex h-44 w-full cursor-pointer items-center justify-center overflow-hidden rounded bg-white hover:ring-1 hover:ring-blue-400 sm:flex-1"
                 @click="triggerPersonPhotoUpload"
               >
-                <img v-if="personForm.photo" :src="photoSrc(personForm.photo)" alt="Foto pamong" class="h-full w-full object-contain" />
+                <img v-if="personForm.photo" :src="photoSrc(personForm.photo)" alt="Foto pejabat" class="h-full w-full object-contain" />
                 <div v-else class="flex flex-col items-center gap-1.5 text-slate-400">
                   <i class="pi pi-camera text-2xl" />
                   <span class="text-xs font-medium">Belum ada foto</span>
                 </div>
               </div>
-              <div class="flex shrink-0 flex-col gap-1.5">
+              <div class="flex shrink-0 flex-row gap-1.5 sm:flex-col">
                 <Button
                   :label="personForm.photo ? 'Ganti' : 'Upload'"
                   icon="pi pi-upload"
@@ -2053,159 +2171,34 @@ async function onToggleShowFormer(value) {
             </div>
           </div>
 
-          <!-- Tanda tangan: tidak dipakai untuk Ketua RT / RW dan Dukuh -->
-          <div v-if="showSignature" class="flex flex-col gap-1.5">
+          <div class="flex flex-col gap-1.5">
             <label class="text-[13px] font-semibold text-slate-700">Tanda Tangan Digital</label>
-            <div class="flex items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
-              <div class="flex h-20 flex-1 items-center justify-center overflow-hidden rounded bg-white">
+            <div class="flex flex-col gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 sm:flex-row sm:items-center">
+              <div class="flex h-20 w-full items-center justify-center overflow-hidden rounded bg-white sm:flex-1">
                 <img v-if="personForm.signature" :src="photoSrc(personForm.signature)" alt="Tanda tangan digital" class="h-full w-full object-contain" />
                 <span v-else class="text-xs text-slate-400">Belum ada tanda tangan</span>
               </div>
-              <div class="flex shrink-0 flex-col gap-1.5">
+              <div class="flex shrink-0 flex-row gap-1.5 sm:flex-col">
                 <Button label="Upload" icon="pi pi-upload" size="small" outlined @click="triggerPersonSignatureUpload" />
                 <Button v-if="personForm.signature" label="Hapus" icon="pi pi-trash" size="small" text severity="danger" @click="removePersonSignature" />
               </div>
             </div>
             <small class="text-xs text-slate-400">Otomatis dinormalisasi ke PNG transparan 600 × 220 px.</small>
           </div>
+
+          <small class="text-xs text-slate-400">
+            Foto &amp; tanda tangan hanya tersimpan untuk pejabat yang masih aktif.
+          </small>
         </section>
 
-        <!-- ===== Data jabatan ===== -->
         <section class="flex flex-col gap-3">
-          <h3 class="m-0 text-xs font-bold uppercase tracking-wider text-blue-700">Data Jabatan</h3>
+          <h3 class="m-0 text-xs font-bold uppercase tracking-wider text-blue-700">Data Diri</h3>
 
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div class="flex flex-col gap-1.5">
+            <div class="flex flex-col gap-1.5 sm:col-span-2">
               <label class="text-[13px] font-semibold text-slate-700">Nama</label>
               <InputText v-model="personForm.nama" placeholder="Nama lengkap" fluid />
             </div>
-            <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-semibold text-slate-700">Jabatan</label>
-              <Select
-                v-model="personForm.jabatan"
-                :options="jabatanDropdownOptions"
-                optionLabel="label"
-                optionValue="label"
-                placeholder="Pilih jabatan"
-                :filter="editingPersonId !== null"
-                fluid
-              />
-            </div>
-          </div>
-
-          <!-- Isian khusus Ketua RT / Ketua RW -->
-          <div v-if="isRtRw" class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div v-if="isKetuaRt" class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-semibold text-slate-700">Nomor RT</label>
-              <InputText v-model="personForm.rt_number" placeholder="mis. 01" fluid />
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <label class="text-[13px] font-semibold text-slate-700">Nomor RW</label>
-              <InputText v-model="personForm.rw_number" placeholder="mis. 02" fluid />
-            </div>
-            <div class="flex flex-col gap-1.5 sm:col-span-2">
-              <label class="text-[13px] font-semibold text-slate-700">Padukuhan</label>
-              <Select
-                v-model="personForm.padukuhan"
-                :options="padukuhanOptions"
-                editable
-                filter
-                placeholder="Pilih atau ketik padukuhan"
-                fluid
-              />
-            </div>
-          </div>
-
-          <!-- Isian khusus Dukuh -->
-          <div v-if="isDukuh" class="flex flex-col gap-1.5">
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div class="flex flex-col gap-1.5">
-                <label class="text-[13px] font-semibold text-slate-700">Nomor Urut Dukuh</label>
-                <InputText v-model="personForm.dukuh_number" placeholder="mis. XIII" fluid />
-              </div>
-              <div class="flex flex-col gap-1.5 sm:col-span-2">
-                <label class="text-[13px] font-semibold text-slate-700">Nama Padukuhan</label>
-                <InputText v-model="personForm.padukuhan" placeholder="mis. Krebet" fluid />
-              </div>
-            </div>
-            <small class="text-xs text-slate-400">
-              Nomor urut memakai angka Romawi.
-              <template v-if="dukuhLabelPreview">
-                Jabatan akan tampil sebagai <strong class="text-slate-600">{{ dukuhLabelPreview }}</strong>.
-              </template>
-            </small>
-          </div>
-
-          <div class="flex flex-col gap-1.5">
-            <label class="text-[13px] font-semibold text-slate-700">Deskripsi</label>
-            <InputText v-model="personForm.desc" placeholder="Deskripsi jabatan (opsional)" fluid />
-          </div>
-
-          <div class="flex flex-col gap-1.5">
-            <label class="text-[13px] font-semibold text-slate-700">Masa Jabatan</label>
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div class="flex flex-col gap-1">
-                <small class="text-xs text-slate-500">Tanggal mulai</small>
-                <InputText v-model="personForm.start_date" type="date" fluid />
-              </div>
-              <div class="flex flex-col gap-1">
-                <small class="text-xs text-slate-500">Tanggal selesai</small>
-                <InputText v-model="personForm.end_date" type="date" :min="personForm.start_date || undefined" fluid />
-              </div>
-            </div>
-            <small class="text-xs text-slate-400">Kosongkan tanggal selesai jika masih menjabat (tampil "Sekarang").</small>
-            <small
-              v-if="!personForm.start_date && (personForm.start_year || personForm.end_year)"
-              class="text-xs text-amber-600"
-            >
-              Data lama hanya berisi tahun ({{ formatMasaJabatan({ start_year: personForm.start_year, end_year: personForm.end_year }) }}).
-              Isi tanggal lengkap untuk memperbarui.
-            </small>
-          </div>
-
-        </section>
-
-        <!-- ===== Surat Keputusan (SK) ===== -->
-        <section class="flex flex-col gap-3">
-          <h3 class="m-0 text-xs font-bold uppercase tracking-wider text-blue-700">Surat Keputusan (SK)</h3>
-
-          <div class="flex flex-col gap-1.5">
-            <label class="text-[13px] font-semibold text-slate-700">Nomor SK</label>
-            <InputText v-model="personForm.sk_number" placeholder="mis. 1/Kep.Lurah/2022" fluid />
-          </div>
-
-          <div class="flex flex-col gap-1.5">
-            <label class="text-[13px] font-semibold text-slate-700">
-              Dokumen SK <span class="font-normal text-slate-400">(opsional)</span>
-            </label>
-
-            <div
-              v-if="personForm.skFile || personForm.sk_document"
-              class="flex items-center gap-2 rounded-lg border border-blue-100 bg-white px-3 py-2"
-            >
-              <i class="pi pi-file text-blue-600" />
-              <span class="min-w-0 flex-1 truncate text-sm font-medium text-slate-700" :title="personForm.sk_document_name">
-                {{ personForm.sk_document_name || 'Dokumen SK' }}
-              </span>
-              <span v-if="personForm.skFile" class="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                Belum disimpan
-              </span>
-              <Button label="Ganti" size="small" text @click="triggerMainSkUpload" />
-              <Button icon="pi pi-times" size="small" text rounded severity="danger" aria-label="Hapus dokumen" @click="removeMainSk" />
-            </div>
-
-            <div v-else class="flex items-center gap-3">
-              <Button label="Upload Dokumen" icon="pi pi-upload" size="small" outlined @click="triggerMainSkUpload" />
-              <small class="text-xs text-slate-400">PDF, Word, atau gambar (maks. {{ SK_MAX_SIZE_MB }} MB).</small>
-            </div>
-          </div>
-        </section>
-
-        <!-- ===== Data pribadi & pendidikan ===== -->
-        <section class="flex flex-col gap-3">
-          <h3 class="m-0 text-xs font-bold uppercase tracking-wider text-blue-700">Data Pribadi &amp; Pendidikan</h3>
-
-          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div class="flex flex-col gap-1.5">
               <label class="text-[13px] font-semibold text-slate-700">Jenis Kelamin</label>
               <Select v-model="personForm.gender" :options="GENDER_OPTIONS" placeholder="Pilih jenis kelamin" fluid />
@@ -2214,6 +2207,13 @@ async function onToggleShowFormer(value) {
               <label class="text-[13px] font-semibold text-slate-700">Tanggal Lahir</label>
               <InputText v-model="personForm.birth_date" type="date" fluid />
             </div>
+          </div>
+        </section>
+
+        <section class="flex flex-col gap-3">
+          <h3 class="m-0 text-xs font-bold uppercase tracking-wider text-blue-700">Riwayat Pendidikan</h3>
+
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div class="flex flex-col gap-1.5">
               <label class="text-[13px] font-semibold text-slate-700">Jenjang Pendidikan</label>
               <Select
@@ -2238,88 +2238,6 @@ async function onToggleShowFormer(value) {
             </div>
           </div>
         </section>
-
-        <!-- ===== Riwayat jabatan ===== -->
-        <section class="flex flex-col gap-3">
-          <div class="flex items-center justify-between">
-            <h3 class="m-0 text-xs font-bold uppercase tracking-wider text-blue-700">Riwayat Jabatan</h3>
-            <Button label="Tambah Riwayat" icon="pi pi-plus" size="small" text @click="addHistoryRow" />
-          </div>
-
-          <div
-            v-if="!personForm.position_history.length"
-            class="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-xs text-slate-400"
-          >
-            Belum ada riwayat jabatan.
-          </div>
-
-          <div
-            v-for="(item, index) in personForm.position_history"
-            :key="index"
-            class="rounded-lg border border-slate-200 bg-slate-50/60 p-3"
-          >
-            <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-              <div class="flex flex-col gap-1.5">
-                <label class="text-xs font-semibold text-slate-600">Judul / Nomor SK</label>
-                <InputText
-                  v-model="item.sk"
-                  placeholder="mis. 1/Kep.Lurah/2022"
-                  size="small"
-                  :readonly="hasSkDocument(item)"
-                  fluid
-                />
-              </div>
-              <div class="flex flex-col gap-1.5">
-                <label class="text-xs font-semibold text-slate-600">Tanggal SK</label>
-                <InputText v-model="item.date" type="date" size="small" fluid />
-              </div>
-              <div class="flex flex-col gap-1.5">
-                <label class="text-xs font-semibold text-slate-600">Pejabat Penerbit</label>
-                <InputText v-model="item.official" placeholder="mis. Lurah" size="small" fluid />
-              </div>
-            </div>
-
-            <!-- Dokumen SK (opsional) -->
-            <div class="mt-3 flex flex-col gap-1.5">
-              <label class="text-xs font-semibold text-slate-600">
-                Dokumen SK <span class="font-normal text-slate-400">(opsional)</span>
-              </label>
-
-              <div
-                v-if="hasSkDocument(item)"
-                class="flex items-center gap-2 rounded-lg border border-blue-100 bg-white px-3 py-2"
-              >
-                <i class="pi pi-file text-blue-600" />
-                <span class="min-w-0 flex-1 truncate text-sm font-medium text-slate-700" :title="item.document_name">
-                  {{ item.document_name || 'Dokumen SK' }}
-                </span>
-                <span v-if="item.documentFile" class="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                  Belum disimpan
-                </span>
-                <Button label="Ganti" size="small" text @click="triggerSkUpload(index)" />
-                <Button icon="pi pi-times" size="small" text rounded severity="danger" aria-label="Hapus dokumen" @click="removeSkDocument(index)" />
-              </div>
-
-              <div v-else class="flex items-center gap-3">
-                <Button label="Upload Dokumen" icon="pi pi-upload" size="small" outlined @click="triggerSkUpload(index)" />
-                <small class="text-xs text-slate-400">
-                  PDF, Word, atau gambar (maks. {{ SK_MAX_SIZE_MB }} MB). Jika diunggah, nama file menjadi judul SK.
-                </small>
-              </div>
-            </div>
-
-            <div class="mt-2 flex justify-end">
-              <Button
-                label="Hapus Riwayat"
-                icon="pi pi-trash"
-                size="small"
-                text
-                severity="danger"
-                @click="removeHistoryRow(index)"
-              />
-            </div>
-          </div>
-        </section>
       </div>
 
       <template #footer>
@@ -2327,12 +2245,212 @@ async function onToggleShowFormer(value) {
         <Button label="Save" icon="pi pi-check" :loading="saving" @click="savePersonDialog" />
       </template>
     </Dialog>
+
+    <Dialog
+      v-model:visible="previewDialogVisible"
+      modal
+      dismissableMask
+      :showHeader="false"
+      :style="{ width: '600px' }"
+      :breakpoints="{ '700px': '95vw' }"
+      :pt="{
+        root: { class: '!overflow-hidden !rounded-3xl' },
+        content: { class: '!p-0' },
+        footer: { class: '!flex-wrap !border-t !border-slate-100 !pt-3' },
+      }"
+      @hide="closePreview"
+    >
+      <div v-if="previewPerson" class="relative pb-6">
+        <div class="absolute inset-x-0 top-0 h-40 bg-gradient-to-br from-[#2a9fd8] to-[#1a5a8a]" />
+
+        <Button
+          icon="pi pi-times"
+          rounded
+          text
+          severity="secondary"
+          class="!absolute right-3 top-3 z-20 !bg-white/20 !text-white hover:!bg-white/30"
+          aria-label="Tutup"
+          @click="closePreview"
+        />
+
+        <div class="relative z-10 flex flex-col items-center px-6 pt-6 text-center">
+          <span class="rounded-full bg-amber-400 px-4 py-1 text-xs font-extrabold uppercase tracking-[0.2em] text-slate-900">
+            {{ previewChip }}
+          </span>
+
+          <div class="mt-4 h-36 w-36 overflow-hidden rounded-3xl border-4 border-white bg-blue-100 shadow-lg">
+            <img
+              v-if="previewPerson.photo"
+              :src="photoSrc(previewPerson.photo)"
+              :alt="previewPerson.nama"
+              class="h-full w-full object-cover"
+            />
+            <div v-else class="flex h-full w-full items-center justify-center text-4xl font-bold text-blue-700">
+              {{ initials(previewPerson.nama) }}
+            </div>
+          </div>
+
+          <h2 class="m-0 mt-4 text-2xl font-extrabold text-slate-900">{{ previewPerson.nama }}</h2>
+
+          <span class="mt-2 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold uppercase text-blue-700">
+            <i class="pi pi-briefcase text-xs" />
+            {{ previewChipFull }}
+          </span>
+
+          <p v-if="previewAssignment?.desc" class="m-0 mt-3 text-sm text-slate-500">{{ previewAssignment.desc }}</p>
+        </div>
+
+        <div class="relative z-10 mt-6 flex flex-col gap-6 px-6">
+          <section class="flex flex-col gap-3">
+            <div class="flex items-center gap-3">
+              <span class="h-px w-6 bg-blue-600" />
+              <h3 class="m-0 text-xs font-bold uppercase tracking-widest text-blue-700">Informasi Pejabat</h3>
+            </div>
+
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div
+                v-for="card in previewInfoCards"
+                :key="card.label"
+                class="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3"
+              >
+                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                  <i :class="['pi', card.icon]" />
+                </span>
+                <div class="min-w-0">
+                  <p class="m-0 text-[11px] font-bold uppercase tracking-wider text-slate-400">{{ card.label }}</p>
+                  <p class="m-0 break-words text-sm font-semibold text-slate-700">{{ card.value || '—' }}</p>
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-if="previewAssignment"
+              class="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3"
+            >
+              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                <i class="pi pi-clock" />
+              </span>
+              <div>
+                <p class="m-0 text-[11px] font-bold uppercase tracking-wider text-amber-700">Tanggal Habis Jabatan</p>
+                <p class="m-0 text-sm font-semibold text-slate-700">
+                  {{ formatDate(previewAssignment.end_date || previewAssignment.term_end_date, 'long') || '—' }}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section v-if="previewAssignment" class="flex flex-col gap-3">
+            <div class="flex items-center gap-3">
+              <span class="h-px w-6 bg-blue-600" />
+              <h3 class="m-0 text-xs font-bold uppercase tracking-widest text-blue-700">Surat Keputusan (SK)</h3>
+            </div>
+
+            <div class="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                <i class="pi pi-file" />
+              </span>
+              <div class="min-w-0 flex-1">
+                <p class="m-0 text-[11px] font-bold uppercase tracking-wider text-slate-400">Nomor SK</p>
+                <p class="m-0 break-words text-sm font-semibold text-slate-700">{{ previewAssignment.sk_number || '—' }}</p>
+                <p v-if="previewAssignment.sk_document_name" class="m-0 truncate text-xs text-slate-400" :title="previewAssignment.sk_document_name">
+                  {{ previewAssignment.sk_document_name }}
+                </p>
+              </div>
+              <a
+                v-if="previewAssignment.sk_document"
+                :href="photoSrc(previewAssignment.sk_document)"
+                target="_blank"
+                rel="noopener"
+                class="shrink-0 text-xs font-semibold text-blue-600 hover:underline"
+              >
+                Buka dokumen
+              </a>
+            </div>
+          </section>
+
+          <section v-if="previewAssignment?.position_history?.length" class="flex flex-col gap-3">
+            <div class="flex items-center gap-3">
+              <span class="h-px w-6 bg-blue-600" />
+              <h3 class="m-0 text-xs font-bold uppercase tracking-widest text-blue-700">Riwayat SK</h3>
+            </div>
+
+            <ul class="m-0 flex list-none flex-col gap-2 p-0">
+              <li
+                v-for="(item, index) in previewAssignment.position_history"
+                :key="index"
+                class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"
+              >
+                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                  <i class="pi pi-history text-sm" />
+                </span>
+                <div class="min-w-0 flex-1">
+                  <p class="m-0 font-semibold">SK: {{ item.sk || '—' }}</p>
+                  <p class="m-0 text-xs text-slate-500">
+                    Tgl: {{ item.date ? formatDate(item.date, 'long') : '—' }} · Pejabat: {{ item.official || '—' }}
+                  </p>
+                </div>
+                <a
+                  v-if="item.document"
+                  :href="photoSrc(item.document)"
+                  target="_blank"
+                  rel="noopener"
+                  class="shrink-0 text-xs font-semibold text-blue-600 hover:underline"
+                >
+                  Dokumen
+                </a>
+              </li>
+            </ul>
+          </section>
+
+          <section class="flex flex-col gap-3">
+            <div class="flex items-center gap-3">
+              <span class="h-px w-6 bg-blue-600" />
+              <h3 class="m-0 text-xs font-bold uppercase tracking-widest text-blue-700">Riwayat Jabatan</h3>
+            </div>
+
+            <div
+              v-if="!previewRiwayat.length"
+              class="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-6 text-center text-sm text-slate-400"
+            >
+              Belum ada riwayat jabatan.
+            </div>
+
+            <ul v-else class="m-0 flex list-none flex-col gap-2 p-0">
+              <li
+                v-for="item in previewRiwayat"
+                :key="item.id"
+                :class="[
+                  'flex items-start gap-3 rounded-xl border p-3 text-sm text-slate-700',
+                  previewAssignment && previewAssignment.id === item.id
+                    ? 'border-blue-300 bg-blue-50'
+                    : 'border-slate-200 bg-slate-50',
+                ]"
+              >
+                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                  <i class="pi pi-briefcase text-sm" />
+                </span>
+                <div class="min-w-0 flex-1">
+                  <p class="m-0 font-semibold">{{ formatJabatanFormer(item) }}</p>
+                  <p class="m-0 text-xs text-slate-500">
+                    {{ formatWilayahFormer(item) !== '—' ? `${formatWilayahFormer(item)} · ` : '' }}{{ formatMasaJabatan(item) }}
+                  </p>
+                </div>
+                <Tag
+                  :value="isEnded(item) ? 'Purna' : 'Aktif'"
+                  :severity="isEnded(item) ? 'secondary' : 'success'"
+                  class="!text-[10px]"
+                />
+              </li>
+            </ul>
+          </section>
+        </div>
+      </div>
+
+      <template #footer>
+        <Button label="Tutup" icon="pi pi-times" text severity="secondary" @click="closePreview" />
+        <Button label="Edit Data Diri" icon="pi pi-user-edit" text @click="editPersonFromPreview" />
+        <Button v-if="previewAssignment" label="Edit Jabatan" icon="pi pi-pencil" @click="editAssignmentFromPreview" />
+      </template>
+    </Dialog>
   </div>
 </template>
-
-<style scoped>
-
-:deep(.p-avatar img) {
-  object-fit: cover;
-}
-</style>
