@@ -307,7 +307,7 @@ export function applyResident(form, sections, resident, autoFilled = {}, options
   for (const section of sections) {
     // Data orang tua catin hanya boleh mengikuti catin yang sedang dicari.
     // Jangan mengisi orang tua catin wanita dari NIK catin pria, atau sebaliknya.
-    if (section.parentOf && residentRole && section.parentOf !== residentRole) {
+    if (!options.force && section.parentOf && residentRole && section.parentOf !== residentRole) {
       // Bila sebelumnya terisi otomatis dari pencarian catin lain, jangan biarkan
       // data lama terlihat seperti data orang tua pasangan yang baru dicari.
       clearAutoFilledSection(section);

@@ -246,6 +246,10 @@ function previewNews() {
   window.open(`/news/preview/${newsId.value ?? ''}`, '_blank')
 }
 
+function goBack() {
+  router.push({ name: 'news-list' })
+}
+
 function saveDraft() {
   status.value = 'Draft'
   router.push({ name: 'news-list' })
@@ -312,10 +316,17 @@ function moveToTrash() {
 <template>
   <div>
 
-    <div class="mb-6">
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
       <h1 class="m-0 text-2xl font-bold text-primary-900">
         {{ pageTitle }}
       </h1>
+
+      <Button
+        label="Kembali"
+        outlined
+        type="button"
+        @click="goBack"
+      />
     </div>
 
     <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">

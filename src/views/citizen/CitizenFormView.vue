@@ -2,7 +2,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
-import { createCitizen, deleteCitizen as removeCitizen, getCitizen, getCitizens, updateCitizen } from '@/services/citizen.service'
+import { createCitizen, deleteCitizen as removeCitizen, getCitizen, getCitizens, getCitizenByNik, updateCitizen } from '@/services/citizen.service'
 import { updateListCache } from '@/services/list-cache'
 import { getRegionAreas } from '@/services/region.service'
 
@@ -13,6 +13,7 @@ import Select from 'primevue/select'
 import AutoComplete from 'primevue/autocomplete'
 import DatePicker from 'primevue/datepicker'
 import Button from 'primevue/button'
+import AppButton from '@/components/common/AppButton.vue'
 import Dialog from 'primevue/dialog'
 import CitizenDocumentsPanel from '@/components/citizen/CitizenDocumentsPanel.vue'
 import CitizenPersonFields from '@/components/citizen/CitizenPersonFields.vue'
@@ -258,6 +259,8 @@ const familyCardHead = computed(() => (
 /* ------------------------------------------------------------------ */
 /* Catatan 3, 4, 12: data orang tua lengkap, cari lewat NIK            */
 /* ------------------------------------------------------------------ */
+/* Catatan 3, 4, 12: data orang tua lengkap, cari lewat NIK            */
+/* ------------------------------------------------------------------ */
 const newParent = () => ({
   nationalId: '',
   fullName: '',
@@ -268,6 +271,7 @@ const newParent = () => ({
   nationality: 'WNI',
   address: '',
   fromRegistry: false, // true = data diambil dari data warga, hanya NIK yang bisa diubah
+  filledFromKk: false, // true = terisi otomatis dari anggota KK yang sama
 })
 const father = reactive(newParent())
 const mother = reactive(newParent())
@@ -277,6 +281,12 @@ const parentForms = [
   { key: 'father', prefix: 'father', title: 'Data Ayah', label: 'Ayah', model: father },
   { key: 'mother', prefix: 'mother', title: 'Data Ibu', label: 'Ibu', model: mother },
 ]
+
+const searchingNik = reactive({
+  father: false,
+  mother: false,
+  spouse: false,
+})
 
 // Judul dan label isian pasangan mengikuti jenis kelamin dan status pernikahan
 const spouseRole = computed(() => (gender.value === 'Perempuan' ? 'Suami' : 'Istri'))
@@ -291,39 +301,105 @@ const spouseTitle = computed(() => {
   return `Data ${spouseRole.value}`
 })
 
-function findCitizenByNik(nik) {
-  return citizenLookup.value.find(citizen => String(citizen.national_id ?? '') === nik) ?? null
+function formatCitizenAddress(c) {
+  if (c.ktp_address) return c.ktp_address
+  if (c.address) return c.address
+  const parts = []
+  if (c.dusun) parts.push(`Dusun ${c.dusun}`)
+  if (c.rt || c.rw) parts.push(`RT ${c.rt || '-'}/RW ${c.rw || '-'}`)
+  if (parts.length) parts.push(villageName)
+  return parts.join(', ')
 }
 
-function fillParent(parent, citizen) {
+async function findCitizenByNik(nik) {
+  const clean = String(nik ?? '').replace(/\D/g, '')
+  if (clean.length !== 16) return null
+
+  // 1. Cek di daftar warga yang sudah ada di memori
+  const fromLocal = citizenLookup.value.find(citizen => String(citizen.national_id ?? '') === clean)
+  if (fromLocal) return fromLocal
+
+  // 2. Jika belum ada di memori lokal, panggil API untuk mencari langsung di database
+  try {
+    const fromApi = await getCitizenByNik(clean)
+    if (fromApi) {
+      if (!citizenLookup.value.some(c => String(c.national_id ?? '') === clean)) {
+        citizenLookup.value.push(fromApi)
+      }
+      return fromApi
+    }
+  } catch {
+    // Warga tidak ditemukan di database
+  }
+  return null
+}
+
+function fillParent(parent, citizen, fromKk = false) {
   parent.fullName = citizen.full_name ?? ''
   parent.birthPlace = citizen.birth_place ?? ''
   parent.birthDate = fromApiDate(citizen.birth_date)
   parent.occupation = citizen.occupation ?? ''
   parent.religion = citizen.religion ?? ''
   parent.nationality = citizen.nationality ?? 'WNI'
-  parent.address = citizen.ktp_address ?? citizen.address ?? ''
+  parent.address = formatCitizenAddress(citizen)
   parent.fromRegistry = true
+  parent.filledFromKk = fromKk
 }
 
-function onParentNik(parent, value) {
+async function onParentNik(parent, value, key = '') {
   const nik = String(value ?? '').replace(/\D/g, '').slice(0, 16)
   const wasLocked = parent.fromRegistry
 
   // NIK diganti setelah data terisi otomatis -> kosongkan lagi dan buka kembali isian manual
-  if (wasLocked) Object.assign(parent, newParent())
+  if (wasLocked && nik !== parent.nationalId) {
+    Object.assign(parent, newParent())
+  }
   parent.nationalId = nik
 
   if (hasValid16Digits(nik)) {
-    const citizen = findCitizenByNik(nik)
-    if (citizen) fillParent(parent, citizen)
+    if (key && key in searchingNik) searchingNik[key] = true
+    try {
+      const citizen = await findCitizenByNik(nik)
+      if (citizen && parent.nationalId === nik) {
+        fillParent(parent, citizen, false)
+      }
+    } finally {
+      if (key && key in searchingNik) searchingNik[key] = false
+    }
   }
 }
+
+// Apakah NIK orang tua/pasangan sudah terdaftar di data warga?
+const fatherNikNotFound = computed(() =>
+  hasValid16Digits(father.nationalId) && !father.fromRegistry
+)
+const motherNikNotFound = computed(() =>
+  hasValid16Digits(mother.nationalId) && !mother.fromRegistry
+)
+const spouseNikNotFound = computed(() =>
+  hasValid16Digits(spouse.nationalId) && !spouse.fromRegistry
+)
 
 const parentNikInvalid = parent => parent.nationalId !== '' && !hasValid16Digits(parent.nationalId)
 
 function loadParent(parent, prefix, data) {
-  parent.nationalId = data[`${prefix}_national_id`] ?? ''
+  const rel = data[prefix]
+  const nik = data[`${prefix}_national_id`] ?? rel?.national_id ?? ''
+  parent.nationalId = nik
+
+  if (rel) {
+    fillParent(parent, rel, false)
+    return
+  }
+
+  if (nik && hasValid16Digits(nik)) {
+    findCitizenByNik(nik).then((citizen) => {
+      if (citizen && parent.nationalId === nik) {
+        fillParent(parent, citizen, false)
+      }
+    })
+  }
+
   parent.fullName = data[`${prefix}_name`] ?? ''
   parent.birthPlace = data[`${prefix}_birth_place`] ?? ''
   parent.birthDate = fromApiDate(data[`${prefix}_birth_date`])
@@ -332,6 +408,7 @@ function loadParent(parent, prefix, data) {
   parent.nationality = data[`${prefix}_nationality`] ?? 'WNI'
   parent.address = data[`${prefix}_address`] ?? ''
   parent.fromRegistry = false
+  parent.filledFromKk = false
 }
 
 function parentPayload(parent, prefix) {
@@ -366,7 +443,7 @@ function applyFamilyCardData() {
   // Hubungan bukan "Anak" -> lepaskan data orang tua yang tadi terisi dari KK
   if (familyRelationship.value !== 'Anak' && lastParentKk) {
     ;[father, mother].forEach((parent) => {
-      if (parent.fromRegistry) Object.assign(parent, newParent())
+      if (parent.filledFromKk) Object.assign(parent, newParent())
     })
     lastParentKk = ''
   }
@@ -405,10 +482,15 @@ function applyFamilyCardData() {
     const dad = pick('Laki-laki', /suami/i) ?? pick('Laki-laki', /kepala/i)
     const mom = pick('Perempuan', /istri/i) ?? pick('Perempuan', /kepala/i)
 
-    Object.assign(father, newParent())
-    Object.assign(mother, newParent())
-    if (dad) { father.nationalId = dad.national_id ?? ''; fillParent(father, dad) }
-    if (mom) { mother.nationalId = mom.national_id ?? ''; fillParent(mother, mom) }
+    // Jangan timpa jika orang tua sudah diisi manual dari NIK warga berbeda KK
+    if (!father.fromRegistry || father.filledFromKk) {
+      Object.assign(father, newParent())
+      if (dad) { father.nationalId = dad.national_id ?? ''; fillParent(father, dad, true) }
+    }
+    if (!mother.fromRegistry || mother.filledFromKk) {
+      Object.assign(mother, newParent())
+      if (mom) { mother.nationalId = mom.national_id ?? ''; fillParent(mother, mom, true) }
+    }
     lastParentKk = kk
   }
 }
@@ -416,13 +498,13 @@ function applyFamilyCardData() {
 watch([familyCardNumber, familyRelationship, citizenLookup], applyFamilyCardData)
 
 // Daftar warga baru selesai dimuat -> coba cocokkan NIK orang tua yang sudah diketik
-watch(citizenLookup, () => {
+watch(citizenLookup, async () => {
   if (isEditMode.value) return
-  allPeople.forEach((model) => {
-    if (model.fromRegistry || !hasValid16Digits(model.nationalId)) return
-    const citizen = findCitizenByNik(model.nationalId)
-    if (citizen) fillParent(model, citizen)
-  })
+  for (const model of allPeople) {
+    if (model.fromRegistry || !hasValid16Digits(model.nationalId)) continue
+    const citizen = await findCitizenByNik(model.nationalId)
+    if (citizen && !model.fromRegistry) fillParent(model, citizen, false)
+  }
 })
 
 /* ------------------------------------------------------------------ */
@@ -621,6 +703,10 @@ async function fetchCitizenDetail() {
     rw.value = data.rw ?? ''
     rtHeadName.value = data.rt_head_name ?? ''
     rwHeadName.value = data.rw_head_name ?? ''
+    // Sync area IDs dari response backend (dari rantai rt_id → rts → rws → regions)
+    padukuhanId.value = data.padukuhan_id ?? null
+    rwId.value = data.rw_id ?? null
+    rtId.value = data.rt_id ?? null
     gender.value = data.gender ?? 'Laki-laki'
     birthPlace.value = data.birth_place ?? ''
     birthDate.value = fromApiDate(data.birth_date)
@@ -713,6 +799,15 @@ async function saveCitizen() {
       errorMessage.value = `NIK ${label} harus tepat 16 digit angka.`
       saving.value = false
       return
+    }
+    // NIK diisi 16 digit tapi tidak ditemukan di data warga → tolak
+    if (hasValid16Digits(model.nationalId)) {
+      const found = await findCitizenByNik(model.nationalId)
+      if (!found) {
+        errorMessage.value = `NIK ${label} tidak ditemukan di data warga. Kosongkan jika belum terdaftar.`
+        saving.value = false
+        return
+      }
     }
   }
 
@@ -827,14 +922,7 @@ function deleteCitizen() {
         {{ pageTitle }}
       </h1>
 
-      <Button
-        label="Kembali ke Daftar Warga"
-        icon="pi pi-arrow-left"
-        severity="secondary"
-        outlined
-        :class="outlineBtnClass"
-        @click="goBack"
-      />
+      <AppButton label="Kembali" variant="outline" @click="goBack" />
     </div>
 
     <div
@@ -1196,7 +1284,8 @@ function deleteCitizen() {
                 :religion-options="religionOptions"
                 :nationality-options="nationalityOptions"
                 :occupation-suggestions="occupationSuggestions"
-                @update:nik="onParentNik(spouse, $event)"
+                :loading="searchingNik.spouse"
+                @update:nik="onParentNik(spouse, $event, 'spouse')"
                 @search-occupation="searchOccupation"
               />
 
@@ -1287,7 +1376,8 @@ function deleteCitizen() {
                 :religion-options="religionOptions"
                 :nationality-options="nationalityOptions"
                 :occupation-suggestions="occupationSuggestions"
-                @update:nik="onParentNik(parent.model, $event)"
+                :loading="searchingNik[parent.key]"
+                @update:nik="onParentNik(parent.model, $event, parent.key)"
                 @search-occupation="searchOccupation"
               />
 

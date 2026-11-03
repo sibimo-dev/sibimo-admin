@@ -15,6 +15,7 @@
 import { computed, nextTick, reactive, ref, watch, watchEffect } from "vue";
 import { useRouter } from "vue-router";
 import Button from "primevue/button";
+import AppButton from "@/components/common/AppButton.vue";
 import Checkbox from "primevue/checkbox";
 import Message from "primevue/message";
 import LetterFormFields from "./LetterFormFields.vue";
@@ -530,7 +531,7 @@ async function submit() {
 
       <!-- Tombol navigasi -->
       <div class="flex justify-between gap-3 mt-7 pt-6 border-t border-slate-200">
-        <Button :label="leavesWizard ? (ui.backLabel ?? 'Kembali ke Daftar Surat') : 'Kembali'" icon="pi pi-arrow-left" severity="secondary" outlined :disabled="isSubmitting" @click="back" />
+        <AppButton label="Kembali" variant="outline" :disabled="isSubmitting" @click="back" />
         <Button
           :label="nextLabel"
           :icon="'pi pi-arrow-right'"
