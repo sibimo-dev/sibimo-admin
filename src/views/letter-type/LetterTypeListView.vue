@@ -141,31 +141,31 @@ async function confirmHapus() {
       </p>
     </div>
 
-    <!-- Ringkasan -->
-    <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <div class="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+    <!-- Ringkasan: 2 kolom di mobile (seperti halaman Aduan), 4 kolom di desktop -->
+    <div class="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div class="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
         <div class="text-[13px] text-neutral-500">Total Tipe Surat</div>
         <div class="mt-1 text-3xl font-bold text-neutral-800">{{ stats.total }}</div>
-        <div class="mt-1 text-xs text-neutral-400">Terdaftar di sistem</div>
+        <div class="mt-1 hidden text-xs text-neutral-400 sm:block">Terdaftar di sistem</div>
       </div>
-      <div class="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+      <div class="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
         <div class="flex items-center gap-1.5 text-[13px] text-neutral-500">
-          <span class="inline-block h-2 w-2 rounded-full bg-green-500"></span> Aktif
+          <span class="inline-block h-2 w-2 shrink-0 rounded-full bg-green-500"></span> Aktif
         </div>
         <div class="mt-1 text-3xl font-bold text-neutral-800">{{ stats.active }}</div>
-        <div class="mt-1 text-xs text-neutral-400">Dapat diajukan warga</div>
+        <div class="mt-1 hidden text-xs text-neutral-400 sm:block">Dapat diajukan warga</div>
       </div>
-      <div class="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+      <div class="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
         <div class="flex items-center gap-1.5 text-[13px] text-neutral-500">
-          <span class="inline-block h-2 w-2 rounded-full bg-neutral-400"></span> Nonaktif / Draft
+          <span class="inline-block h-2 w-2 shrink-0 rounded-full bg-neutral-400"></span> Nonaktif / Draft
         </div>
         <div class="mt-1 text-3xl font-bold text-neutral-800">{{ stats.inactive }}</div>
-        <div class="mt-1 text-xs text-neutral-400">Belum lengkap konfigurasi</div>
+        <div class="mt-1 hidden text-xs text-neutral-400 sm:block">Belum lengkap konfigurasi</div>
       </div>
-      <div class="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+      <div class="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
         <div class="text-[13px] text-neutral-500">Kategori Layanan</div>
         <div class="mt-1 text-3xl font-bold text-neutral-800">{{ stats.categoryCount }}</div>
-        <div class="mt-1 text-xs text-neutral-400">Keterangan, Pengantar, dll.</div>
+        <div class="mt-1 hidden text-xs text-neutral-400 sm:block">Keterangan, Pengantar, dll.</div>
       </div>
     </div>
 

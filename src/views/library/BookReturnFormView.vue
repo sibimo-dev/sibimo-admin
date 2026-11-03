@@ -152,7 +152,7 @@ onMounted(() => loadLoans({ background: Boolean(cachedLoans) }))
       <h1 class="m-0 mb-1 text-[22px] font-bold text-slate-900">Pengembalian Buku</h1>
       <p class="mb-5 text-sm text-slate-500">Catat transaksi pengembalian buku perpustakaan desa.</p>
       <div class="card">
-        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div class="flex flex-wrap items-center gap-2">
             <AppButton
               v-for="filter in statusFilters"
@@ -163,45 +163,46 @@ onMounted(() => loadLoans({ background: Boolean(cachedLoans) }))
               @click="activeFilter = filter"
             />
           </div>
-          <IconField>
+          <IconField class="w-full md:w-auto">
             <InputIcon class="pi pi-search" />
-            <InputText v-model="keyword" placeholder="Cari nomor, peminjam, atau judul..." class="w-72" />
+            <InputText v-model="keyword" placeholder="Cari nomor, peminjam, atau judul..." class="w-full md:w-72" />
           </IconField>
         </div>
+
         <div class="book-return-table">
-        <AppDataTable :columns="columns" :rows="unreturnedLoans" :loading="loading" data-key="loan_id" empty-message="Semua buku sudah dikembalikan">
-          <template #borrowed_at="{ data }">{{ formatDate(data.borrowed_at) }}</template>
-          <template #due_date="{ data }">{{ formatDate(data.due_date) }}</template>
-          <template #late_days="{ data }">
-            <Tag :value="calculateStatus(data).label" :severity="calculateStatus(data).severity" />
-          </template>
-          <template #actions="{ data }">
-            <AppButton label="Proses" icon="pi pi-replay" variant="ghost" size="small" @click="selectRow(data)" />
-          </template>
-        </AppDataTable>
+          <AppDataTable :columns="columns" :rows="unreturnedLoans" :loading="loading" data-key="loan_id" empty-message="Semua buku sudah dikembalikan">
+            <template #borrowed_at="{ data }">{{ formatDate(data.borrowed_at) }}</template>
+            <template #due_date="{ data }">{{ formatDate(data.due_date) }}</template>
+            <template #late_days="{ data }">
+              <Tag :value="calculateStatus(data).label" :severity="calculateStatus(data).severity" />
+            </template>
+            <template #actions="{ data }">
+              <AppButton label="Proses" icon="pi pi-replay" variant="ghost" size="small" @click="selectRow(data)" />
+            </template>
+          </AppDataTable>
         </div>
       </div>
     </div>
 
-    <Dialog v-model:visible="showReturnDialog" modal header="Proses Pengembalian" :style="{ width: '40rem' }" @hide="cancelForm">
+    <Dialog v-model:visible="showReturnDialog" modal header="Proses Pengembalian" :style="{ width: '40rem', maxWidth: '95vw' }" @hide="cancelForm">
       <div v-if="selectedLoan">
         <p>No. Peminjaman: <strong>{{ selectedLoan.loan_id }}</strong></p>
         <p>Peminjam: {{ selectedLoan.full_name }}</p>
         <p>Buku: {{ selectedLoan.title }}</p>
         <p>Status: <Tag :value="statusInfo.label" :severity="statusInfo.severity" /></p>
-        <div class="flex justify-end gap-3">
+        <div class="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <AppButton label="Batal" variant="outline" @click="cancelForm" />
           <AppButton label="Proses Pengembalian" variant="primary" :loading="submittingReturn" @click="processReturn" />
         </div>
       </div>
     </Dialog>
 
-    <Dialog v-model:visible="showReceiptDialog" modal header="Bukti Pengembalian Buku" :style="{ width: '32rem' }">
+    <Dialog v-model:visible="showReceiptDialog" modal header="Bukti Pengembalian Buku" :style="{ width: '32rem', maxWidth: '95vw' }">
       <div v-if="returnReceipt">
         <p>No. Peminjaman: {{ returnReceipt.loan_id }}</p>
         <p>Peminjam: {{ returnReceipt.full_name }}</p>
         <p>Buku: {{ returnReceipt.title }}</p>
-        <div class="flex justify-end gap-3">
+        <div class="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <AppButton label="Tutup" variant="outline" @click="showReceiptDialog = false" />
           <AppButton label="Cetak Bukti" icon="pi pi-print" variant="primary" @click="printReturnReceipt" />
         </div>
@@ -268,15 +269,21 @@ onMounted(() => loadLoans({ background: Boolean(cachedLoans) }))
 </template>
 
 <style scoped>
+/* Mobile: tabel dibiarkan selebar isinya dan bisa digeser ke samping */
+.book-return-table :deep(.p-datatable-table-container) { overflow-x: auto; }
+.book-return-table :deep(.p-datatable-table) { min-width: 46rem; }
 
-.book-return-table :deep(.p-datatable-table) { table-layout: fixed; width: 100%; }
-.book-return-table :deep(th:nth-child(1)), .book-return-table :deep(td:nth-child(1)) { width: 10%; }
-.book-return-table :deep(th:nth-child(2)), .book-return-table :deep(td:nth-child(2)) { width: 18%; }
-.book-return-table :deep(th:nth-child(3)), .book-return-table :deep(td:nth-child(3)) { width: 27%; }
-.book-return-table :deep(th:nth-child(4)), .book-return-table :deep(td:nth-child(4)) { width: 12%; }
-.book-return-table :deep(th:nth-child(5)), .book-return-table :deep(td:nth-child(5)) { width: 12%; }
-.book-return-table :deep(th:nth-child(6)), .book-return-table :deep(td:nth-child(6)) { width: 12%; }
-.book-return-table :deep(th:nth-child(7)), .book-return-table :deep(td:nth-child(7)) { width: 9%; }
+/* Tablet/desktop: lebar kolom tetap berbasis persentase */
+@media (min-width: 768px) {
+  .book-return-table :deep(.p-datatable-table) { table-layout: fixed; width: 100%; min-width: 0; }
+  .book-return-table :deep(th:nth-child(1)), .book-return-table :deep(td:nth-child(1)) { width: 10%; }
+  .book-return-table :deep(th:nth-child(2)), .book-return-table :deep(td:nth-child(2)) { width: 18%; }
+  .book-return-table :deep(th:nth-child(3)), .book-return-table :deep(td:nth-child(3)) { width: 27%; }
+  .book-return-table :deep(th:nth-child(4)), .book-return-table :deep(td:nth-child(4)) { width: 12%; }
+  .book-return-table :deep(th:nth-child(5)), .book-return-table :deep(td:nth-child(5)) { width: 12%; }
+  .book-return-table :deep(th:nth-child(6)), .book-return-table :deep(td:nth-child(6)) { width: 12%; }
+  .book-return-table :deep(th:nth-child(7)), .book-return-table :deep(td:nth-child(7)) { width: 9%; }
+}
 </style>
 
 <style>

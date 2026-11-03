@@ -1,3 +1,4 @@
+import { nextTick } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import { useAuthStore } from '@/stores/auth.store'
@@ -56,7 +57,29 @@ const router = createRouter({
       redirect: '/',
     },
   ],
+  // Scroll window: halaman baru mulai dari atas,
+  // tombol Back/Forward browser tetap mengembalikan posisi sebelumnya.
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    if (to.hash) return { el: to.hash }
+    return { top: 0 }
+  },
 })
+
+// Kalau layout admin memakai container sendiri yang bisa di-scroll
+// (mis. <main class="overflow-y-auto">), scrollBehavior di atas tidak menyentuhnya.
+// Jadi container itu ikut di-reset ke atas setiap pindah halaman.
+// Elemen yang di-reset: <main> dan elemen dengan atribut data-scroll-container.
+router.afterEach((to, from) => {
+  if (to.path === from.path) return // hanya query/hash yang berubah: jangan reset
+
+  nextTick(() => {
+    document
+      .querySelectorAll('main, [data-scroll-container]')
+      .forEach((el) => el.scrollTo?.({ top: 0 }))
+  })
+})
+
 // Route guard: tendang ke /login kalau belum login,
 // dan jangan biarkan user yang sudah login buka /login lagi.
 router.beforeEach((to) => {

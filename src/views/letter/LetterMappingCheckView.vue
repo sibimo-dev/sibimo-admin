@@ -4,11 +4,14 @@
    Buka lewat  /letter/mapping-check . Hasil "Salin laporan" dikirim ke developer untuk mengisi override
    di data/letterFieldMap.js bila masih ada yang belum cocok. */
 import { computed, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import AppButton from '@/components/common/AppButton.vue'
 import { LETTER_INDEX } from '@/data/letterIndex'
 import { getBackendLetterCode } from '@/data/letterBackendMap'
 import { getLetterTypes, getFields, createField } from '@/services/letter-type.service'
 import { mapFieldsToBackend, fillFromDocuments } from '@/services/letter-create.service'
 
+const router = useRouter()
 const letterModules = import.meta.glob('@/data/letters/*/*.js')
 // field identitas pemohon dikirim sebagai applicant_*, bukan form_data -> tidak dianggap masalah
 const IDENTITY = new Set(['name', 'nik', 'address', 'phone', 'whatsapp', 'fullName', 'phoneNumber', 'applicantName', 'applicantNik', 'applicantAddress', 'applicantPhone'])
@@ -134,7 +137,10 @@ const badgeText = { ok: 'Cocok', warn: 'Perlu dicek', error: 'Gagal kirim', noty
 <template>
   <div class="max-w-5xl mx-auto space-y-4">
     <div class="rounded-2xl bg-white p-5 shadow-sm border border-slate-200">
-      <h1 class="text-lg font-semibold text-slate-800">Pemeriksa Pemetaan Field Surat</h1>
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <h1 class="text-lg font-semibold text-slate-800">Pemeriksa Pemetaan Field Surat</h1>
+        <AppButton label="Kembali" variant="outline" @click="router.push('/letter')" />
+      </div>
       <p class="mt-1 text-sm text-slate-500">
         Mencocokkan isian form {{ total }} surat dengan field di backend. <b>Gagal kirim</b> = ada field wajib backend yang tidak terisi
         dari form. <b>Perlu dicek</b> = ada isian form yang belum punya pasangan atau field backend yang tidak terpakai.

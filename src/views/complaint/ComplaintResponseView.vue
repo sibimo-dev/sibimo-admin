@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, reactive, ref } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useToast } from "primevue/usetoast";
 import Button from "primevue/button";
 import Card from "primevue/card";
@@ -15,6 +15,7 @@ import {
 import { getListCache, updateListCache } from "@/services/list-cache";
 
 const route = useRoute();
+const router = useRouter();
 const toast = useToast();
 
 const cachedComplaint = getListCache("complaints")?.find(
@@ -298,13 +299,21 @@ onMounted(() => loadComplaint({ background: Boolean(cachedComplaint) }));
 
 <template>
   <div class="flex flex-col gap-5">
-    <div>
-      <h1 class="m-0 text-2xl font-bold text-gray-800">
-        Detail Aduan #{{ complaint.complaint_id }}
-      </h1>
-      <p class="text-sm text-gray-500">
-        Dibuat pada {{ complaint.submitted_at }}
-      </p>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h1 class="m-0 text-2xl font-bold text-gray-800">
+          Detail Aduan #{{ complaint.complaint_id }}
+        </h1>
+        <p class="text-sm text-gray-500">
+          Dibuat pada {{ complaint.submitted_at }}
+        </p>
+      </div>
+      <Button
+        label="Kembali"
+        outlined
+        type="button"
+        @click="router.push({ name: 'complaint-list' })"
+      />
     </div>
 
     <div class="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">

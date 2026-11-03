@@ -13,6 +13,7 @@ import Select from 'primevue/select'
 import AutoComplete from 'primevue/autocomplete'
 import DatePicker from 'primevue/datepicker'
 import Button from 'primevue/button'
+import AppButton from '@/components/common/AppButton.vue'
 import Dialog from 'primevue/dialog'
 import CitizenDocumentsPanel from '@/components/citizen/CitizenDocumentsPanel.vue'
 import CitizenPersonFields from '@/components/citizen/CitizenPersonFields.vue'
@@ -921,14 +922,7 @@ function deleteCitizen() {
         {{ pageTitle }}
       </h1>
 
-      <Button
-        label="Kembali ke Daftar Warga"
-        icon="pi pi-arrow-left"
-        severity="secondary"
-        outlined
-        :class="outlineBtnClass"
-        @click="goBack"
-      />
+      <AppButton label="Kembali" variant="outline" @click="goBack" />
     </div>
 
     <div

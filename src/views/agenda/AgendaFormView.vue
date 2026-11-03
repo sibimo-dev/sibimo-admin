@@ -7,13 +7,13 @@ import { useToast } from 'primevue/usetoast'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import DatePicker from 'primevue/datepicker'
-import Textarea from 'primevue/textarea'
 import Button from 'primevue/button'
 import FileUpload from 'primevue/fileupload'
 import RadioButton from 'primevue/radiobutton'
 import Card from 'primevue/card'
 import { agendaService } from '@/services/content.service'
 import { updateListCache } from '@/services/list-cache'
+import { agendaPeriod, setAgendaPeriod } from '@/services/agenda.period'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,18 +31,28 @@ const mainButtonLabel = computed(() => (
   isEditMode.value ? 'Perbarui' : 'Terbitkan'
 ))
 
-const monthOptions = [
-  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
-]
+// Tanggal awal untuk agenda baru: hari ini jika masih di bulan yang sedang
+// dilihat di list, kalau tidak tanggal 1 bulan tersebut.
+function defaultEventDate() {
+  const today = new Date()
+  if (today.getMonth() === agendaPeriod.month && today.getFullYear() === agendaPeriod.year) {
+    return today
+  }
+  return new Date(agendaPeriod.year, agendaPeriod.month, 1)
+}
 
-const selectedMonth = ref('Agustus')
+// Format YYYY-MM-DD memakai waktu lokal (toISOString bisa mundur 1 hari di WIB)
+function toLocalIso(date) {
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${mm}-${dd}`
+}
 
 const eventName = ref('')
 const letterOrigin = ref('')
 const place = ref('')
 const attendees = ref('')
-const eventDate = ref(new Date())
+const eventDate = ref(defaultEventDate())
 const startTime = ref(new Date())
 const endTime = ref(new Date())
 
@@ -106,6 +116,8 @@ function createTime(value) {
   return date
 }
 
+// Kembali ke list pada bulan & tahun yang tadi sedang dilihat
+// (state bulan/tahun disimpan di agenda-period, jadi tidak reset ke bulan ini)
 function goBack() {
   router.push({ name: 'agenda-list' })
 }
@@ -148,8 +160,8 @@ async function saveMain() {
   status.value = 'Published'
   const payload = {
     title: eventName.value,
-    attendee : attendees.value,
-    event_date: eventDate.value.toISOString().slice(0, 10),
+    attendee: attendees.value,
+    event_date: toLocalIso(eventDate.value),
     start_time: startTime.value.toTimeString().slice(0, 5),
     end_time: endTime.value.toTimeString().slice(0, 5),
     location: place.value,
@@ -172,6 +184,9 @@ async function saveMain() {
 
       return [cachedItem, ...items]
     })
+
+    // Buka list pada bulan dari agenda yang baru disimpan
+    setAgendaPeriod(eventDate.value)
     router.push({ name: 'agenda-list' })
   } catch (error) {
     toast.add({
@@ -202,8 +217,9 @@ function moveToTrash() {
 
 <template>
   <div>
-    <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
-      <div>
+    <!-- Header: judul + tombol Kembali -->
+    <div class="mb-6 flex items-center justify-between gap-3">
+      <div class="min-w-0">
         <h1 class="m-0 text-2xl font-bold text-gray-800">
           {{ pageTitle }}
         </h1>
@@ -212,30 +228,13 @@ function moveToTrash() {
         </p>
       </div>
 
-      <div class="flex flex-wrap items-center gap-2">
-        <label for="month" class="text-[13px] font-medium text-gray-600">
-          Bulan
-        </label>
-
-        <Select
-          id="month"
-          v-model="selectedMonth"
-          :options="monthOptions"
-          class="w-36"
-        />
-
-        <FileUpload
-          mode="basic"
-          name="agenda"
-          accept=".csv,.xlsx,.xls"
-          chooseLabel="Import Agenda dari File"
-          chooseIcon="pi pi-upload"
-          :auto="false"
-          :customUpload="true"
-          class="[&_input[type='file']]:hidden"
-          @select="handleAttachmentSelect"
-        />
-      </div>
+      <Button
+        label="Kembali"
+        outlined
+        type="button"
+        class="shrink-0"
+        @click="goBack"
+      />
     </div>
 
     <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
