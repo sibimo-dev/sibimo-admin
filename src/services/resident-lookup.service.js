@@ -1,10 +1,7 @@
 /* Pencarian data warga lewat NIK (dipakai form Tambah Surat admin).
    Hasilnya dinormalisasi ke bentuk yang dibaca `field.from` di data/letterFields.js
-   (fullName, nik, birthPlace, birthDate, birthPlaceDate, gender, maritalStatus, religion, occupation, address, phoneNumber).
-
-   TODO(BE): sementara memakai GET /citizens (modul Data Warga) lalu mencocokkan `national_id` di sisi frontend.
-   Bila backend sudah punya endpoint khusus (mis. GET /citizens/by-nik/{nik}), cukup ganti isi `findResidentByNik`. */
-import { getCitizens } from './citizen.service'
+   (fullName, nik, birthPlace, birthDate, birthPlaceDate, gender, maritalStatus, religion, occupation, address, phoneNumber). */
+import { getCitizenByNik, getCitizens } from './citizen.service'
 
 // Pilihan form surat (data/letterFields.js → OPT) sekarang sama persis dengan modul Data Warga, jadi status perkawinan,
 // agama, pendidikan, pekerjaan, dan SHDK diteruskan apa adanya tanpa dipetakan lagi.
@@ -220,10 +217,26 @@ export function toResident(c, citizens = []) {
   }
 }
 
-/* nik (16 digit) → resident | null (tidak ditemukan). Melempar error bila request gagal. */
+/* nik (16 digit) → resident | null (tidak ditemukan). Melempar error bila request gagal.
+   Menggunakan endpoint GET /citizens/by-nik/{nik} yang sudah tersedia di backend
+   sehingga tidak perlu menarik seluruh daftar warga hanya untuk mencari satu orang. */
 export async function findResidentByNik(nik) {
-  const result = await getCitizens()
-  const list = Array.isArray(result) ? result : (result?.data ?? [])
-  const hit = list.find((c) => normNik(c.national_id) === normNik(nik))
-  return hit ? toResident(hit, list) : null
+  try {
+    const citizen = await getCitizenByNik(normNik(nik))
+    if (!citizen) return null
+    // Untuk memetakan relasi keluarga (pasangan, orang tua) kita masih butuh data
+    // keluarga satu KK. Backend mengembalikan relasi melalui eager-load mother/father/spouse.
+    // Bangun daftar keluarga dari field relasi yang sudah ikut di response.
+    const family = [
+      citizen,
+      citizen.mother,
+      citizen.father,
+      citizen.spouse,
+    ].filter(Boolean)
+    return toResident(citizen, family)
+  } catch (error) {
+    // 404 = NIK tidak ada di database; kembalikan null (bukan throw)
+    if (error?.response?.status === 404) return null
+    throw error
+  }
 }
