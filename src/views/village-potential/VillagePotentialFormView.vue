@@ -51,43 +51,51 @@ const publishDate = ref(new Date())
 const authorOptions = ref([])
 const author = ref(null)
 
-/* ---------- Kelola Kategori ---------- */
+/* ---------- Kategori (dipilih lewat dropdown, dikelola di sidebar) ---------- */
 const categoryOptions = ref([])
-const selectedCategoryId = ref(null)
+const selectedCategory = ref(null) // slug kategori yang dipilih
+const categoryError = ref('')
 const newCategory = ref('')
 const editingCategoryId = ref(null)
 const editingCategoryLabel = ref('')
 
-// id = category_id (dipakai RadioButton), value = slug (dikirim ke backend)
+// id = category_id, value = slug (dikirim ke backend)
 const toOption = (c) => ({ id: c.category_id, label: c.name, value: c.slug })
 
-function errorToast(summary, error) {
-  toast.add({
-    severity: 'error',
-    summary,
-    detail: error.response?.data?.errors?.name?.[0] ?? error.response?.data?.message,
-    life: 3000,
-  })
+function errorDetail(error, fallback) {
+  const errs = error.response?.data?.errors
+  return (errs && Object.values(errs).flat()[0]) ?? error.response?.data?.message ?? fallback
+}
+
+function isDuplicateCategory(label, ignoreId = null) {
+  return categoryOptions.value.some(
+    (c) => c.id !== ignoreId && c.label.toLowerCase() === label.toLowerCase()
+  )
 }
 
 async function fetchCategories() {
   try {
     categoryOptions.value = (await potentialCategoryService.list()).map(toOption)
   } catch (error) {
-    errorToast('Gagal memuat kategori', error)
+    toast.add({ severity: 'error', summary: 'Gagal memuat kategori', detail: errorDetail(error, 'Coba lagi.'), life: 3500 })
   }
 }
 
 async function addCategory() {
   const name = newCategory.value.trim()
   if (!name) return
+  if (isDuplicateCategory(name)) {
+    toast.add({ severity: 'warn', summary: 'Kategori sudah ada', life: 3000 })
+    return
+  }
   try {
     const created = toOption(await potentialCategoryService.create({ name }))
     categoryOptions.value.push(created)
-    selectedCategoryId.value = created.id
+    selectedCategory.value = created.value // langsung terpilih
+    categoryError.value = ''
     newCategory.value = ''
   } catch (error) {
-    errorToast('Gagal menambah kategori', error)
+    toast.add({ severity: 'error', summary: 'Kategori gagal ditambahkan', detail: errorDetail(error, 'Coba lagi.'), life: 3500 })
   }
 }
 
@@ -104,12 +112,20 @@ function cancelEditCategory() {
 async function saveEditCategory(category) {
   const name = editingCategoryLabel.value.trim()
   if (!name) return
+  if (isDuplicateCategory(name, category.id)) {
+    toast.add({ severity: 'warn', summary: 'Kategori sudah ada', life: 3000 })
+    return
+  }
   try {
     const updated = await potentialCategoryService.update(category.id, { name })
+    const oldValue = category.value
     category.label = updated.name
+    // slug bisa ikut berubah; jaga agar pilihan di dropdown tetap menunjuk kategori ini
+    if (updated.slug) category.value = updated.slug
+    if (selectedCategory.value === oldValue) selectedCategory.value = category.value
     cancelEditCategory()
   } catch (error) {
-    errorToast('Gagal memperbarui kategori', error)
+    toast.add({ severity: 'error', summary: 'Kategori gagal diperbarui', detail: errorDetail(error, 'Coba lagi.'), life: 3500 })
   }
 }
 
@@ -125,14 +141,14 @@ function removeCategory(category) {
       try {
         await potentialCategoryService.remove(category.id)
         categoryOptions.value = categoryOptions.value.filter((c) => c.id !== category.id)
-        if (selectedCategoryId.value === category.id) selectedCategoryId.value = null
+        if (selectedCategory.value === category.value) selectedCategory.value = null
       } catch (error) {
-        errorToast('Gagal menghapus kategori', error)
+        toast.add({ severity: 'error', summary: 'Kategori gagal dihapus', detail: errorDetail(error, 'Kategori mungkin masih dipakai.'), life: 3500 })
       }
     },
   })
 }
-/* ---------- /Kelola Kategori ---------- */
+/* ---------- /Kategori ---------- */
 
 const visibilityLabel = computed(() => (
   visibility.value === 'publik'
@@ -154,8 +170,8 @@ onMounted(async () => {
     content.value = existing.description ?? ''
     photoPreview.value = mediaUrl(existing.image)
 
-    selectedCategoryId.value =
-      categoryOptions.value.find((c) => c.value === existing.category)?.id ?? null
+    selectedCategory.value =
+      categoryOptions.value.find((c) => c.value === existing.category)?.value ?? null
 
     status.value = existing.status ?? 'Published'
     visibility.value = 'publik'
@@ -222,11 +238,10 @@ function saveDraft() {
 async function saveMain() {
   if (saving.value) return
   status.value = 'Published'
-  const selectedCategory = categoryOptions.value.find(c => c.id === selectedCategoryId.value)
-  if (!selectedCategory) {
-    toast.add({ severity: 'warn', summary: 'Pilih kategori potensi terlebih dahulu', life: 3000 })
-    return
-  }
+
+  categoryError.value = selectedCategory.value ? '' : 'Kategori wajib dipilih'
+  if (categoryError.value) return
+
   const extraInfoObject = Object.fromEntries(
     extraFields.value.filter((f) => f.label.trim()).map((f) => [f.label, f.value]))
   const payload = {
@@ -389,6 +404,28 @@ function moveToTrash() {
                 class="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[13px] text-neutral-800 outline-none focus:border-primary-600 focus:ring-4 focus:ring-primary-100"
               />
             </div>
+
+            <div class="flex flex-col gap-2">
+              <label for="category" class="text-[13px] font-semibold text-neutral-700">
+                Kategori <span class="text-danger-500">*</span>
+              </label>
+              <Select
+                id="category"
+                v-model="selectedCategory"
+                :options="categoryOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Pilih kategori"
+                :invalid="!!categoryError"
+                class="w-full"
+                @update:modelValue="categoryError = ''"
+              />
+              <small v-if="categoryError" class="text-danger-500">{{ categoryError }}</small>
+              <small class="text-xs text-neutral-400">
+                Ingin kategori baru? Tambahkan lewat "Kelola Kategori" di samping.
+              </small>
+            </div>
+
             <div class="flex flex-col gap-2">
               <label class="text-[13px] font-semibold text-neutral-700" for="shortDesc">
                 Ringkasan Singkat
@@ -581,6 +618,7 @@ function moveToTrash() {
           </template>
         </Card>
 
+        <!-- Kelola Kategori: tambah, ubah nama, hapus (pilihan kategori lewat dropdown di form) -->
         <Card>
           <template #content>
             <div class="flex flex-col gap-3">
@@ -597,6 +635,7 @@ function moveToTrash() {
                   label="Tambah"
                   icon="pi pi-plus"
                   class="rounded-lg"
+                  type="button"
                   @click="addCategory"
                 />
               </div>
@@ -616,20 +655,17 @@ function moveToTrash() {
                       @keyup.esc="cancelEditCategory"
                     />
                     <div class="flex shrink-0 items-center">
-                      <Button icon="pi pi-check" text rounded size="small" aria-label="Simpan" @click="saveEditCategory(category)" />
-                      <Button icon="pi pi-times" text rounded size="small" severity="secondary" aria-label="Batal" @click="cancelEditCategory" />
+                      <Button icon="pi pi-check" text rounded size="small" type="button" aria-label="Simpan" @click="saveEditCategory(category)" />
+                      <Button icon="pi pi-times" text rounded size="small" severity="secondary" type="button" aria-label="Batal" @click="cancelEditCategory" />
                     </div>
                   </template>
 
                   <!-- Mode tampil -->
                   <template v-else>
-                    <label class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-[13px] text-neutral-700">
-                      <RadioButton v-model="selectedCategoryId" :value="category.id" />
-                      <span class="truncate">{{ category.label }}</span>
-                    </label>
+                    <span class="min-w-0 flex-1 truncate text-[13px] text-neutral-700">{{ category.label }}</span>
                     <div class="flex shrink-0 items-center">
-                      <Button icon="pi pi-pencil" text rounded size="small" severity="secondary" aria-label="Edit kategori" @click="startEditCategory(category)" />
-                      <Button icon="pi pi-trash" text rounded size="small" severity="danger" aria-label="Hapus kategori" @click="removeCategory(category)" />
+                      <Button icon="pi pi-pencil" text rounded size="small" severity="secondary" type="button" aria-label="Edit kategori" @click="startEditCategory(category)" />
+                      <Button icon="pi pi-trash" text rounded size="small" severity="danger" type="button" aria-label="Hapus kategori" @click="removeCategory(category)" />
                     </div>
                   </template>
                 </div>
