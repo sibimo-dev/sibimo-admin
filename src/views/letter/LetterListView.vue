@@ -13,6 +13,7 @@ import * as XLSX from 'xlsx'
 import AppDataTable from '@/components/common/AppDataTable.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import { useLetterStore } from '@/stores/useLetterStore'
+import { BUNDLES } from '@/data/letterBundles'
 
 const router = useRouter()
 const { rows, fetchRows } = useLetterStore()
@@ -88,9 +89,200 @@ function handleSort(field) {
   }
 }
 
+// Deteksi rumpun paket surat untuk grouping heuristik data lama
+function detectLetterFamily(row) {
+  const view = String(row.templateView || '').toLowerCase()
+  if (view.includes('married-man')) return 'married-man'
+  if (view.includes('marriage-women')) return 'marriage-women'
+  if (view.includes('death')) return 'death'
+  if (view.includes('birth')) return 'birth'
+  if (view.includes('letter-c')) return 'letter-c'
+  if (view.includes('relocation') || view.includes('pindah')) return 'relocation'
+
+  const purpose = String(row.purpose || '').toLowerCase()
+  for (const b of BUNDLES) {
+    if (
+      b.letters.some((l) => {
+        const lt = l.title.toLowerCase()
+        return purpose.includes(lt) || lt.includes(purpose)
+      })
+    ) {
+      return b.slug
+    }
+  }
+
+  return null
+}
+
+// Tentukan judul paket yang tepat untuk baris gabungan
+function detectBundleTitle(groupRows) {
+  const named = groupRows.find((r) => r.formData?.__bundle_name)
+  if (named?.formData?.__bundle_name) return named.formData.__bundle_name
+
+  const slugged = groupRows.find((r) => r.formData?.__bundle_slug)
+  if (slugged?.formData?.__bundle_slug) {
+    const match = BUNDLES.find((b) => b.slug === slugged.formData.__bundle_slug)
+    if (match) return match.title
+  }
+
+  const templateViews = groupRows.map((r) => String(r.templateView || '').toLowerCase())
+  if (templateViews.some((v) => v.includes('married-man'))) return 'Permohonan Nikah Laki-laki'
+  if (templateViews.some((v) => v.includes('marriage-women'))) return 'Permohonan Nikah Perempuan'
+  if (templateViews.some((v) => v.includes('death'))) return 'Permohonan Akta Kematian'
+  if (templateViews.some((v) => v.includes('birth'))) return 'Permohonan Akta Kelahiran'
+  if (templateViews.some((v) => v.includes('letter-c'))) return 'Permohonan Data Letter C'
+  if (templateViews.some((v) => v.includes('relocation') || v.includes('pindah'))) return 'Permohonan Pindah WNI'
+
+  const letterTitles = groupRows.map((r) => String(r.purpose ?? '').toLowerCase().trim())
+  let bestMatch = null
+  let maxHits = 0
+  for (const b of BUNDLES) {
+    const hits = b.letters.filter((l) =>
+      letterTitles.some((t) => t.includes(l.title.toLowerCase()) || l.title.toLowerCase().includes(t)),
+    ).length
+    if (hits > maxHits) {
+      maxHits = hits
+      bestMatch = b
+    }
+  }
+  if (bestMatch && maxHits > 0) return bestMatch.title
+
+  const cat = groupRows[0]?.category
+  if (cat && cat !== '-') return `Paket ${cat}`
+
+  return 'Paket Surat'
+}
+
+// Kelompokkan surat paket agar tampil sebagai 1 baris di tabel pengajuan surat
+function groupLetterRows(rawList) {
+  const bundleMap = new Map()
+  const unassigned = []
+
+  // 1. Kelompokkan berdasarkan __bundle_id jika ada
+  for (const item of rawList) {
+    const bundleId = item.formData?.__bundle_id
+    if (bundleId) {
+      const key = `explicit:${bundleId}`
+      if (!bundleMap.has(key)) bundleMap.set(key, [])
+      bundleMap.get(key).push(item)
+    } else {
+      unassigned.push(item)
+    }
+  }
+
+  // 2. Heuristik untuk data lama tanpa __bundle_id
+  unassigned.sort((a, b) => b.dateTs - a.dateTs)
+
+  const used = new Set()
+  const heuristicGroups = []
+
+  for (let i = 0; i < unassigned.length; i++) {
+    if (used.has(i)) continue
+    const current = unassigned[i]
+    const currentNik = String(current.citizenId || current.citizenName || '').trim()
+    const currentFamily = detectLetterFamily(current)
+
+    if (!currentNik || !currentFamily) {
+      heuristicGroups.push([current])
+      used.add(i)
+      continue
+    }
+
+    const cluster = [current]
+    used.add(i)
+
+    for (let j = i + 1; j < unassigned.length; j++) {
+      if (used.has(j)) continue
+      const candidate = unassigned[j]
+      const candidateNik = String(candidate.citizenId || candidate.citizenName || '').trim()
+      const candidateFamily = detectLetterFamily(candidate)
+
+      if (candidateNik !== currentNik) continue
+      if (candidateFamily !== currentFamily) continue
+
+      const timeDiff = Math.abs(current.dateTs - candidate.dateTs)
+      if (timeDiff <= 180_000) {
+        cluster.push(candidate)
+        used.add(j)
+      }
+    }
+
+    heuristicGroups.push(cluster)
+  }
+
+  const allGroups = [...bundleMap.values(), ...heuristicGroups]
+  const result = []
+
+  for (const group of allGroups) {
+    if (group.length === 1 && !group[0].formData?.__bundle_id) {
+      result.push(group[0])
+      continue
+    }
+
+    group.sort((a, b) => a.id - b.id)
+
+    const first = group[0]
+    const bundleTitle = detectBundleTitle(group)
+    const memberIds = group.map((g) => g.id)
+    const memberCodes = group.map((g) => g.requestId)
+    const allPurposes = group.map((g) => g.purpose).filter(Boolean).join(', ')
+    const allRequestIds = memberCodes.join(' ')
+
+    const statuses = group.map((g) => g.status)
+    const selesaiCount = statuses.filter((s) => s === 'Selesai').length
+    const ditolakCount = statuses.filter((s) => s === 'Ditolak').length
+    const pendingCount = statuses.filter((s) => s === 'Pending').length
+
+    let consolidatedStatus = 'Pending'
+    if (selesaiCount === group.length) {
+      consolidatedStatus = 'Selesai'
+    } else if (ditolakCount === group.length) {
+      consolidatedStatus = 'Ditolak'
+    } else {
+      consolidatedStatus = 'Pending'
+    }
+
+    const letterNames = group.map((g) => g.purpose).filter(Boolean)
+    let bundleSubtitles = ''
+    if (letterNames.length <= 3) {
+      bundleSubtitles = letterNames.join(', ')
+    } else {
+      bundleSubtitles = `${letterNames.slice(0, 3).join(', ')} (+${letterNames.length - 3} lainnya)`
+    }
+
+    const verifier = group.find((g) => g.verifiedBy && g.verifiedBy !== '-')?.verifiedBy || '-'
+    const authorizer = group.find((g) => g.authorizedBy && g.authorizedBy !== '-')?.authorizedBy || '-'
+    const signatureType = group.some((g) => g.signatureType === 'Digital') ? 'Digital' : 'Manual'
+
+    result.push({
+      ...first,
+      isBundle: true,
+      bundleTitle,
+      purpose: bundleTitle,
+      status: consolidatedStatus,
+      bundleProgress: {
+        selesai: selesaiCount,
+        ditolak: ditolakCount,
+        pending: pendingCount,
+        total: group.length,
+      },
+      memberIds,
+      memberCodes,
+      bundleLettersCount: group.length,
+      allPurposes,
+      allRequestIds,
+      bundleSubtitles,
+      verifiedBy: verifier,
+      authorizedBy: authorizer,
+      signatureType,
+    })
+  }
+
+  return result
+}
 
 const filteredRows = computed(() => {
-  let result = (rows.value || []).map((r) => {
+  let list = (rows.value || []).map((r) => {
     const submittedAt = r.dateValue ?? r.submitted_at ?? r.date
     return {
       ...r,
@@ -102,6 +294,8 @@ const filteredRows = computed(() => {
     }
   })
 
+  let result = groupLetterRows(list)
+
   if (activeFilter.value !== 'Semua Status') {
     result = result.filter((r) => r.status === activeFilter.value)
   }
@@ -111,8 +305,10 @@ const filteredRows = computed(() => {
     result = result.filter(
       (r) =>
         String(r.purpose ?? '').toLowerCase().includes(query) ||
+        String(r.allPurposes ?? '').toLowerCase().includes(query) ||
         String(r.citizenName ?? '').toLowerCase().includes(query) ||
         String(r.requestId ?? '').toLowerCase().includes(query) ||
+        String(r.allRequestIds ?? '').toLowerCase().includes(query) ||
         String(r.citizenId ?? '').toLowerCase().includes(query),
     )
   }
@@ -149,9 +345,17 @@ const statusColor = {
 }
 
 // Verifikasi, otorisasi, cetak, dan unduh PDF kini ada di halaman detail.
-// Pakai route bernama (letter-detail) supaya tidak bergantung pada bentuk path.
+// Bila surat merupakan paket bundle, bawa seluruh ID anggotanya lewat query `?with=`
 function goToDetail(data) {
-  router.push({ name: 'letter-detail', params: { id: data.id }, query: { highlight: data.requestId } })
+  if (data.isBundle && data.memberIds?.length > 1) {
+    router.push({
+      name: 'letter-detail',
+      params: { id: data.memberIds[0] },
+      query: { with: data.memberIds.join(',') },
+    })
+  } else {
+    router.push({ name: 'letter-detail', params: { id: data.id }, query: { highlight: data.requestId } })
+  }
 }
 
 function goToTambahSurat() {
