@@ -1,10 +1,7 @@
 /* Pencarian data warga lewat NIK (dipakai form Tambah Surat admin).
    Hasilnya dinormalisasi ke bentuk yang dibaca `field.from` di data/letterFields.js
-   (fullName, nik, birthPlace, birthDate, birthPlaceDate, gender, maritalStatus, religion, occupation, address, phoneNumber).
-
-   TODO(BE): sementara memakai GET /citizens (modul Data Warga) lalu mencocokkan `national_id` di sisi frontend.
-   Bila backend sudah punya endpoint khusus (mis. GET /citizens/by-nik/{nik}), cukup ganti isi `findResidentByNik`. */
-import { getCitizens } from './citizen.service'
+   (fullName, nik, birthPlace, birthDate, birthPlaceDate, gender, maritalStatus, religion, occupation, address, phoneNumber). */
+import { getCitizenByNik, getCitizens } from './citizen.service'
 
 // Pilihan form surat (data/letterFields.js → OPT) sekarang sama persis dengan modul Data Warga, jadi status perkawinan,
 // agama, pendidikan, pekerjaan, dan SHDK diteruskan apa adanya tanpa dipetakan lagi.
@@ -96,6 +93,9 @@ function toResidentPerson(c) {
 }
 
 function spouseOf(c, citizens) {
+  if (c?.spouse && typeof c.spouse === 'object' && (c.spouse.full_name || c.spouse.national_id)) {
+    return toResidentPerson(c.spouse)
+  }
   const familyCard = normNik(c?.family_card_number)
   if (!familyCard || !isMarriedStatus(c?.marital_status)) return null
   const allowedRelations = spouseRelationsFor(c)
@@ -155,10 +155,14 @@ export function toResident(c, citizens = []) {
     education: '',
     fatherName: '',
   })
-  // Jika NIK orang tua belum tersimpan pada baris anak, tetap coba hubungkan
-  // lewat nama yang sama secara unik agar detail orang tua ikut lengkap.
-  const fatherRecord = byParent(c.father_national_id, c.father_name, 'Laki-laki')
-  const motherRecord = byParent(c.mother_national_id, c.mother_name, 'Perempuan')
+  // Cek relasi langsung dari object (jika di-eager-load / di-resolve backend),
+  // baru cari di daftar warga / anggota KK lewat NIK dan nama.
+  const fatherRecord = (c.father && typeof c.father === 'object' && (c.father.full_name || c.father.national_id))
+    ? c.father
+    : byParent(c.father_national_id, c.father_name, 'Laki-laki')
+  const motherRecord = (c.mother && typeof c.mother === 'object' && (c.mother.full_name || c.mother.national_id))
+    ? c.mother
+    : byParent(c.mother_national_id, c.mother_name, 'Perempuan')
   const household = familyCardNumber
     ? citizens
       .filter((item) => normNik(item.family_card_number) === familyCardNumber)
@@ -220,10 +224,27 @@ export function toResident(c, citizens = []) {
   }
 }
 
-/* nik (16 digit) → resident | null (tidak ditemukan). Melempar error bila request gagal. */
+/* nik (16 digit) → resident | null (tidak ditemukan). Melempar error bila request gagal.
+   Menggunakan endpoint GET /citizens/by-nik/{nik} yang sudah tersedia di backend
+   sehingga tidak perlu menarik seluruh daftar warga hanya untuk mencari satu orang. */
 export async function findResidentByNik(nik) {
-  const result = await getCitizens()
-  const list = Array.isArray(result) ? result : (result?.data ?? [])
-  const hit = list.find((c) => normNik(c.national_id) === normNik(nik))
-  return hit ? toResident(hit, list) : null
+  try {
+    const citizen = await getCitizenByNik(normNik(nik))
+    if (!citizen) return null
+    // Untuk memetakan relasi keluarga (pasangan, orang tua) kita masih butuh data
+    // keluarga satu KK. Backend mengembalikan relasi melalui eager-load mother/father/spouse
+    // dan daftar anggota keluarga dalam 1 KK (family_members).
+    const family = [
+      citizen,
+      citizen.mother,
+      citizen.father,
+      citizen.spouse,
+      ...(citizen.family_members || citizen.familyMembers || citizen.household || []),
+    ].filter(Boolean)
+    return toResident(citizen, family)
+  } catch (error) {
+    // 404 = NIK tidak ada di database; kembalikan null (bukan throw)
+    if (error?.response?.status === 404) return null
+    throw error
+  }
 }
