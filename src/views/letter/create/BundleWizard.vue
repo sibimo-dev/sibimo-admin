@@ -374,9 +374,12 @@ const isSubmitting = ref(false);
 // Payload per surat = nilai field milik surat itu + file miliknya. Disimpan lewat
 // (services/letter-create.service.js): backend yang membuat kode surat dan men-generate PDF per surat.
 function buildPayload() {
+  const bundleId = `BND-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   return {
     source: LETTER_SOURCE,
     bundle: props.bundle.slug,
+    bundle_id: bundleId,
+    bundle_name: props.bundle.title,
     letters: selectedLetters.value.map((l) => ({
       id: l.id,
       // Kode pada paket adalah kode tampilan lama (contoh KHN). Kirim slug

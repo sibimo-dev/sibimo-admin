@@ -21,8 +21,8 @@ const props = defineProps({
   ids: { type: Array, required: true }, // urutan = urutan di paket
 })
 
-// TODO(BE): nyalakan setelah endpoint GET /letter-requests/bundle/pdf?ids=... tersedia (lihat letter-request.service.js).
-const MERGED_PREVIEW_ENABLED = false
+// Endpoint GET /letter-requests/bundle/pdf?ids=... sudah tersedia di backend.
+const MERGED_PREVIEW_ENABLED = true
 const MERGED_KEY = '__merged__'
 
 const router = useRouter()
@@ -94,6 +94,25 @@ const previewUrl = ref('')
 const previewLoading = ref(false)
 const previewError = ref('')
 
+// Gangguan sementara (server masih "pemanasan" saat render PDF pertama, 5xx, timeout, jaringan putus) dicoba ulang otomatis.
+// Error 4xx (data/izin salah) tidak diulang karena percuma.
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+async function withRetry(task, tries = 3) {
+  let lastError
+  for (let attempt = 0; attempt < tries; attempt++) {
+    try {
+      return await task()
+    } catch (error) {
+      lastError = error
+      const status = error.response?.status
+      const temporary = !status || status >= 500 || status === 408 || status === 429
+      if (!temporary || attempt === tries - 1) break
+      await sleep(800 * (attempt + 1))
+    }
+  }
+  throw lastError
+}
+
 async function readErrorMessage(error) {
   const data = error.response?.data
   if (data instanceof Blob) {
@@ -110,8 +129,8 @@ async function blobUrlFor(key, { force = false } = {}) {
   if (!force && urlCache.has(key)) return urlCache.get(key)
   const blob =
     key === MERGED_KEY
-      ? await getLetterBundlePdf(records.value.map((r) => r.id))
-      : await letterStore.getLetterPdf(key)
+      ? await withRetry(() => getLetterBundlePdf(records.value.map((r) => r.id)))
+      : await withRetry(() => letterStore.getLetterPdf(key))
   if (urlCache.has(key)) URL.revokeObjectURL(urlCache.get(key))
   const url = URL.createObjectURL(blob)
   urlCache.set(key, url)

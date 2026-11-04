@@ -530,6 +530,13 @@ async function submitOne(letter) {
       dikirim: Object.fromEntries(Object.entries(formData).filter(([k]) => HAMLET_RE.test(k))),
     });
   }
+  if (letter.bundleInfo) {
+    formData.__bundle_id = letter.bundleInfo.bundle_id;
+    formData.__bundle_slug = letter.bundleInfo.bundle_slug;
+    if (letter.bundleInfo.bundle_name) {
+      formData.__bundle_name = letter.bundleInfo.bundle_name;
+    }
+  }
   let created;
   try {
     created = await createLetterRequest({
@@ -559,7 +566,15 @@ export async function submitSingleLetter(payload) {
 }
 export async function submitLetterBundle(payload) {
   const codes = [];
+  const bundleId = payload.bundle_id || `BND-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const bundleSlug = payload.bundle;
+  const bundleName = payload.bundle_name;
   for (const letter of payload.letters) {
+    letter.bundleInfo = {
+      bundle_id: bundleId,
+      bundle_slug: bundleSlug,
+      bundle_name: bundleName,
+    };
     try { codes.push(await submitOne(letter)); }
     catch (err) {
       if (!codes.length) throw err;
