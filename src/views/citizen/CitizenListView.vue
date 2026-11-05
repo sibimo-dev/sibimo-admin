@@ -1,6 +1,6 @@
 <script setup>
 
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import * as XLSX from 'xlsx'
 import { FilterMatchMode } from '@primevue/core/api'
@@ -8,8 +8,11 @@ import { useConfirm } from 'primevue/useconfirm'
 import {
   createCitizen,
   deleteCitizen as removeCitizen,
+  getCitizen,
   getCitizens,
+  getCitizenNationalIds,
   refreshCitizenAges,
+  updateCitizenRelations,
   validateCitizenImport,
 } from '@/services/citizen.service'
 import { getListCache, setListCache } from '@/services/list-cache'
@@ -47,7 +50,11 @@ const familyMembers = computed(() => {
 
   if (!familyCardNumber) return []
 
-  return residents.value
+  const source = Array.isArray(selected?.familyMembers) && selected.familyMembers.length > 0
+    ? selected.familyMembers
+    : residents.value
+
+  return source
     .filter((resident) => (
       String(resident.familyCardNumber ?? '').trim() === familyCardNumber
       && resident.status !== 'Pindah'
@@ -60,9 +67,15 @@ const familyMembers = computed(() => {
     })
 })
 
-function viewDetail(data) {
+async function viewDetail(data) {
   selectedDetailResident.value = data
   detailDialogVisible.value = true
+  try {
+    const detail = await getCitizen(data.id)
+    selectedDetailResident.value = mapCitizenFromApi(detail)
+  } catch {
+    // Data ringkas dari tabel tetap ditampilkan jika detail gagal dimuat.
+  }
 }
 
 function formatDate(dateStr) {
@@ -126,19 +139,35 @@ function mapCitizenFromApi(item) {
     passportExpiryDate: item.passport_expiry_date,
     createdAt: item.created_at,
     updatedAt: item.updated_at,
+    familyMembers: Array.isArray(item.family_members)
+      ? item.family_members.map(mapCitizenFromApi)
+      : [],
   }
 }
 
-async function fetchCitizens({ background = false } = {}) {
+const totalResidents = ref(0)
+const serverPage = ref(1)
+let searchTimer = null
+
+async function fetchCitizens({ background = false, page = serverPage.value, signal } = {}) {
   if (!background) loading.value = true
   loadError.value = ''
   try {
-    const data = await getCitizens()
-    const normalized = Array.isArray(data) ? data : []
+    const response = await getCitizens({
+      page,
+      per_page: rowsPerPage.value,
+      search: filters.value.global.value || undefined,
+    }, signal ? { signal } : {})
+    const normalized = Array.isArray(response?.data) ? response.data : []
     setListCache('citizens', normalized)
     residents.value = normalized.map(mapCitizenFromApi)
+    totalResidents.value = Number(response?.meta?.total ?? normalized.length)
+    serverPage.value = Number(response?.meta?.current_page ?? page)
     return true
   } catch (err) {
+    if (signal?.aborted || err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError' || err?.name === 'AbortError') {
+      return false
+    }
     loadError.value = err.response?.data?.message || 'Gagal memuat data warga.'
     if (!background) residents.value = []
     return false
@@ -168,11 +197,26 @@ const filters = ref({
   global: { value: null, matchMode: FilterMatchMode.CONTAINS },
 })
 
+watch(() => filters.value.global.value, () => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    serverPage.value = 1
+    fetchCitizens({ page: 1 })
+  }, 300)
+})
+
+function handlePage(event) {
+  rowsPerPage.value = event.rows
+  serverPage.value = event.page + 1
+  fetchCitizens({ page: serverPage.value })
+}
+
 const importError = ref('')
 const importSuccess = ref('')
 const importProgress = ref('')
 const importing = ref(false)
 const importCancelled = ref(false)
+const importAbortController = ref(null)
 const importDialogVisible = ref(false)
 const importFileInput = ref(null)
 const refreshingAges = ref(false)
@@ -228,7 +272,8 @@ const citizenImportColumns = [
 function cancelImport() {
   if (!importing.value) return
   importCancelled.value = true
-  importProgress.value = 'Membatalkan import setelah data yang sedang diproses selesai...'
+  importAbortController.value?.abort()
+  importProgress.value = 'Membatalkan import...'
 }
 
 function statusSeverity(status) {
@@ -362,8 +407,7 @@ async function deleteSelected() {
   })
 }
 
-// --- Bagian import Excel (handleFileSelect, mapRowToResident, normalizeKey)
-// TETAP SAMA PERSIS, tidak perlu diubah -- itu logic baca file, bukan komunikasi API.
+// --- Normalisasi import Excel/CSV ---
 
 function normalizeKey(key) {
   return String(key ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '')
@@ -371,26 +415,50 @@ function normalizeKey(key) {
 
 function excelDateToIso(value) {
   if (value === null || value === undefined || value === '') return null
-  if (value instanceof Date) return value.toISOString().slice(0, 10)
+  const toValidIsoDate = (year, month, day) => {
+    const normalizedYear = Number(year)
+    const normalizedMonth = Number(month)
+    const normalizedDay = Number(day)
+    if (!Number.isInteger(normalizedYear) || !Number.isInteger(normalizedMonth) || !Number.isInteger(normalizedDay)) return null
+
+    const candidate = `${String(normalizedYear).padStart(4, '0')}-${String(normalizedMonth).padStart(2, '0')}-${String(normalizedDay).padStart(2, '0')}`
+    const parsed = new Date(`${candidate}T00:00:00Z`)
+    if (Number.isNaN(parsed.getTime())) return null
+    if (parsed.getUTCFullYear() !== normalizedYear || parsed.getUTCMonth() + 1 !== normalizedMonth || parsed.getUTCDate() !== normalizedDay) return null
+    return candidate
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime())
+      ? null
+      : toValidIsoDate(value.getUTCFullYear(), value.getUTCMonth() + 1, value.getUTCDate())
+  }
   const raw = String(value).trim()
   if (!raw) return null
 
   if (/^\d+(\.\d+)?$/.test(raw)) {
     const parsed = XLSX.SSF.parse_date_code(Number(raw))
-    if (parsed) return `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`
+    if (parsed) return toValidIsoDate(parsed.y, parsed.m, parsed.d)
   }
 
   const parts = raw.split(/[\/-]/).map(Number)
   if (parts.length === 3 && parts.every(Number.isFinite)) {
     const [first, second, third] = parts
     const year = first > 31 ? first : third
-    const month = first > 31 ? second : second
+    const month = second
     const day = first > 31 ? third : first
-    if (year && month && day) return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    return toValidIsoDate(year, month, day)
   }
 
   const parsed = new Date(raw)
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10)
+  return Number.isNaN(parsed.getTime())
+    ? null
+    : toValidIsoDate(parsed.getUTCFullYear(), parsed.getUTCMonth() + 1, parsed.getUTCDate())
+}
+
+function normalizeFamilyCard(value) {
+  const digits = String(value ?? '').replace(/\D/g, '')
+  return digits.length === 16 ? digits : null
 }
 
 function normalizeGender(value) {
@@ -437,7 +505,7 @@ function mapRowToResident(row) {
 
   const full_name = normalized['namalengkap'] ?? normalized['nama'] ?? normalized['name'] ?? ''
   const national_id = normalized['nik'] ?? normalized['nationalid'] ?? ''
-  const family_card_number = normalized['nomorkk'] ?? normalized['kk'] ?? normalized['familycardnumber'] ?? ''
+  const family_card_number = normalizeFamilyCard(normalized['nomorkk'] ?? normalized['kk'] ?? normalized['familycardnumber'] ?? '')
   const dusun = normalized['dusun'] ?? ''
   const rt = normalized['rt'] ?? ''
   const rw = normalized['rw'] ?? ''
@@ -495,7 +563,7 @@ function mapRowToResident(row) {
     record_type,
     full_name: String(full_name).trim(),
     national_id: String(national_id).trim(),
-    family_card_number: String(family_card_number).trim(),
+    family_card_number,
     dusun: String(dusun).trim(),
     rt: String(rt).trim(),
     rw: String(rw).trim(),
@@ -572,6 +640,8 @@ async function handleFileSelect(event) {
   importProgress.value = 'Membaca dan memeriksa file (Excel / CSV)...'
   importing.value = true
   importCancelled.value = false
+  importAbortController.value = new AbortController()
+  const requestSignal = importAbortController.value.signal
 
   try {
     const data = new Uint8Array(await file.arrayBuffer())
@@ -615,7 +685,7 @@ async function handleFileSelect(event) {
       preflightFile = new File([new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })], 'preflight.csv', { type: 'text/csv' })
     }
 
-    const preflight = await validateCitizenImport(preflightFile)
+    const preflight = await validateCitizenImport(preflightFile, { signal: requestSignal })
     const serverRowCount = preflight?.data?.row_count ?? rows.length
 
     if (importCancelled.value) {
@@ -623,7 +693,15 @@ async function handleFileSelect(event) {
       return
     }
 
-    importProgress.value = `File lolos pemeriksaan (${serverRowCount} data). Memproses data...`
+    importProgress.value = `File lolos pemeriksaan (${serverRowCount} data). Mengecek NIK yang sudah tersimpan...`
+
+    // Ambil NIK saja sebelum mulai menulis agar data lama tidak pernah
+    // dikirim ulang dan tidak perlu memuat ribuan profil warga.
+    const existingNikList = await getCitizenNationalIds({ signal: requestSignal })
+    if (!Array.isArray(existingNikList)) {
+      importError.value = 'Import dibatalkan karena daftar warga yang sudah ada tidak dapat diverifikasi.'
+      return
+    }
 
     const mappedRows = rows
       .map((row, index) => ({ rowNumber: index + 2, payload: mapRowToResident(row) }))
@@ -634,39 +712,119 @@ async function handleFileSelect(event) {
       return
     }
 
+    const totalFileRows = rows.length
+    const existingNiks = new Set(existingNikList.map(nik => String(nik ?? '').trim()).filter(Boolean))
+    const seenFileNiks = new Set()
+    const candidateRows = []
+    let alreadyExistsCount = 0
+    let duplicateInFileCount = 0
     let successCount = 0
     let failCount = 0
+    let relationWarningCount = 0
     const failures = []
-    const successfulNiks = []
+    const relationWarnings = []
 
-    for (const [index, { payload, rowNumber }] of mappedRows.entries()) {
+    for (const item of mappedRows) {
+      const nik = String(item.payload.national_id ?? '').trim()
+      if (nik && existingNiks.has(nik)) {
+        alreadyExistsCount++
+      } else if (nik && seenFileNiks.has(nik)) {
+        duplicateInFileCount++
+      } else {
+        if (nik) seenFileNiks.add(nik)
+        candidateRows.push(item)
+      }
+    }
+
+    // Tahap 1: masukkan data utama tanpa FK keluarga. Dengan cara ini anak
+    // tetap dapat disimpan walaupun baris ayah/ibu/pasangannya berada setelah
+    // baris anak atau berada di batch Excel berikutnya.
+    const createdRows = []
+    const createConcurrency = 8
+    for (let start = 0; start < candidateRows.length; start += createConcurrency) {
       if (importCancelled.value) break
-      importProgress.value = `Mengimpor data ${index + 1} dari ${mappedRows.length}...`
-      try {
-        await createCitizen(payload)
-        successCount++
-        successfulNiks.push(payload.national_id)
-      } catch (err) {
-        failCount++
-        if (failures.length < 5) {
+      const chunk = candidateRows.slice(start, start + createConcurrency)
+      importProgress.value = `Mengimpor data ${Math.min(start + chunk.length, candidateRows.length)} dari ${candidateRows.length}...`
+      const results = await Promise.all(chunk.map(async ({ payload, rowNumber }) => {
+        const basePayload = {
+          ...payload,
+          mother_national_id: null,
+          father_national_id: null,
+          spouse_national_id: null,
+        }
+
+        try {
+          const created = await createCitizen(basePayload, { signal: requestSignal })
+          return {
+            ok: true,
+            payload,
+            rowNumber,
+            citizenId: created?.citizen_id ?? created?.id,
+          }
+        } catch (err) {
           const validationErrors = err.response?.data?.errors
           const validationMessage = validationErrors
             ? Object.entries(validationErrors)
               .flatMap(([field, messages]) => `${field}: ${messages.join(', ')}`)
               .join('; ')
             : err.response?.data?.message || 'Data ditolak server.'
-          failures.push(`Baris ${rowNumber} (${payload.full_name || payload.national_id}): ${validationMessage}`)
+          return { ok: false, payload, rowNumber, validationMessage }
+        }
+      }))
+
+      for (const result of results) {
+        if (result.ok) {
+          successCount++
+          createdRows.push(result)
+        } else {
+          failCount++
+          if (failures.length < 5) {
+            failures.push(`Baris ${result.rowNumber} (${result.payload.full_name || result.payload.national_id}): ${result.validationMessage}`)
+          }
         }
       }
     }
 
-    importProgress.value = 'Memverifikasi data ke database...'
-    const refreshed = await fetchCitizens()
+    // Tahap 2: seluruh baris baru sudah dibuat, sehingga FK keluarga yang
+    // berada di file yang sama maupun batch sebelumnya dapat dihubungkan.
+    if (!importCancelled.value && createdRows.length > 0) {
+      importProgress.value = 'Menghubungkan relasi ayah, ibu, dan pasangan...'
+      const relationUpdates = createdRows
+        .filter(({ citizenId, payload }) => citizenId && ['mother_national_id', 'father_national_id', 'spouse_national_id']
+          .some(field => String(payload[field] ?? '').trim()))
+        .map(({ citizenId, payload }) => ({
+          citizen_id: citizenId,
+          mother_national_id: String(payload.mother_national_id ?? '').trim() || null,
+          father_national_id: String(payload.father_national_id ?? '').trim() || null,
+          spouse_national_id: String(payload.spouse_national_id ?? '').trim() || null,
+        }))
+
+      if (relationUpdates.length > 0) {
+        try {
+          const relationResult = await updateCitizenRelations(relationUpdates, { signal: requestSignal })
+          relationWarningCount = relationResult?.data?.unresolved_count ?? 0
+        } catch (err) {
+          relationWarningCount = relationUpdates.length
+          if (relationWarnings.length < 5) {
+            relationWarnings.push(err.response?.data?.message || 'Relasi keluarga belum dapat diproses secara batch.')
+          }
+        }
+      }
+    }
+
     const wasCancelled = importCancelled.value
+    let refreshed = true
+    if (wasCancelled) {
+      // Request reload harus memakai signal baru; signal import sudah di-abort.
+      await fetchCitizens()
+    } else {
+      importProgress.value = 'Memverifikasi data ke database...'
+      refreshed = await fetchCitizens({ signal: requestSignal })
+    }
 
     if (wasCancelled) {
-      const processedCount = successCount + failCount
-      const remainingCount = Math.max(mappedRows.length - processedCount, 0)
+      const processedCount = successCount + failCount + alreadyExistsCount + duplicateInFileCount
+      const remainingCount = Math.max(totalFileRows - processedCount, 0)
       importSuccess.value = successCount > 0
         ? `${successCount} data warga berhasil diimpor sebelum proses dibatalkan.`
         : ''
@@ -674,21 +832,42 @@ async function handleFileSelect(event) {
     } else if (!refreshed && successCount > 0) {
       importError.value = `${successCount} data berhasil dikirim, tetapi daftar warga gagal dimuat ulang dari database. Periksa koneksi lalu refresh halaman.`
     } else if (successCount > 0) {
-      const savedNiks = new Set(residents.value.map(resident => String(resident.nationalId ?? '').trim()))
-      const verifiedCount = successfulNiks.filter(nik => savedNiks.has(String(nik).trim())).length
-      importSuccess.value = `${verifiedCount} dari ${successCount} data berhasil diimpor dan terverifikasi tersimpan di database.`
+      const verifiedCount = successCount
+      // Penyebut harus memakai total baris pada file, bukan jumlah baris yang
+      // kebetulan berhasil. Sebelumnya import sebagian tampil menyesatkan,
+      // misalnya "348 dari 348" padahal file berisi 1.000 baris.
+      const skippedCount = Math.max(totalFileRows - mappedRows.length, 0)
+      importSuccess.value = `${verifiedCount} dari ${totalFileRows} data berhasil diimpor dan terverifikasi tersimpan di database.`
 
-      if (verifiedCount < successCount) {
-        importError.value = `${successCount - verifiedCount} data berhasil dikirim tetapi belum terbaca saat verifikasi ulang.`
+      const messages = []
+      if (alreadyExistsCount > 0) messages.push(`${alreadyExistsCount} data sudah ada dan dilewati tanpa ditimpa.`)
+      if (duplicateInFileCount > 0) messages.push(`${duplicateInFileCount} data duplikat di dalam file dilewati.`)
+      if (failCount + skippedCount > 0) {
+        const detail = failures.length > 0 ? ` ${failures.join(' | ')}` : ''
+        messages.push(`${failCount + skippedCount} data tidak berhasil diimpor.${detail}`)
       }
+      if (relationWarningCount > 0) {
+        messages.push(`${relationWarningCount} relasi keluarga belum terhubung.${relationWarnings.join(' | ')}`)
+      }
+      importError.value = messages.join(' ')
     } else {
-      importError.value = `${failCount} data gagal diimpor. ${failures.join(' | ')}`
+      const skippedCount = Math.max(totalFileRows - mappedRows.length, 0)
+      importSuccess.value = alreadyExistsCount > 0
+        ? `0 dari ${totalFileRows} data baru diimpor. ${alreadyExistsCount} data sudah ada dan tidak ditimpa.`
+        : ''
+      importError.value = `${failCount + skippedCount} data gagal diimpor. ${failures.join(' | ')}`
     }
   } catch (err) {
+    if (importCancelled.value || err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError' || err?.name === 'AbortError') {
+      await fetchCitizens()
+      importError.value = 'Import berhasil dibatalkan. Data yang sudah tersimpan tetap dipertahankan.'
+      return
+    }
     importError.value = err.response?.data?.message
       || 'Gagal membaca file. Pastikan file yang dipilih berformat Excel (.xlsx, .xls) atau CSV dan sesuai template.'
   } finally {
     importing.value = false
+    importAbortController.value = null
     importProgress.value = ''
   }
 }
@@ -1492,8 +1671,10 @@ function exportReportToPdf() {
           v-model:selection="selectedResidents"
           :value="residents"
           :loading="loading"
-          :filters="filters"
-          :globalFilterFields="['name', 'fullName', 'full_name', 'nationalId', 'familyCardNumber', 'address', 'occupation', 'dusun', 'phoneNumber']"
+          :lazy="true"
+          :totalRecords="totalResidents"
+          :first="(serverPage - 1) * rowsPerPage"
+          @page="handlePage"
           :paginator="true"
           :rows="rowsPerPage"
           :rowsPerPageOptions="[10, 25, 50]"
