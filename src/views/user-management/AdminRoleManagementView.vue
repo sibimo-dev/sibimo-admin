@@ -46,9 +46,11 @@ const MODULE_GROUPS = [
       { key: 'letter-type', name: 'Tipe Surat', parent: 'Persuratan', slugs: ['letter-type', 'tipe-surat'] },
       { key: 'complaint', name: 'Aduan', slugs: ['complaint', 'aduan', 'pengaduan'] },
       // Perpustakaan dipecah sesuai submenu sidebar.
-      { key: 'library-catalog', name: 'Katalog Buku', parent: 'Perpustakaan', slugs: ['library-catalog', 'book-catalog', 'catalog', 'katalog-buku'] },
-      { key: 'library-loan', name: 'Peminjaman', parent: 'Perpustakaan', slugs: ['library-loan', 'book-loan', 'loan', 'borrowing', 'peminjaman'] },
-      { key: 'library-return', name: 'Pengembalian', parent: 'Perpustakaan', slugs: ['library-return', 'book-return', 'return', 'returning', 'pengembalian'] },
+      // Backend saat ini memakai satu permission induk `perpustakaan`
+      // untuk seluruh submenu perpustakaan.
+      { key: 'library-catalog', name: 'Katalog Buku', parent: 'Perpustakaan', slugs: ['perpustakaan', 'library-catalog', 'book-catalog', 'catalog', 'katalog-buku'] },
+      { key: 'library-loan', name: 'Peminjaman', parent: 'Perpustakaan', slugs: ['perpustakaan', 'library-loan', 'book-loan', 'loan', 'borrowing', 'peminjaman'] },
+      { key: 'library-return', name: 'Pengembalian', parent: 'Perpustakaan', slugs: ['perpustakaan', 'library-return', 'book-return', 'return', 'returning', 'pengembalian'] },
     ],
   },
   {
@@ -72,17 +74,19 @@ const MODULE_GROUPS = [
   {
     label: 'Profil Kalurahan',
     modules: [
-      { key: 'history', name: 'Sejarah', slugs: ['history', 'sejarah'] },
-      { key: 'vision-mission', name: 'Visi & Misi', slugs: ['vision-mission', 'visi-misi'] },
-      { key: 'organization-structure', name: 'Struktur Organisasi', slugs: ['organization-structure', 'struktur-organisasi'] },
-      { key: 'village-area', name: 'Data Wilayah', slugs: ['village-area', 'data-wilayah'] },
+      // Backend memakai permission induk `profil-kalurahan` selain slug
+      // submenu yang lebih spesifik.
+      { key: 'history', name: 'Sejarah', slugs: ['profil-kalurahan', 'history', 'sejarah'] },
+      { key: 'vision-mission', name: 'Visi & Misi', slugs: ['profil-kalurahan', 'vision-mission', 'visi-misi'] },
+      { key: 'organization-structure', name: 'Struktur Organisasi', slugs: ['profil-kalurahan', 'organization-structure', 'struktur-organisasi'] },
+      { key: 'village-area', name: 'Data Wilayah', slugs: ['profil-kalurahan', 'village-area', 'data-wilayah'] },
     ],
   },
   {
     label: 'Manajemen Pengguna',
     modules: [
       { key: 'user-list', name: 'Daftar Pengguna', slugs: ['user-list', 'user-management', 'daftar-pengguna'] },
-      { key: 'role-permission', name: 'Role & Hak Akses', slugs: ['role-permission', 'role-management', 'role-hak-akses'] },
+      { key: 'role-permission', name: 'Role & Hak Akses', slugs: ['user-management', 'role-permission', 'role-management', 'role-hak-akses'] },
     ],
   },
 ]

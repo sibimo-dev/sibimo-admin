@@ -1,7 +1,12 @@
 import api from './api'
 
-export async function getCitizens() {
-  const response = await api.get('/citizens')
+export async function getCitizens(params = {}, config = {}) {
+  const response = await api.get('/citizens', { params, ...config })
+  return response.data
+}
+
+export async function getCitizenNationalIds(config = {}) {
+  const response = await api.get('/citizens/national-ids', config)
   return response.data.data
 }
 
@@ -25,15 +30,20 @@ export async function refreshCitizenAges() {
   return response.data
 }
 
-export async function validateCitizenImport(file) {
+export async function validateCitizenImport(file, config = {}) {
   const formData = new FormData()
   formData.append('file', file)
-  const response = await api.post('/citizens/import/validate', formData)
+  const response = await api.post('/citizens/import/validate', formData, config)
   return response.data
 }
 
-export async function createCitizen(payload) {
-  const response = await api.post('/citizens', payload)
+export async function updateCitizenRelations(relations, config = {}) {
+  const response = await api.post('/citizens/import/relations', { relations }, config)
+  return response.data
+}
+
+export async function createCitizen(payload, config = {}) {
+  const response = await api.post('/citizens', payload, config)
   return response.data.data
 }
 
