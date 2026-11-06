@@ -17,7 +17,7 @@ import WizardStepper from "./WizardStepper.vue";
 import ApplicantLookup from "./ApplicantLookup.vue";
 import CitizenDocumentsPanel from "@/components/citizen/CitizenDocumentsPanel.vue";
 import { useApplicantLookup } from "./useApplicantLookup";
-import { applicantOf, fillForm, reviewLocation, scrollTop, validateFields, focusFirstInvalid } from "./formLogic";
+import { applicantOf, fillForm, reviewLocation, scrollTop, uniqueRowsByNik, validateFields, focusFirstInvalid } from "./formLogic";
 import { hue as getHue } from "./pastel";
 import { LETTER_SOURCE, getLetterRequestError, submitSingleLetter } from "@/services/letter-create.service";
 
@@ -128,7 +128,7 @@ function buildPayload() {
     slug: props.slug,
     title: props.title,
     applicant: lookup.withApplicant(applicantOf(allSections.value, form)),
-    fields: Object.fromEntries(allSections.value.flatMap((s) => s.fields).map((f) => [f.key, form[f.key]])),
+    fields: Object.fromEntries(allSections.value.flatMap((s) => s.fields).map((f) => [f.key, f.type === "rows" ? uniqueRowsByNik(form[f.key] ?? []) : form[f.key]])),
     fieldDefinitions: allSections.value.flatMap((s) => s.fields.map(({ key, label }) => ({ key, label, section: s.title }))),
     files: [],
   };

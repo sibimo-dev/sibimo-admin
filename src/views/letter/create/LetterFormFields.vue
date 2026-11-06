@@ -9,7 +9,7 @@ import Checkbox from "primevue/checkbox";
 import Button from "primevue/button";
 import { onMounted, reactive, ref, watch } from "vue";
 import { findResidentByNik } from "@/services/resident-lookup.service";
-import { applyResidentToSections, visible, isFilled, emptyRow, toDate, syncFamilyRows, relocationMode, familyModeFor, householdOf, pickFamily } from "./formLogic";
+import { applyResidentToSections, visible, isFilled, emptyRow, toDate, syncFamilyRows, uniqueRowsByNik, relocationMode, familyModeFor, householdOf, pickFamily } from "./formLogic";
 import { DECEASED_NIK_KEY, KK_KEY, HEAD_KEY, hasDeceasedLookup, fillDeceasedData, clearDeceasedData, findHeadByKk, fillHeadOfFamily } from "./deceasedLookup";
 import { HUES, SECTION_HUES } from "./pastel";
 import { getRegions } from "@/services/region.service";
@@ -333,6 +333,22 @@ const LIFETIME = "SEUMUR HIDUP";
 const isLifetime = (v) => String(v ?? "").trim().toUpperCase() === LIFETIME;
 const setLifetime = (row, c, on) => { row[c.key] = on ? LIFETIME : ""; };
 const minRows = (field) => field.min ?? (field.optional ? 0 : 1);
+const normalizeRows = () => {
+  const seenKeys = new Set();
+  for (const field of props.sections.flatMap((section) => section.fields)) {
+    if (field.type !== "rows" || seenKeys.has(field.key)) continue;
+    seenKeys.add(field.key);
+    const current = Array.isArray(props.form[field.key]) ? props.form[field.key] : [];
+    const unique = uniqueRowsByNik(current);
+    if (unique.length !== current.length) props.form[field.key] = unique;
+  }
+};
+const rowsForDisplay = (field) => uniqueRowsByNik(Array.isArray(props.form[field.key]) ? props.form[field.key] : []);
+const removeRow = (field, row) => {
+  const rows = Array.isArray(props.form[field.key]) ? props.form[field.key] : [];
+  const index = rows.indexOf(row);
+  if (index >= 0) rows.splice(index, 1);
+};
 
 /* ---------- Keluarga yang pindah: mengikuti Jenis Kepindahan (field rows dengan `autoByType`) ----------
    mode: head | all | others → baris otomatis & terkunci (tanpa tambah/hapus baris); partial → kepala keluarga otomatis,
@@ -394,6 +410,7 @@ watch(
   resyncFamily,
 );
 onMounted(resyncFamily);
+onMounted(normalizeRows);
 </script>
 
 <template>
@@ -483,11 +500,11 @@ onMounted(resyncFamily);
             <div v-else-if="field.type === 'rows'" class="flex flex-col gap-3">
               <p v-if="modeHint(field)" class="text-xs" :class="noAutoMatch(field) ? 'text-amber-700' : 'text-slate-600'">{{ modeHint(field) }}</p>
               <p v-if="overflowCount(field)" class="text-xs text-amber-700">Formulir hanya memuat {{ field.max }} baris; {{ overflowCount(field) }} anggota keluarga lainnya tidak tercantum.</p>
-              <div v-for="(row, i) in form[field.key]" :key="i" class="rounded-xl border border-white bg-white/80 p-3 shadow-sm">
+              <div v-for="(row, i) in rowsForDisplay(field)" :key="row.nik || i" class="rounded-xl border border-white bg-white/80 p-3 shadow-sm">
                 <div class="flex items-center justify-between">
                   <span class="text-xs font-medium text-slate-500">#{{ i + 1 }}</span>
                   <span v-if="isLocked(field, row)" class="text-[11px] text-emerald-700">otomatis</span>
-                  <Button v-else-if="form[field.key].length > minRows(field)" icon="pi pi-trash" text rounded size="small" severity="danger" aria-label="Hapus baris" @click="form[field.key].splice(i, 1)" />
+                  <Button v-else-if="rowsForDisplay(field).length > minRows(field)" icon="pi pi-trash" text rounded size="small" severity="danger" aria-label="Hapus baris" @click="removeRow(field, row)" />
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
                   <div v-for="c in field.columns" :key="c.key" class="flex flex-col gap-1">

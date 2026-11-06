@@ -1,5 +1,9 @@
 import api from './api'
 
+// Import dapat memproses sampai 1.000 baris per berkas. Timeout ini hanya
+// dipakai oleh request import, bukan seluruh request API aplikasi.
+export const CITIZEN_IMPORT_TIMEOUT = 5 * 60 * 1000
+
 export async function getCitizens(params = {}, config = {}) {
   const response = await api.get('/citizens', { params, ...config })
   return response.data
@@ -33,12 +37,18 @@ export async function refreshCitizenAges() {
 export async function validateCitizenImport(file, config = {}) {
   const formData = new FormData()
   formData.append('file', file)
-  const response = await api.post('/citizens/import/validate', formData, config)
+  const response = await api.post('/citizens/import/validate', formData, {
+    timeout: CITIZEN_IMPORT_TIMEOUT,
+    ...config,
+  })
   return response.data
 }
 
 export async function updateCitizenRelations(relations, config = {}) {
-  const response = await api.post('/citizens/import/relations', { relations }, config)
+  const response = await api.post('/citizens/import/relations', { relations }, {
+    timeout: CITIZEN_IMPORT_TIMEOUT,
+    ...config,
+  })
   return response.data
 }
 
