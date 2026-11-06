@@ -88,6 +88,16 @@ const isGenderOptions = (options) => Array.isArray(options)
   && options.every((option) => typeof option === "string")
   && options.map((option) => option.trim().toLowerCase()).sort().join("|") === "laki-laki|perempuan";
 const normalizeOptions = (options) => isGenderOptions(options) ? GENDER_OPTIONS : options;
+
+/* Pilihan dropdown yang MENAMPILKAN nomor tetapi MENYIMPAN teks tanpa nomor.
+   Dipakai untuk pekerjaan: tampil "1. Belum/Tidak Bekerja", tersimpan "Belum/Tidak Bekerja"
+   supaya cocok dengan nilai occupation di Data Warga (autofill dari KK) dan cetak PDF tetap bersih. */
+const numberedChoice = (list) => (list ?? []).map((o, i) => {
+  const text = typeof o === "string" ? o : String(o?.label ?? o?.value ?? "");
+  const label = /^\s*\d+\s*[.)\-:]\s*/.test(text) ? text : `${i + 1}. ${text}`;
+  return { label, value: text.replace(/^\s*\d+\s*[.)\-:]\s*/, "") };
+});
+
 export const f = {
   text: make("text"),
   hamlet: (key, label = "Dusun/Dukuh/Kampung", opts = {}) => ({ key, label, type: "hamlet", ...opts }),
@@ -97,8 +107,16 @@ export const f = {
   combo: (key, label, options, opts = {}) => ({ key, label, type: "combo", options, ...opts }),
   date: make("date"),
   time: make("time"),
-  /** pekerjaan: pilih dari daftar bernomor (sama dengan Data Warga) atau ketik bebas. Yang disimpan = nama pekerjaan tanpa nomor. */
-  occupation: (key, label = "Pekerjaan", opts = {}) => ({ key, label, type: "occupation", options: OPT.occupation, ...opts }),
+  /** pekerjaan: pilih dari daftar bernomor (sama dengan Data Warga, 91 kode) atau ketik bebas.
+      Dropdown menampilkan "1. Belum/Tidak Bekerja", tetapi yang disimpan = nama tanpa nomor
+      ("Belum/Tidak Bekerja") agar cocok dengan nilai occupation di Data Warga. */
+  occupation: (key, label = "Pekerjaan", opts = {}) => ({
+    key,
+    label,
+    type: "occupation",
+    options: numberedChoice(OPT.occupationKode ?? OPT.occupation),
+    ...opts,
+  }),
   /** checkbox banyak pilihan (nilai = array) */
   checks: (key, label, options, opts = {}) => ({ key, label, type: "checks", options, ...opts }),
   /** daftar baris berulang (anggota keluarga, saksi, dst). columns = [{ key, label, type?, options? }] */
