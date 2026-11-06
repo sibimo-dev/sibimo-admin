@@ -39,12 +39,34 @@ export function display(field, v) {
    Bila pilihan otomatis tidak menghasilkan satu pun anggota (mis. mode 4 tetapi KK hanya berisi kepala keluarga),
    baris dibuka sebagai isian MANUAL (tidak terkunci) lewat familyModeFor() → null.
    Daftar anggota KK disimpan di autoFilled.__household (bukan di form, jadi tidak ikut terkirim). */
-const isHead = (p) => /kepala\s+keluarga/i.test(String(p?.familyRelationship ?? ""));
+const canonicalNik = (value) => {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return digits || String(value ?? "").trim();
+};
+const personNik = (person) => [person?.nik, person?.nationalId, person?.national_id]
+  .map((value) => canonicalNik(value))
+  .find((value) => value !== "") ?? "";
+const uniquePeopleByNik = (people = []) => {
+  const seen = new Set();
+  return people.filter((person) => {
+    const nik = personNik(person);
+    if (!nik) return true;
+    if (seen.has(nik)) return false;
+    seen.add(nik);
+    return true;
+  });
+};
+const isHead = (p) => /kepala\s+keluarga/i.test(String(
+  p?.familyRelationship ?? p?.family_relationship ?? p?.familyRelation ?? p?.shdk ?? "",
+));
 export const relocationMode = (value) => ({ 1: "head", 2: "all", 3: "partial", 4: "others" })[parseInt(String(value ?? "").trim(), 10)] ?? null;
-export const householdOf = (autoFilled) => (Array.isArray(autoFilled?.__household) ? autoFilled.__household : []);
+export const householdOf = (autoFilled) => uniquePeopleByNik(
+  Array.isArray(autoFilled?.__household) ? autoFilled.__household : [],
+);
 export const pickFamily = (mode, household = []) => {
-  const heads = household.filter(isHead);
-  const others = household.filter((p) => !isHead(p));
+  const uniqueHousehold = uniquePeopleByNik(household);
+  const heads = uniqueHousehold.filter(isHead);
+  const others = uniqueHousehold.filter((p) => !isHead(p));
   if (mode === "head" || mode === "partial") return heads;
   if (mode === "all") return [...heads, ...others];
   if (mode === "others") return others;
@@ -62,6 +84,8 @@ export const familyModeFor = (value, household = []) => {
    `fromHousehold` = { kunciKolom: "properti warga" }. Satu baris dibuat per anggota KK (kepala keluarga lebih dulu),
    semua kolom boleh dikoreksi manual. Kolom select (kode bernomor) dicocokkan lewat `source` (nilai di Data Warga) atau label. */
 const lc = (v) => String(v ?? "").trim().toLowerCase();
+const bareNumber = (v) => String(v ?? "").replace(/^\s*\d+\s*[.)\-:]\s*/, "").trim();
+const canon = (v) => String(v ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
 export function matchCode(column, raw) {
   if (canon(raw) === "belumada") raw = "Tidak Ada"; // Data Warga menyimpan "Belum Ada" untuk pilihan "1. Tidak Ada"
   const options = Array.isArray(column.options) ? column.options : [];
@@ -83,13 +107,31 @@ export function rowFromPerson(field, person) {
   for (const c of field.columns) if (c.disabledWhen && c.disabledWhen(row)) row[c.key] = c.default ?? "";
   return row;
 }
-const familyRow = (p) => ({ nik: p.nik ?? "", name: p.fullName ?? "", validUntil: "", shdk: p.familyRelationship ?? "" });
+const familyRow = (p) => ({
+  nik: personNik(p),
+  name: p.fullName ?? p.full_name ?? "",
+  validUntil: "",
+  shdk: p.familyRelationship ?? p.family_relationship ?? p.familyRelation ?? p.shdk ?? "",
+});
+const rowNik = (row) => [row?.nik, row?.nationalId, row?.national_id]
+  .map((value) => canonicalNik(value))
+  .find((value) => value !== "") ?? "";
+export const uniqueRowsByNik = (rows = []) => {
+  const seen = new Set();
+  return rows.filter((row) => {
+    const nik = rowNik(row);
+    if (!nik) return true;
+    if (seen.has(nik)) return false;
+    seen.add(nik);
+    return true;
+  });
+};
 
 /* Susun ulang baris keluarga sesuai Jenis Kepindahan. Dipanggil saat NIK pemohon dicari dan saat Jenis Kepindahan diganti.
    Mengembalikan daftar key field yang berubah. `prevHousehold` = KK pemohon sebelumnya (supaya barisnya ikut dibersihkan). */
 export function syncFamilyRows(form, sections, autoFilled = {}, prevHousehold = []) {
   const household = householdOf(autoFilled);
-  const nikSet = (list) => new Set(list.map((p) => String(p.nik ?? "")));
+  const nikSet = (list) => new Set(list.map((p) => personNik(p)).filter(Boolean));
   const headNiks = nikSet([...pickFamily("head", household), ...pickFamily("head", prevHousehold)]);
   const currNiks = nikSet(household);
   const prevOnly = new Set([...nikSet(prevHousehold)].filter((n) => !currNiks.has(n))); // anggota KK pemohon sebelumnya
@@ -97,7 +139,9 @@ export function syncFamilyRows(form, sections, autoFilled = {}, prevHousehold = 
   for (const section of sections) {
     for (const field of section.fields) {
       if (field.type !== "rows" || !field.autoByType) continue;
-      const old = Array.isArray(form[field.key]) ? form[field.key] : [];
+      const rawOld = Array.isArray(form[field.key]) ? form[field.key] : [];
+      const old = uniqueRowsByNik(rawOld);
+      if (old.length !== rawOld.length) form[field.key] = old;
       const minRows = field.min ?? (field.optional ? 0 : 1);
       const pad = (rows) => [...rows, ...Array.from({ length: Math.max(0, minRows - rows.length) }, () => emptyRow(field.columns))];
       const mode = relocationMode(form[field.autoByType]);
@@ -105,7 +149,7 @@ export function syncFamilyRows(form, sections, autoFilled = {}, prevHousehold = 
       if (!household.length) {
         // KK tidak ditemukan / pencarian dihapus: buang baris otomatis milik KK lama, sisanya (manual) dibiarkan.
         if (prevHousehold.length) {
-          form[field.key] = pad(old.filter((r) => !prevHousehold.some((p) => String(p.nik ?? "") === String(r.nik ?? ""))));
+          form[field.key] = pad(old.filter((r) => !prevHousehold.some((p) => personNik(p) === rowNik(r))));
           delete autoFilled[field.key];
           delete autoFilled[`__mode_${field.key}`];
           changed.push(field.key);
@@ -119,17 +163,17 @@ export function syncFamilyRows(form, sections, autoFilled = {}, prevHousehold = 
         // Jangan sisakan baris kosong yang terkunci: buang baris otomatis sebelumnya, biarkan isian manual, buka baris untuk diisi manual.
         const wasAuto = !!prevMode && prevMode !== "partial" && prevMode !== "manual";
         const autoNiks = new Set([...nikSet(household), ...nikSet(prevHousehold)]);
-        const keep = old.filter((r) => Object.values(r).some(isFilled) && !(wasAuto && autoNiks.has(String(r.nik ?? ""))));
+        const keep = old.filter((r) => Object.values(r).some(isFilled) && !(wasAuto && autoNiks.has(rowNik(r))));
         form[field.key] = pad(keep);
         delete autoFilled[field.key];
         autoFilled[`__mode_${field.key}`] = "manual";
         changed.push(field.key);
         continue;
       }
-      const validByNik = new Map(old.filter((r) => r.nik && r.validUntil).map((r) => [String(r.nik), r.validUntil]));
-      const auto = picked.map((p) => ({ ...familyRow(p), validUntil: validByNik.get(String(p.nik)) ?? "" }));
-      const manual = mode === "partial" && (!prevMode || prevMode === "partial" || prevMode === "manual") ? old.filter((r) => Object.values(r).some(isFilled) && !headNiks.has(String(r.nik ?? "")) && !prevOnly.has(String(r.nik ?? ""))) : [];
-      form[field.key] = pad([...auto, ...manual].slice(0, field.max ?? 20));
+      const validByNik = new Map(old.filter((r) => rowNik(r) && r.validUntil).map((r) => [rowNik(r), r.validUntil]));
+      const auto = picked.map((p) => ({ ...familyRow(p), validUntil: validByNik.get(personNik(p)) ?? "" }));
+      const manual = mode === "partial" && (!prevMode || prevMode === "partial" || prevMode === "manual") ? old.filter((r) => Object.values(r).some(isFilled) && !headNiks.has(rowNik(r)) && !prevOnly.has(rowNik(r))) : [];
+      form[field.key] = pad(uniqueRowsByNik([...auto, ...manual]).slice(0, field.max ?? 20));
       autoFilled[field.key] = true;
       autoFilled[`__mode_${field.key}`] = mode;
       changed.push(field.key);
@@ -138,7 +182,7 @@ export function syncFamilyRows(form, sections, autoFilled = {}, prevHousehold = 
   return changed;
 }
 
-export const filledRows = (field, form) => form[field.key].filter((r) => Object.values(r).some(isFilled));
+export const filledRows = (field, form) => uniqueRowsByNik(form[field.key] ?? []).filter((r) => Object.values(r).some(isFilled));
 
 /* Normalisasi daftar dokumen: "Nama" atau { label, optional } → { id, label, optional }.
    Mendukung fungsi dinamis (form) => [] dan prefix unik untuk paket surat. */
@@ -339,11 +383,11 @@ export function applyResident(form, sections, resident, autoFilled = {}, options
             && current.some((row) => Object.values(row).some(isFilled))
             && !autoFilled[field.key];
           if (!manual && resident.household.length) {
-            form[field.key] = resident.household.map((person) => ({
-              nik: person.nik ?? "",
-              name: person.fullName ?? "",
+            form[field.key] = uniquePeopleByNik(resident.household).map((person) => ({
+              nik: personNik(person),
+              name: person.fullName ?? person.full_name ?? "",
               validUntil: "",
-              shdk: person.familyRelationship ?? "",
+              shdk: person.familyRelationship ?? person.family_relationship ?? person.familyRelation ?? person.shdk ?? "",
             }));
             autoFilled[field.key] = true;
             filled.push(field.key);
