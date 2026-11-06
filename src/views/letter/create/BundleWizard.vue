@@ -22,7 +22,7 @@ import LetterFormFields from "./LetterFormFields.vue";
 import WizardStepper from "./WizardStepper.vue";
 import ApplicantLookup from "./ApplicantLookup.vue";
 import { useApplicantLookup } from "./useApplicantLookup";
-import { applicantOf, applyAliases, buildAliasIndex, fillForm, reviewLocation, scrollTop, validateFields, focusFirstInvalid } from "./formLogic";
+import { applicantOf, applyAliases, buildAliasIndex, fillForm, reviewLocation, scrollTop, uniqueRowsByNik, validateFields, focusFirstInvalid } from "./formLogic";
 import { HUES, SECTION_HUES, hue } from "./pastel";
 import { LETTER_SOURCE, getLetterRequestError, submitLetterBundle } from "@/services/letter-create.service";
 
@@ -388,7 +388,7 @@ function buildPayload() {
       code: l.code,
       title: l.title,
       applicant: lookup.withApplicant(applicantOf(sectionsOf(l), form)),
-      fields: Object.fromEntries(sectionsOf(l).flatMap((s) => s.fields).map((f) => [f.key, form[f.key]])),
+      fields: Object.fromEntries(sectionsOf(l).flatMap((s) => s.fields).map((f) => [f.key, f.type === "rows" ? uniqueRowsByNik(form[f.key] ?? []) : form[f.key]])),
       fieldDefinitions: sectionsOf(l).flatMap((s) => s.fields.map(({ key, label }) => ({ key, label, section: s.title }))),
       files: [],
     })),

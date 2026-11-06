@@ -11,6 +11,7 @@ import {
   getCitizen,
   getCitizens,
   getCitizenNationalIds,
+  CITIZEN_IMPORT_TIMEOUT,
   refreshCitizenAges,
   updateCitizenRelations,
   validateCitizenImport,
@@ -444,9 +445,23 @@ function excelDateToIso(value) {
   const parts = raw.split(/[\/-]/).map(Number)
   if (parts.length === 3 && parts.every(Number.isFinite)) {
     const [first, second, third] = parts
-    const year = first > 31 ? first : third
+    if (first > 31) {
+      // Format ISO: YYYY-MM-DD.
+      return toValidIsoDate(first, second, third)
+    }
+
+    if (third >= 0 && third < 100) {
+      // XLSX.sheet_to_csv() menghasilkan tanggal Excel sebagai M/D/YY,
+      // misalnya 2/9/93 = 9 Februari 1993. Jangan menganggap 93 sebagai
+      // tahun 0093 karena umur hasil kalkulasinya bisa menjadi ribuan tahun.
+      const year = third >= 30 ? 1900 + third : 2000 + third
+      return toValidIsoDate(year, first, second)
+    }
+
+    // Format tanggal panjang yang umum pada input manual: DD/MM/YYYY.
+    const year = third
     const month = second
-    const day = first > 31 ? third : first
+    const day = first
     return toValidIsoDate(year, month, day)
   }
 
@@ -483,6 +498,14 @@ function normalizeReligion(value) {
   return values[normalized] ?? String(value ?? '').trim()
 }
 
+function normalizeAge(value) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+
+  const age = Number(raw)
+  return Number.isInteger(age) && age >= 0 && age <= 150 ? age : null
+}
+
 function mapRowToResident(row) {
   const normalized = {}
 
@@ -512,7 +535,7 @@ function mapRowToResident(row) {
   const gender = normalizeGender(normalized['lp'] ?? normalized['jeniskelamin'] ?? normalized['gender'] ?? normalized['jk'] ?? '')
   const birth_place = normalized['tempatlahir'] ?? normalized['birthplace'] ?? ''
   const birth_date = excelDateToIso(normalized['tanggallahir'] ?? normalized['birthdate'] ?? null)
-  const age = normalized['umur'] ? Number.parseInt(normalized['umur'], 10) : null
+  const age = normalizeAge(normalized['umur'])
   const birth_certificate_status = normalized['aktalahir'] ?? ''
   const birth_certificate_number = normalized['nomoraktalahir'] ?? ''
   const blood_type = normalized['goldarah'] ?? ''
@@ -570,7 +593,7 @@ function mapRowToResident(row) {
     gender,
     birth_place: String(birth_place).trim(),
     birth_date,
-    age: Number.isNaN(age) ? null : age,
+    age,
     birth_certificate_status: String(birth_certificate_status).trim(),
     birth_certificate_number: String(birth_certificate_number).trim(),
     blood_type: String(blood_type).trim(),
@@ -697,7 +720,10 @@ async function handleFileSelect(event) {
 
     // Ambil NIK saja sebelum mulai menulis agar data lama tidak pernah
     // dikirim ulang dan tidak perlu memuat ribuan profil warga.
-    const existingNikList = await getCitizenNationalIds({ signal: requestSignal })
+    const existingNikList = await getCitizenNationalIds({
+      signal: requestSignal,
+      timeout: CITIZEN_IMPORT_TIMEOUT,
+    })
     if (!Array.isArray(existingNikList)) {
       importError.value = 'Import dibatalkan karena daftar warga yang sudah ada tidak dapat diverifikasi.'
       return
@@ -748,13 +774,20 @@ async function handleFileSelect(event) {
       const results = await Promise.all(chunk.map(async ({ payload, rowNumber }) => {
         const basePayload = {
           ...payload,
+          // Umur dihitung otomatis oleh model backend dari birth_date.
+          // Jangan kirim nilai umur dari file agar angka/tahun yang salah
+          // tidak pernah masuk ke kolom database age.
+          age: null,
           mother_national_id: null,
           father_national_id: null,
           spouse_national_id: null,
         }
 
         try {
-          const created = await createCitizen(basePayload, { signal: requestSignal })
+          const created = await createCitizen(basePayload, {
+            signal: requestSignal,
+            timeout: CITIZEN_IMPORT_TIMEOUT,
+          })
           return {
             ok: true,
             payload,

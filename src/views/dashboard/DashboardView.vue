@@ -100,6 +100,8 @@ const MAX_RECENT_LETTERS = 10
 
 const { rows: letterRows, fetchRows: fetchLetterRows } = useLetterStore()
 const citizens = ref([])
+const citizenTotal = ref(null)
+const citizenActiveTotal = ref(null)
 const complaints = ref([])
 const loans = ref([])
 const agendas = ref([])
@@ -115,8 +117,8 @@ const letterStats = computed(() => {
 })
 
 const citizenStats = computed(() => ({
-  total: citizens.value.length,
-  active: citizens.value.filter((c) => c.status === 'Active').length,
+  total: citizenTotal.value ?? citizens.value.length,
+  active: citizenActiveTotal.value ?? citizens.value.filter((c) => c.status === 'Active').length,
 }))
 
 const complaintStats = computed(() => ({
@@ -327,7 +329,26 @@ async function loadDashboard() {
   const results = await Promise.allSettled([getCitizens(), getComplaints(), getLoans(), agendaService.list()])
   const [citizensRes, complaintsRes, loansRes, agendasRes] = results
 
-  citizens.value = citizensRes.status === 'fulfilled' && Array.isArray(citizensRes.value) ? citizensRes.value : []
+  // getCitizens mengembalikan envelope API { data, meta }, sedangkan service
+  // lain di dashboard sudah mengembalikan array data langsung.
+  if (citizensRes.status === 'fulfilled') {
+    if (Array.isArray(citizensRes.value)) {
+      citizens.value = citizensRes.value
+      citizenTotal.value = citizensRes.value.length
+      citizenActiveTotal.value = citizensRes.value.filter((c) => c.status === 'Active').length
+    } else {
+      citizens.value = Array.isArray(citizensRes.value?.data) ? citizensRes.value.data : []
+      citizenTotal.value = Number(citizensRes.value?.meta?.total ?? citizens.value.length)
+      citizenActiveTotal.value = Number(
+        citizensRes.value?.meta?.active_total
+          ?? citizens.value.filter((c) => c.status === 'Active').length,
+      )
+    }
+  } else {
+    citizens.value = []
+    citizenTotal.value = null
+    citizenActiveTotal.value = null
+  }
   complaints.value = complaintsRes.status === 'fulfilled' && Array.isArray(complaintsRes.value) ? complaintsRes.value : []
   loans.value = loansRes.status === 'fulfilled' && Array.isArray(loansRes.value) ? loansRes.value : []
   agendas.value = agendasRes.status === 'fulfilled' && Array.isArray(agendasRes.value) ? agendasRes.value : []
