@@ -1,0 +1,1 @@
+import{n as e}from"./rolldown-runtime-QTnfLwEv.js";import{I as t,R as n,c as r,f as i}from"./letterFields-2FPN2FZi.js";var a=e({documents:()=>s,meta:()=>c,sections:()=>o}),o=[{...n(i),title:`Data Catin Pria`},{...t(i),title:`Data Catin Wanita`}],s=[`Fotokopi KTP calon suami`,`Fotokopi KTP calon istri`,r.kk],c={title:`Persetujuan Calon Pengantin`,code:`SCM`};export{a as t};
