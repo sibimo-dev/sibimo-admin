@@ -17,7 +17,7 @@ export const sections = [
     ],
   },
   // 3. Alamat asal = alamat pemohon → terisi dari data warga.
-  //    Desa/Kecamatan/Kab/Provinsi: dropdown (boleh diketik), default Bimomartani/Ngemplak/Sleman/DIY.
+  //    Provinsi → Kab/Kota → Kecamatan → Desa: dropdown bertingkat (boleh diketik), default Bimomartani/Ngemplak/Sleman/DIY.
   wilayahDropdown(
     alamat("origin", "Alamat Daerah Asal", {
       from: "address",
@@ -61,9 +61,9 @@ export const sections = [
       f.select("relocationTypeLabel", "Cakupan Kepindahan (subjudul formulir)", OPT.relocationScope, { default: OPT.relocationScope[0], span: 2 }),
     ],
   },
-  // 2. Alamat Tujuan Pindah: dropdown (boleh diketik), kosong / dipilih sendiri. Dusun diketik manual.
+  // 2. Alamat Tujuan Pindah: dropdown bertingkat (boleh diketik), kosong / dipilih sendiri. Dusun tujuan diketik manual (hamletFree).
   wilayahDropdown(
-    alamat("destination", "Alamat Tujuan Pindah", { scopeKey: "relocationTypeLabel" }),
+    alamat("destination", "Alamat Tujuan Pindah", { scopeKey: "relocationTypeLabel", hamletFree: true }),
     "destination",
     "relocationTypeLabel",
     {},
@@ -77,7 +77,7 @@ export const sections = [
       f.select("destinationKkStatus", "Status Nomor KK bagi yang pindah", OPT.kkStatusNo),
     ],
   },
-  // 6. Keluarga yang Pindah (tabel 7 baris: NIK, Nama, Masa Berlaku KTP s/d, SHDK)
+  // 6. Keluarga yang Pindah (tabel: NIK, Nama, Masa Berlaku KTP s/d, SHDK)
   {
     title: "Keluarga yang Pindah",
     fields: [
@@ -85,7 +85,7 @@ export const sections = [
         { key: "nik", label: "NIK" },
         { key: "name", label: "Nama" },
         { key: "validUntil", label: "Masa berlaku KTP s/d", type: "date", optional: true, lifetime: true },
-        { key: "shdk", label: "SHDK", type: "select", options: OPT.shdk },
+        { key: "shdk", label: "SHDK", type: "select", options: OPT.shdkKode },
       ], { max: 7, autoByType: "relocationType" }),
     ],
   },

@@ -1,0 +1,1 @@
+import{n as e}from"./rolldown-runtime-QTnfLwEv.js";import{K as t,c as n,nt as r}from"./letterFields-2FPN2FZi.js";var i=e({documents:()=>o,meta:()=>s,sections:()=>a}),a=[r(t())],o=[n.ktp,n.kk,n.rt],s={title:`Surat Keterangan Belum Pernah Menikah`,code:`KBM`};export{i as t};

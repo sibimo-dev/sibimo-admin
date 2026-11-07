@@ -1,5 +1,6 @@
 /* Kumpulan "cetakan" isian yang dipakai berulang oleh file-file surat.
    Satu surat = satu file .vue yang menyusun `sections` + `documents` dari sini. */
+import { reactive } from "vue";
 
 /* ---------- Pilihan dropdown ---------- */
 export const GENDER_OPTIONS = [
@@ -44,6 +45,8 @@ Object.assign(OPT, {
   religionKode: numbered(["Islam", "Kristen", "Katolik", "Hindu", "Buddha", "Khonghucu", "Kepercayaan terhadap Tuhan YME"]),
   // Kolom 15: Status Perkawinan (hanya 4 pilihan)
   maritalKode: numbered(["Belum Kawin", "Kawin", "Cerai Hidup", "Cerai Mati"]),
+  // SHDK bernomor, sama dengan Data Warga (1 = Kepala Keluarga ... 11 = Lainnya)
+  shdkKode: numbered(["Kepala Keluarga", "Suami", "Istri", "Anak", "Menantu", "Cucu", "Orang Tua", "Mertua", "Famili Lain", "Pembantu", "Lainnya"]),
   // Kolom 23: Kelainan Fisik & Mental
   disability: numbered(["Tidak Ada", "Ada"]),
   // Kolom 24: Penyandang Cacat
@@ -55,7 +58,7 @@ Object.assign(OPT, {
     "Tidak/Belum Sekolah", "Belum Tamat SD/Sederajat", "Tamat SD/Sederajat", "SLTP/Sederajat", "SLTA/Sederajat",
     "Diploma I/II", "Akademi/Diploma III/S. Muda", "Diploma IV/Strata I", "Strata II", "Strata III",
   ]),
-  // Kolom 26: Jenis Pekerjaan
+  // Kolom 26: Jenis Pekerjaan (91 pilihan, sama persis dengan daftar di form Data Warga admin)
   occupationKode: numbered([
     "Belum/Tidak Bekerja", "Mengurus Rumah Tangga", "Pelajar/Mahasiswa", "Pensiunan", "Pegawai Negeri Sipil (PNS)",
     "Tentara Nasional Indonesia (TNI)", "Kepolisian RI (POLRI)", "Perdagangan", "Petani/Pekebun", "Peternak",
@@ -65,16 +68,16 @@ Object.assign(OPT, {
     "Tukang Batu", "Tukang Kayu", "Tukang Sol Sepatu", "Tukang Las/Pandai Besi", "Tukang Jahit",
     "Tukang Gigi", "Penata Rias", "Penata Busana", "Penata Rambut", "Mekanik",
     "Seniman", "Tabib", "Paraji", "Perancang Busana", "Penterjemah",
-    "Imam Mesjid", "Pendeta", "Pastor", "Wartawan", "Ustadz/Mubaligh",
+    "Imam Masjid", "Pendeta", "Pastor", "Wartawan", "Ustadz/Mubaligh",
     "Juru Masak", "Promotor Acara", "Anggota DPR-RI", "Anggota DPD", "Anggota BPK",
-    "Presiden", "Wakil Presiden", "Anggota Mahkamah Konstitusi", "Anggota Kabinet/Kementerian", "Duta Besar",
+    "Presiden", "Wakil Presiden", "Anggota Mahkamah Konstitusi", "Anggota Kabinet/Kementrian", "Duta Besar",
     "Gubernur", "Wakil Gubernur", "Bupati", "Wakil Bupati", "Walikota",
-    "Wakil Walikota", "Anggota DPRD Provinsi", "Anggota DPRD Kabupaten/Kota", "Dosen", "Guru",
+    "Wakil walikota", "Anggota DPRD Prov.", "Anggota DPRD Kab./Kota", "Dosen", "Guru",
     "Pilot", "Pengacara", "Notaris", "Arsitek", "Akuntan",
     "Konsultan", "Dokter", "Bidan", "Perawat", "Apoteker",
     "Psikiater/Psikolog", "Penyiar Televisi", "Penyiar Radio", "Pelaut", "Peneliti",
     "Sopir", "Pialang", "Paranormal", "Pedagang", "Perangkat Desa",
-    "Kepala Desa", "Biarawati", "Wiraswasta", "Lainnya",
+    "Kepala desa", "Biarawati", "Wiraswasta", "Lainnya, Sebutkan", "Hakim", "Biarawan",
   ]),
 });
 
@@ -85,6 +88,16 @@ const isGenderOptions = (options) => Array.isArray(options)
   && options.every((option) => typeof option === "string")
   && options.map((option) => option.trim().toLowerCase()).sort().join("|") === "laki-laki|perempuan";
 const normalizeOptions = (options) => isGenderOptions(options) ? GENDER_OPTIONS : options;
+
+/* Pilihan dropdown yang MENAMPILKAN nomor tetapi MENYIMPAN teks tanpa nomor.
+   Dipakai untuk pekerjaan: tampil "1. Belum/Tidak Bekerja", tersimpan "Belum/Tidak Bekerja"
+   supaya cocok dengan nilai occupation di Data Warga (autofill dari KK) dan cetak PDF tetap bersih. */
+const numberedChoice = (list) => (list ?? []).map((o, i) => {
+  const text = typeof o === "string" ? o : String(o?.label ?? o?.value ?? "");
+  const label = /^\s*\d+\s*[.)\-:]\s*/.test(text) ? text : `${i + 1}. ${text}`;
+  return { label, value: text.replace(/^\s*\d+\s*[.)\-:]\s*/, "") };
+});
+
 export const f = {
   text: make("text"),
   hamlet: (key, label = "Dusun/Dukuh/Kampung", opts = {}) => ({ key, label, type: "hamlet", ...opts }),
@@ -94,8 +107,16 @@ export const f = {
   combo: (key, label, options, opts = {}) => ({ key, label, type: "combo", options, ...opts }),
   date: make("date"),
   time: make("time"),
-  /** pekerjaan: pilih dari daftar bernomor (sama dengan Data Warga) atau ketik bebas. Yang disimpan = nama pekerjaan tanpa nomor. */
-  occupation: (key, label = "Pekerjaan", opts = {}) => ({ key, label, type: "occupation", options: OPT.occupation, ...opts }),
+  /** pekerjaan: pilih dari daftar bernomor (sama dengan Data Warga, 91 kode) atau ketik bebas.
+      Dropdown menampilkan "1. Belum/Tidak Bekerja", tetapi yang disimpan = nama tanpa nomor
+      ("Belum/Tidak Bekerja") agar cocok dengan nilai occupation di Data Warga. */
+  occupation: (key, label = "Pekerjaan", opts = {}) => ({
+    key,
+    label,
+    type: "occupation",
+    options: numberedChoice(OPT.occupationKode ?? OPT.occupation),
+    ...opts,
+  }),
   /** checkbox banyak pilihan (nilai = array) */
   checks: (key, label, options, opts = {}) => ({ key, label, type: "checks", options, ...opts }),
   /** daftar baris berulang (anggota keluarga, saksi, dst). columns = [{ key, label, type?, options? }] */
@@ -105,10 +126,11 @@ export const f = {
 };
 
 /* ---------- Daftar wilayah untuk dropdown "pilih atau ketik manual" ----------
-   Hanya saran; petugas tetap boleh mengetik wilayah di luar daftar. Cocokkan ejaan dengan data resmi/tabel wilayah sebelum dipakai.
+   Sumber utama: API wilayah seluruh Indonesia (lihat blok "Data wilayah" di bawah). Data lokal DIY ini hanya CADANGAN
+   bila API belum termuat / tidak terjangkau. Petugas tetap boleh mengetik wilayah di luar daftar.
    Aturan daftar yang saling bergantung (desa ← kecamatan ← kabupaten ← provinsi):
-     - induk sudah terisi dan dikenal  → tampil anak dari induk itu saja
-     - induk masih kosong              → tampil SEMUA pilihan yang dikenal (supaya dropdown tetap berfungsi di semua cakupan)
+     - induk sudah terisi → tampil anak dari induk itu saja
+     - induk masih kosong → daftar kosong (pilih induk dulu)
      - induk diketik manual & tak dikenal → daftar kosong, isian diketik manual */
 const DESA_BY_KECAMATAN = {
   Berbah: ["Jogotirto", "Kalitirto", "Sendangtirto", "Tegaltirto"],
@@ -167,16 +189,86 @@ const SCOPE_WILAYAH = [
 ];
 export const scopeWilayah = (label) => SCOPE_WILAYAH[OPT.relocationScope.indexOf(label)] ?? {};
 
+/* ---------- Data wilayah seluruh Indonesia (API) ----------
+   Sumber: https://emsifa.github.io/api-wilayah-indonesia (statis, gratis, tanpa API key).
+   Daftar diambil saat dibutuhkan lalu disimpan di cache reactive, jadi dropdown ikut ter-render ulang begitu datanya tiba.
+   Selama API belum termuat / gagal, dropdown memakai data lokal DIY di atas sebagai cadangan, dan isian tetap boleh diketik manual.
+   Gagal muat TIDAK lagi di-cache selamanya: dicoba lagi setelah RETRY_MS. Kegagalan dicatat di console (cari "[wilayah]"). */
+const WILAYAH_API = "https://emsifa.github.io/api-wilayah-indonesia/api";
+const RETRY_MS = 10000;
+const wilayahCache = reactive({}); // path -> [{ id, name }]
+const wilayahPending = new Set();
+const wilayahFailedAt = new Map();
+
+const normName = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const PROVINCE_ALIAS = {
+  "di yogyakarta": "daerah istimewa yogyakarta",
+  "yogyakarta": "daerah istimewa yogyakarta",
+  "diy": "daerah istimewa yogyakarta",
+  "dki": "dki jakarta",
+  "bangka belitung": "kepulauan bangka belitung",
+  "kep bangka belitung": "kepulauan bangka belitung",
+  "kep riau": "kepulauan riau",
+};
+const provinceKey = (s) => { const c = normName(s); return PROVINCE_ALIAS[c] ?? c; };
+const regencyKey = (s) => normName(s).replace(/^(kabupaten|kab) /, ""); // "KABUPATEN SLEMAN" = "Sleman"; "KOTA ..." tetap
+const niceCase = (s) => String(s).toLowerCase().replace(/(^|[\s(/-])([a-z])/g, (_, a, b) => a + b.toUpperCase());
+const regencyLabel = (name) => niceCase(String(name).replace(/^KABUPATEN\s+/i, ""));
+
+function wilayahRows(path) {
+  const failed = wilayahFailedAt.get(path);
+  const stale = failed !== undefined && Date.now() - failed > RETRY_MS;
+  if ((!(path in wilayahCache) && !wilayahPending.has(path) && failed === undefined) || (stale && !wilayahPending.has(path))) {
+    wilayahPending.add(path);
+    fetch(`${WILAYAH_API}/${path}.json`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then((list) => { wilayahCache[path] = Array.isArray(list) ? list : []; wilayahFailedAt.delete(path); })
+      .catch((err) => { wilayahFailedAt.set(path, Date.now()); console.warn(`[wilayah] gagal memuat ${path}:`, err?.message ?? err); })
+      .finally(() => wilayahPending.delete(path));
+  }
+  return wilayahCache[path] ?? null;
+}
+const findByName = (list, name, key) => (list ? list.find((x) => key(x.name) === key(name)) ?? null : null);
+
+/* null = belum tersedia → pemanggil memakai data lokal */
+const regencyNames = (province) => {
+  const prov = findByName(wilayahRows("provinces"), province, provinceKey);
+  const list = prov ? wilayahRows(`regencies/${prov.id}`) : null;
+  return list ? list.map((r) => regencyLabel(r.name)) : null;
+};
+const districtNames = (province, regency) => {
+  const prov = findByName(wilayahRows("provinces"), province, provinceKey);
+  const reg = prov ? findByName(wilayahRows(`regencies/${prov.id}`), regency, regencyKey) : null;
+  const list = reg ? wilayahRows(`districts/${reg.id}`) : null;
+  return list ? list.map((d) => niceCase(d.name)) : null;
+};
+const villageNames = (province, regency, district) => {
+  const prov = findByName(wilayahRows("provinces"), province, provinceKey);
+  const reg = prov ? findByName(wilayahRows(`regencies/${prov.id}`), regency, regencyKey) : null;
+  const dis = reg ? findByName(wilayahRows(`districts/${reg.id}`), district, normName) : null;
+  const list = dis ? wilayahRows(`villages/${dis.id}`) : null;
+  return list ? list.map((v) => niceCase(v.name)) : null;
+};
+
+/* Pilihan anak mengikuti induk yang dipilih: data API bila sudah termuat, jika belum pakai data lokal (DIY).
+   Induk kosong → daftar kosong (pilih induk dulu). */
+const childOptions = (fromApi, map, parent) => (String(parent ?? "").trim() ? (fromApi ?? optionsFor(map, parent)) : []);
+
 /* Desa/Kecamatan/Kab/Provinsi yang mengikuti cakupan kepindahan (dibaca watcher di LetterFormFields.vue lewat `scopeAuto`).
    Semua dropdown tetap aktif di setiap cakupan dan boleh diketik manual.
-   optionsOf(level) = opsi tambahan per level (mis. from/default dari alamat()). */
+   optionsOf(level) = opsi tambahan per level (mis. from/default dari alamat()).
+   URUTAN: Provinsi → Kab/Kota → Kecamatan → Desa (induk dulu, anak kemudian) supaya pilihan bertingkat
+   dan petugas memilih dari wilayah terluas ke terkecil. */
 export const wilayahByScope = (prefix, scopeKey, optionsOf = () => ({})) => {
   const scoped = (level) => ({ scopeAuto: { key: scopeKey, level } });
+  const prov = (form) => form[`${prefix}Province`];
+  const reg = (form) => form[`${prefix}Regency`];
+  const dis = (form) => form[`${prefix}District`];
   return [
-    f.combo(`${prefix}Village`, "Desa/Kelurahan", (form) => optionsFor(DESA_BY_KECAMATAN, form[`${prefix}District`]), { ...scoped("village"), ...optionsOf("village") }),
-    f.combo(`${prefix}District`, "Kecamatan", (form) => optionsFor(KECAMATAN_BY_KABUPATEN, form[`${prefix}Regency`]), { ...scoped("district"), ...optionsOf("district") }),
-    f.combo(`${prefix}Regency`, "Kabupaten/Kota", (form) => optionsFor(KABUPATEN_BY_PROVINSI, form[`${prefix}Province`]), { ...scoped("regency"), ...optionsOf("regency") }),
     f.combo(`${prefix}Province`, "Provinsi", PROVINSI, { ...scoped("province"), ...optionsOf("province") }),
+    f.combo(`${prefix}Regency`, "Kabupaten/Kota", (form) => childOptions(regencyNames(prov(form)), KABUPATEN_BY_PROVINSI, prov(form)), { placeholder: "Pilih provinsi dulu", ...scoped("regency"), ...optionsOf("regency") }),
+    f.combo(`${prefix}District`, "Kecamatan", (form) => childOptions(districtNames(prov(form), reg(form)), KECAMATAN_BY_KABUPATEN, reg(form)), { placeholder: "Pilih kab/kota dulu", ...scoped("district"), ...optionsOf("district") }),
+    f.combo(`${prefix}Village`, "Desa/Kelurahan", (form) => childOptions(villageNames(prov(form), reg(form), dis(form)), DESA_BY_KECAMATAN, dis(form)), { placeholder: "Pilih kecamatan dulu", ...scoped("village"), ...optionsOf("village") }),
   ];
 };
 
@@ -191,7 +283,8 @@ export const BIMOMARTANI = {
 const WILAYAH_LEVELS = { Village: "village", District: "district", Regency: "regency", Province: "province" };
 
 /* Ubah Desa/Kecamatan/Kabupaten/Provinsi pada blok alamat menjadi dropdown (pilih atau ketik manual).
-   Tidak lagi ikut "Cakupan Kepindahan" (scopeAuto dibuang). Nilai awal dari `defaults`, kosong bila tidak ada. */
+   Tidak lagi ikut "Cakupan Kepindahan" (scopeAuto dibuang). Nilai awal dari `defaults`, kosong bila tidak ada.
+   Urutan isian mengikuti wilayahByScope (Provinsi → Kab/Kota → Kecamatan → Desa). */
 export function wilayahDropdown(section, prefix, scopeKey, defaults = {}) {
   if (!section || !Array.isArray(section.fields)) return section;
   const list = wilayahByScope(prefix, scopeKey) ?? [];
@@ -207,6 +300,25 @@ export function wilayahDropdown(section, prefix, scopeKey, defaults = {}) {
       return merged;
     }),
   };
+}
+
+/* ---------- Reset anak otomatis saat induk wilayah diganti ----------
+   Ganti Provinsi → Kab/Kota, Kecamatan, Desa dikosongkan; ganti Kab/Kota → Kecamatan, Desa dikosongkan; dst.
+   Hanya berlaku bila induk sebelumnya SUDAH terisi lalu berubah (isi otomatis dari kosong tidak menghapus apa pun).
+   Pemasangan di komponen yang memegang `form` (reactive), mis. LetterWizard.vue:
+     import { WILAYAH_WATCH_KEYS, resetWilayahChildren } from "@/data/letterFields";
+     watch(() => WILAYAH_WATCH_KEYS.map((k) => form[k]), (now, before) => resetWilayahChildren(form, now, before), { flush: "post" }); */
+const WILAYAH_PREFIXES = ["origin", "destination"];
+const WILAYAH_CHILDREN = { Province: ["Regency", "District", "Village"], Regency: ["District", "Village"], District: ["Village"] };
+export const WILAYAH_WATCH_KEYS = WILAYAH_PREFIXES.flatMap((p) => Object.keys(WILAYAH_CHILDREN).map((level) => `${p}${level}`));
+
+export function resetWilayahChildren(form, now = [], before = []) {
+  WILAYAH_WATCH_KEYS.forEach((key, i) => {
+    const prev = String(before[i] ?? "").trim();
+    if (!prev || prev === String(now[i] ?? "").trim()) return;
+    const [, prefix, level] = key.match(/^(origin|destination)(\w+)$/);
+    WILAYAH_CHILDREN[level].forEach((child) => { form[`${prefix}${child}`] = ""; });
+  });
 }
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -468,19 +580,20 @@ export const alamat = (prefix, title, { from, phoneFrom, fieldFrom = {}, default
   const wilayah = scopeKey
     ? wilayahByScope(prefix, scopeKey, options)
     : [
-        f.text(`${prefix}Village`, "Desa/Kelurahan", options("village")),
-        f.text(`${prefix}District`, "Kecamatan", options("district")),
-        f.text(`${prefix}Regency`, "Kabupaten/Kota", options("regency")),
         f.text(`${prefix}Province`, "Provinsi", options("province")),
+        f.text(`${prefix}Regency`, "Kabupaten/Kota", options("regency")),
+        f.text(`${prefix}District`, "Kecamatan", options("district")),
+        f.text(`${prefix}Village`, "Desa/Kelurahan", options("village")),
       ];
+  const hamletField = hamlet ? [hamletFree ? f.text(`${prefix}Hamlet`, "Dusun/Dukuh/Kampung", { placeholder: "Ketik nama dusun/dukuh/kampung", ...options("hamlet") }) : f.hamlet(`${prefix}Hamlet`, "Dusun/Dukuh/Kampung", { optional: true, ...options("hamlet") })] : [];
   return ({
   title,
   fields: [
     f.area(`${prefix}Address`, "Alamat (jalan/nomor)", { span: 2, ...(from ? { from } : {}) }),
     f.text(`${prefix}Rt`, "RT", options("rt")),
     f.text(`${prefix}Rw`, "RW", options("rw")),
-    ...(hamlet ? [hamletFree ? f.text(`${prefix}Hamlet`, "Dusun/Dukuh/Kampung", { placeholder: "Ketik nama dusun/dukuh/kampung", ...options("hamlet") }) : f.hamlet(`${prefix}Hamlet`, "Dusun/Dukuh/Kampung", { optional: true, ...options("hamlet") })] : []),
     ...wilayah,
+    ...hamletField,
     f.text(`${prefix}PostalCode`, "Kode Pos", { optional: true, ...options("postalCode") }),
     f.text(`${prefix}Phone`, "Telepon", { optional: true, ...(phoneFrom ? { from: phoneFrom } : {}), ...options("phone") }),
   ],
