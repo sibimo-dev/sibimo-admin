@@ -14,7 +14,7 @@ export const sections = [
       f.date("applicantBirthDate", "Tanggal Lahir", { from: "birthDate" }),
       f.select("applicantGender", "Jenis Kelamin", ["Laki-laki", "Perempuan"], { from: "gender" }),
       f.select("applicantReligion", "Agama", ["Islam", "Kristen", "Katolik", "Hindu", "Buddha", "Khonghucu"], { from: "religion" }),
-      f.select("applicantOccupation", "Pekerjaan", ["Belum/Tidak Bekerja", "Pelajar/Mahasiswa", "Ibu Rumah Tangga", "Petani", "Buruh", "Wiraswasta", "Karyawan Swasta", "PNS/ASN", "TNI/Polri", "Pensiunan"], { from: "occupation", editable: true }),
+      f.occupation("applicantOccupation", "Pekerjaan", { from: "occupation", editable: true }),
       f.area("applicantAddress", "Alamat", { from: "address", span: 2 }),
     ],
   },

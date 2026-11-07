@@ -6,7 +6,7 @@
    (route `letter-detail`) yang menampilkan preview surat. Bila penyimpanan
    gagal, pesan error tampil inline di bawah isian (tanpa pop-up).
    Penyimpanan ke backend: lihat services/letter-create.service.js (asumsi kontrak ada di komentar file itu). */
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import Button from "primevue/button";
 import AppButton from "@/components/common/AppButton.vue";
@@ -19,6 +19,7 @@ import CitizenDocumentsPanel from "@/components/citizen/CitizenDocumentsPanel.vu
 import { useApplicantLookup } from "./useApplicantLookup";
 import { applicantOf, fillForm, reviewLocation, scrollTop, uniqueRowsByNik, validateFields, focusFirstInvalid } from "./formLogic";
 import { hue as getHue } from "./pastel";
+import { WILAYAH_WATCH_KEYS, resetWilayahChildren } from "@/data/letterFields";
 import { LETTER_SOURCE, getLetterRequestError, submitSingleLetter } from "@/services/letter-create.service";
 
 const props = defineProps({
@@ -56,6 +57,14 @@ const allSections = computed(() => [
 
 const form = reactive({});
 fillForm(form, allSections.value);
+
+// Ganti Provinsi / Kab-Kota / Kecamatan -> isian wilayah di bawahnya dikosongkan agar pilihannya ikut induk yang baru.
+// Sama dengan wizard publik (letterFields.js: WILAYAH_WATCH_KEYS + resetWilayahChildren).
+watch(
+  () => WILAYAH_WATCH_KEYS.map((k) => form[k]),
+  (now, before) => resetWilayahChildren(form, now, before),
+  { flush: "post" },
+);
 
 // Dipakai template (ApplicantLookup & LetterFormFields) dan buildPayload(). Tanpa 3 baris ini halaman gagal tampil
 // ("Property lookup was accessed during render but is not defined").

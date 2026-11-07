@@ -20,7 +20,7 @@ export const sections = [
       f.text("headOfFamily", "Nama Kepala Keluarga", { from: "headOfFamilyName" }),
     ],
   },
-  // Alamat asal: dropdown (boleh diketik), default Bimomartani/Ngemplak/Sleman/DIY
+  // Alamat asal: dropdown bertingkat (boleh diketik), default Bimomartani/Ngemplak/Sleman/DIY
   wilayahDropdown(
     alamat("origin", "Alamat Daerah Asal", {
       from: "address",
@@ -62,9 +62,9 @@ export const sections = [
       f.select("relocationTypeLabel", "Cakupan Kepindahan (subjudul formulir)", OPT.relocationScope, { default: OPT.relocationScope[0], span: 2 }),
     ],
   },
-  // Alamat tujuan: dropdown (boleh diketik), kosong / dipilih sendiri. Dusun diketik manual.
+  // Alamat tujuan: dropdown bertingkat (boleh diketik), kosong / dipilih sendiri. Dusun tujuan diketik manual (hamletFree).
   wilayahDropdown(
-    alamat("destination", "Alamat Tujuan Pindah", { scopeKey: "relocationTypeLabel" }),
+    alamat("destination", "Alamat Tujuan Pindah", { scopeKey: "relocationTypeLabel", hamletFree: true }),
     "destination",
     "relocationTypeLabel",
     {},
@@ -84,7 +84,7 @@ export const sections = [
         { key: "nik", label: "NIK" },
         { key: "name", label: "Nama" },
         { key: "validUntil", label: "Masa berlaku KTP s/d", type: "date", optional: true, lifetime: true },
-        { key: "shdk", label: "SHDK", type: "select", options: OPT.shdk },
+        { key: "shdk", label: "SHDK", type: "select", options: OPT.shdkKode },
       ], { max: 7, autoByType: "relocationType" }),
     ],
   },

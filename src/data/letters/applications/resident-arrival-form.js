@@ -3,7 +3,8 @@
 // Formulir Permohonan Pindah Datang WNI
 import { f, OPT, pemohon, DOC, wilayahByScope, wilayahDropdown, BIMOMARTANI } from "@/data/letterFields";
 
-// scopeKey (opsional): bila diisi, Desa/Kecamatan/Kab/Provinsi berupa dropdown yang boleh diketik manual.
+// scopeKey (opsional): bila diisi, Provinsi/Kab/Kecamatan/Desa berupa dropdown bertingkat yang boleh diketik manual
+// (urutan Provinsi -> Kab/Kota -> Kecamatan -> Desa dari wilayahByScope). Tanpa scopeKey urutannya terbalik dan berupa teks biasa.
 // Nilai awalnya ditentukan oleh wilayahDropdown (bukan lagi otomatis menurut Cakupan Kepindahan).
 const alamatLengkap = (prefix, title, addressLabel = "Alamat", scopeKey) => ({
   title,
@@ -24,22 +25,11 @@ const alamatLengkap = (prefix, title, addressLabel = "Alamat", scopeKey) => ({
   ],
 });
 
-const KK_STATUS = ["1. Numpang KK", "2. Membuat KK Baru", "3. Nomor KK Tetap"];
-const REASONS = [
-  "1. Pekerjaan",
-  "2. Pendidikan",
-  "3. Keamanan",
-  "4. Kesehatan",
-  "5. Perumahan",
-  "6. Keluarga",
-  "7. Lainnya (sebutkan)",
-];
-const RELOCATION_TYPES = [
-  "1. Kep. Keluarga",
-  "2. Kep. Keluarga dan seluruh Angg. Keluarga",
-  "3. Kep. Keluarga dan sbg Angg. Keluarga",
-  "4. Anggota Keluarga",
-];
+// Daftar pilihan memakai OPT bersama (isinya sama dengan salinan lokal sebelumnya) supaya tidak berbeda
+// dengan surat pindah lain bila daftar di letterFields.js diubah.
+const KK_STATUS = OPT.kkStatusNo;
+const REASONS = OPT.relocationReason;
+const RELOCATION_TYPES = OPT.relocationType;
 
 export const sections = [
   {
