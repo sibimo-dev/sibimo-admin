@@ -68,8 +68,8 @@ function parseDukuhLabel(label) {
   return match ? { number: match[1], name: match[2].trim() } : { number: '', name: rest }
 }
 
-function composeDukuhLabel(number, name) {
-  return ['Dukuh', String(number ?? '').trim().toUpperCase(), String(name ?? '').trim()]
+function composeDukuhLabel(_number, name) {
+  return ['Dukuh', String(name ?? '').trim()]
     .filter(Boolean)
     .join(' ')
 }
@@ -144,7 +144,14 @@ function romanToNumber(value) {
 function personOrderKey(item) {
   if (isDukuhLabel(item?.jabatan)) {
     const parsed = parseDukuhLabel(item.jabatan)
-    const number = /^\d+$/.test(parsed.number) ? Number(parsed.number) : romanToNumber(parsed.number)
+    let number = /^\d+$/.test(parsed.number) ? Number(parsed.number) : romanToNumber(parsed.number)
+    if (!number) {
+      const known = JABATAN_OPTIONS.find((option) => (
+        isDukuhLabel(option.label)
+        && normalizePadukuhanKey(parseDukuhLabel(option.label).name) === normalizePadukuhanKey(parsed.name)
+      ))
+      if (known) number = romanToNumber(parseDukuhLabel(known.label).number)
+    }
     return [9, number || 999]
   }
 
@@ -1062,7 +1069,6 @@ const padukuhanDirectory = computed(() => {
   allJabatanOptions.value.forEach((option) => add(option.label))
   form.assignments.forEach((a) => add(a.jabatan))
 
-  // Ambil juga dari Data Wilayah jika ada padukuhan yang belum terdaftar di default options
   regionAreas.value.forEach((area, index) => {
     const dusunName = String(area.dusun ?? '').trim()
     const key = normalizePadukuhanKey(dusunName)
@@ -1087,13 +1093,10 @@ const padukuhanOptions = computed(() => {
     }
   }
 
-  // Prioritas 1: Dari Data Wilayah (backend /api/region-areas)
   regionAreas.value.forEach((a) => pushName(a.dusun))
 
-  // Prioritas 2: Dari JABATAN_OPTIONS / padukuhanDirectory
   padukuhanDirectory.value.forEach((item) => pushName(item.name))
 
-  // Prioritas 3: Dari assignments yang sudah ada
   form.assignments.forEach((a) => pushName(a.padukuhan))
 
   return names
@@ -1125,7 +1128,6 @@ const rwOptions = computed(() => {
   const padukuhan = aPadukuhanName.value
   if (!padukuhan) return []
 
-  // 1. Ambil RW dari Data Wilayah
   const matchedArea = regionAreas.value.find((r) =>
     normalizePadukuhanKey(r.dusun) === normalizePadukuhanKey(padukuhan)
   )
@@ -1137,7 +1139,6 @@ const rwOptions = computed(() => {
     })
   }
 
-  // 2. Fallback dari assignments yang sudah ada
   form.assignments.forEach((a) => {
     if (a.rw_number && normalizePadukuhanKey(a.padukuhan) === normalizePadukuhanKey(padukuhan)) {
       const num = padNumber(a.rw_number)
@@ -1154,7 +1155,6 @@ const rtOptions = computed(() => {
   const selectedRw = padNumber(textValue(assignForm.rw_number))
   if (!padukuhan || !selectedRw) return []
 
-  // 1. Ambil RT dari Data Wilayah
   const matchedArea = regionAreas.value.find((r) =>
     normalizePadukuhanKey(r.dusun) === normalizePadukuhanKey(padukuhan)
   )
@@ -1172,7 +1172,6 @@ const rtOptions = computed(() => {
     }
   }
 
-  // 2. Fallback dari assignments yang sudah ada
   form.assignments.forEach((a) => {
     if (
       a.rt_number &&
@@ -1349,9 +1348,6 @@ function prepareAssignment(f, person, original = null, editingId = null) {
   if (isRw && (!padukuhan || !rw)) return { error: 'Padukuhan dan nomor RW wajib diisi' }
   if (isDukuh) {
     if (!padukuhan) return { error: 'Padukuhan wajib dipilih' }
-    if (dukuhNumber && !/^([IVXLCDM]+|\d+)$/.test(dukuhNumber)) {
-      return { error: 'Nomor urut dukuh harus angka Romawi (mis. I, II, XIII)' }
-    }
   }
 
   const usesDates = !!f.start_date
@@ -1924,11 +1920,6 @@ const previewInfoCards = computed(() => {
                   placeholder="Pilih / ketik padukuhan"
                   fluid
                 />
-              </div>
-
-              <div v-if="aNeedsDukuhNumber" class="flex flex-col gap-1.5">
-                <label class="text-xs font-semibold text-slate-600">No. Urut Dukuh</label>
-                <InputText v-model="assignForm.dukuh_number" placeholder="mis. XIII" fluid />
               </div>
 
               <div v-if="aIsRtRw" class="flex flex-col gap-1.5">
