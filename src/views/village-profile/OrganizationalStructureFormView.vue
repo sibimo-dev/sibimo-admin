@@ -50,14 +50,8 @@ function isDukuhLabel(label) {
   return /^Dukuh(\s|$)/i.test(String(label ?? '').trim())
 }
 
-function parseDukuhLabel(label) {
-  const rest = String(label ?? '').trim().replace(/^Dukuh\s*/i, '')
-  const match = rest.match(/^([IVXLCDM]+|\d+)\s+(.+)$/)
-  return match ? { number: match[1], name: match[2].trim() } : { number: '', name: rest }
-}
-
 function composeDukuhLabel(number, name) {
-  return ['Dukuh', String(number ?? '').trim().toUpperCase(), String(name ?? '').trim()]
+  return ['Dukuh', String(number ?? '').trim(), String(name ?? '').trim()]
     .filter(Boolean)
     .join(' ')
 }
@@ -117,23 +111,11 @@ function jabatanKey(value) {
   ).toLowerCase()
 }
 
-function romanToNumber(value) {
-  const numbers = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 }
-  let total = 0
-  let previous = 0
-  for (const letter of String(value ?? '').toUpperCase().split('').reverse()) {
-    const number = numbers[letter] ?? 0
-    total += number < previous ? -number : number
-    previous = Math.max(previous, number)
-  }
-  return total
-}
-
 function personOrderKey(item) {
   if (isDukuhLabel(item?.jabatan)) {
-    const parsed = parseDukuhLabel(item.jabatan)
-    const number = /^\d+$/.test(parsed.number) ? Number(parsed.number) : romanToNumber(parsed.number)
-    return [9, number || 999]
+    const areaKey = normalizePadukuhanKey(item.padukuhan)
+    const areaIndex = regionAreas.value.findIndex((area) => normalizePadukuhanKey(area.dusun) === areaKey)
+    return [9, areaIndex >= 0 ? areaIndex + 1 : 999]
   }
 
   const rank = JABATAN_OPTIONS.findIndex((option) => jabatanKey(option.label) === jabatanKey(item?.jabatan))
@@ -234,7 +216,7 @@ function formatJabatanFormer(item) {
 
 function formatWilayahFormer(item) {
   if (isDukuhLabel(item?.jabatan)) {
-    const name = item.padukuhan || parseDukuhLabel(item.jabatan).name
+    const name = item.padukuhan
     return name ? `Padukuhan ${name}` : '—'
   }
   const parts = []
@@ -391,7 +373,7 @@ function deriveState(structure) {
         person_id: person.id,
         staff_id: src.staff_id ?? null,
         source: 'level',
-        jabatan: normalizeJabatan(src.title) || null,
+        jabatan: isDukuhLabel(src.title) ? JABATAN_DUKUH : (normalizeJabatan(src.title) || null),
         desc: src.desc ?? '',
         rt_number: src.rt_number ?? '',
         rw_number: src.rw_number ?? '',
@@ -1037,30 +1019,6 @@ const aIsRw = computed(() => assignForm.jabatan === JABATAN_KETUA_RW)
 const aIsRtRw = computed(() => aIsRt.value || aIsRw.value)
 const aIsDukuh = computed(() => assignForm.jabatan === JABATAN_DUKUH)
 
-const padukuhanDirectory = computed(() => {
-  const map = new Map()
-  const add = (label, fallbackNumber = null) => {
-    if (!isDukuhLabel(label)) return
-    const { number, name } = parseDukuhLabel(label)
-    const key = normalizePadukuhanKey(name)
-    if (key && !map.has(key)) {
-      map.set(key, { number: number || fallbackNumber, name: String(name).trim() })
-    }
-  }
-  allJabatanOptions.value.forEach((option) => add(option.label))
-  form.assignments.forEach((a) => add(a.jabatan))
-
-  // Ambil juga dari Data Wilayah jika ada padukuhan yang belum terdaftar di default options
-  regionAreas.value.forEach((area, index) => {
-    const dusunName = String(area.dusun ?? '').trim()
-    const key = normalizePadukuhanKey(dusunName)
-    if (key && !map.has(key)) {
-      map.set(key, { number: numberToRoman(index + 1), name: dusunName })
-    }
-  })
-  return map
-})
-
 const padukuhanOptions = computed(() => {
   const names = []
   const seen = new Set()
@@ -1075,12 +1033,8 @@ const padukuhanOptions = computed(() => {
     }
   }
 
-  // Prioritas 1: Dari Data Wilayah (backend /api/region-areas)
   regionAreas.value.forEach((a) => pushName(a.dusun))
 
-  // Assignment lama hanya boleh ikut ditampilkan jika masih menunjuk
-  // ke padukuhan yang ada di Data Wilayah. Dengan begitu opsi stale seperti
-  // Purwobinangun tidak lagi muncul dari daftar hardcode lama.
   const regionKeys = new Set(regionAreas.value.map((area) => normalizePadukuhanKey(area.dusun)))
   form.assignments.forEach((a) => {
     const key = normalizePadukuhanKey(a.padukuhan)
@@ -1091,16 +1045,8 @@ const padukuhanOptions = computed(() => {
 })
 
 const aPadukuhanName = computed(() => String(textValue(assignForm.padukuhan)).trim())
-const aKnownDukuhNumber = computed(() => {
-  const key = normalizePadukuhanKey(aPadukuhanName.value)
-  return padukuhanDirectory.value.get(key)?.number ?? null
-})
-const aNeedsDukuhNumber = computed(() => (
-  aIsDukuh.value && !!aPadukuhanName.value && aKnownDukuhNumber.value === null
-))
-const aDukuhNumber = computed(() => (
-  String(aKnownDukuhNumber.value ?? assignForm.dukuh_number ?? '').trim().toUpperCase()
-))
+const aNeedsDukuhNumber = computed(() => aIsDukuh.value && !!aPadukuhanName.value)
+const aDukuhNumber = computed(() => String(assignForm.dukuh_number ?? '').trim().toUpperCase())
 const aDukuhPreview = computed(() => (
   aIsDukuh.value && aPadukuhanName.value ? composeDukuhLabel(aDukuhNumber.value, aPadukuhanName.value) : ''
 ))
@@ -1116,7 +1062,6 @@ const rwOptions = computed(() => {
   const padukuhan = aPadukuhanName.value
   if (!padukuhan) return []
 
-  // 1. Ambil RW dari Data Wilayah
   const matchedArea = regionAreas.value.find((r) =>
     normalizePadukuhanKey(r.dusun) === normalizePadukuhanKey(padukuhan)
   )
@@ -1128,7 +1073,6 @@ const rwOptions = computed(() => {
     })
   }
 
-  // 2. Fallback dari assignments yang sudah ada
   form.assignments.forEach((a) => {
     if (a.rw_number && normalizePadukuhanKey(a.padukuhan) === normalizePadukuhanKey(padukuhan)) {
       const num = padNumber(a.rw_number)
@@ -1145,7 +1089,6 @@ const rtOptions = computed(() => {
   const selectedRw = padNumber(textValue(assignForm.rw_number))
   if (!padukuhan || !selectedRw) return []
 
-  // 1. Ambil RT dari Data Wilayah
   const matchedArea = regionAreas.value.find((r) =>
     normalizePadukuhanKey(r.dusun) === normalizePadukuhanKey(padukuhan)
   )
@@ -1163,7 +1106,6 @@ const rtOptions = computed(() => {
     }
   }
 
-  // 2. Fallback dari assignments yang sudah ada
   form.assignments.forEach((a) => {
     if (
       a.rt_number &&
@@ -1299,8 +1241,8 @@ function startEditAssignment(a) {
   Object.assign(assignForm, {
     person_id: a.person_id,
     jabatan: dukuh ? JABATAN_DUKUH : a.jabatan,
-    dukuh_number: dukuh ? parseDukuhLabel(a.jabatan).number : '',
-    padukuhan: a.padukuhan || (dukuh ? parseDukuhLabel(a.jabatan).name : ''),
+    dukuh_number: '',
+    padukuhan: a.padukuhan ?? '',
     rw_number: a.rw_number ?? '',
     rt_number: a.rt_number ?? '',
     start_date: a.start_date ?? '',
@@ -1333,16 +1275,12 @@ function prepareAssignment(f, person, original = null, editingId = null) {
   const padukuhan = String(textValue(f.padukuhan)).trim()
   const rt = padNumber(textValue(f.rt_number))
   const rw = padNumber(textValue(f.rw_number))
-  const knownNumber = padukuhanDirectory.value.get(normalizePadukuhanKey(padukuhan))?.number ?? null
-  const dukuhNumber = String(knownNumber ?? f.dukuh_number ?? '').trim().toUpperCase()
+  const dukuhNumber = String(f.dukuh_number ?? '').trim().toUpperCase()
 
   if (isRt && (!padukuhan || !rw || !rt)) return { error: 'Padukuhan, nomor RW, dan nomor RT wajib diisi' }
   if (isRw && (!padukuhan || !rw)) return { error: 'Padukuhan dan nomor RW wajib diisi' }
   if (isDukuh) {
     if (!padukuhan) return { error: 'Padukuhan wajib dipilih' }
-    if (dukuhNumber && !/^([IVXLCDM]+|\d+)$/.test(dukuhNumber)) {
-      return { error: 'Nomor urut dukuh harus angka Romawi (mis. I, II, XIII)' }
-    }
   }
 
   const usesDates = !!f.start_date
@@ -1608,7 +1546,7 @@ const previewInfoCards = computed(() => {
       cards.push({ label: 'Nomor RW', value: padNumber(a.rw_number), icon: 'pi-hashtag' })
       cards.push({ label: 'Padukuhan', value: a.padukuhan, icon: 'pi-map-marker' })
     } else if (isDukuhLabel(a.jabatan)) {
-      cards.push({ label: 'Padukuhan', value: a.padukuhan || parseDukuhLabel(a.jabatan).name, icon: 'pi-map-marker' })
+      cards.push({ label: 'Padukuhan', value: a.padukuhan, icon: 'pi-map-marker' })
     }
   }
 
@@ -1918,8 +1856,9 @@ const previewInfoCards = computed(() => {
               </div>
 
               <div v-if="aNeedsDukuhNumber" class="flex flex-col gap-1.5">
-                <label class="text-xs font-semibold text-slate-600">No. Urut Dukuh</label>
-                <InputText v-model="assignForm.dukuh_number" placeholder="mis. XIII" fluid />
+                <label class="text-xs font-semibold text-slate-600">Nomor Dukuh <span class="font-normal text-slate-400">(opsional)</span></label>
+                <InputText v-model="assignForm.dukuh_number" placeholder="mis. VI" fluid />
+                <small class="text-xs text-slate-500">Isi manual jika nomor Romawi ingin ditampilkan pada jabatan.</small>
               </div>
 
               <div v-if="aIsRtRw" class="flex flex-col gap-1.5">
@@ -2444,4 +2383,4 @@ const previewInfoCards = computed(() => {
       </template>
     </Dialog>
   </div>
-</template>
+</template>
