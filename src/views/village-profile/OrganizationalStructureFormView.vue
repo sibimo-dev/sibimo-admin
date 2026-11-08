@@ -37,18 +37,6 @@ const JABATAN_OPTIONS = [
   { label: 'Ulu-Ulu', level: 'Kepala Seksi' },
   { label: 'Jagabaya', level: 'Kepala Seksi' },
   { label: 'Staff Pamong Kalurahan', level: 'Staff Pamong Kalurahan', slider: true, centerOnDesktop: true },
-  { label: 'Dukuh I Krebet', level: 'Dukuh (Kepala Padukuhan)', slider: true },
-  { label: 'Dukuh II Rogobangsan', level: 'Dukuh (Kepala Padukuhan)', slider: true },
-  { label: 'Dukuh III Kalibulus', level: 'Dukuh (Kepala Padukuhan)', slider: true },
-  { label: 'Dukuh IV Macanan', level: 'Dukuh (Kepala Padukuhan)', slider: true },
-  { label: 'Dukuh V Cokrogaten', level: 'Dukuh (Kepala Padukuhan)', slider: true },
-  { label: 'Dukuh VI Purwobinangun', level: 'Dukuh (Kepala Padukuhan)', slider: true },
-  { label: 'Dukuh VII Pondok Suruh', level: 'Dukuh (Kepala Padukuhan)', slider: true },
-  { label: 'Dukuh VIII Balong', level: 'Dukuh (Kepala Padukuhan)', slider: true },
-  { label: 'Dukuh IX Kragilan', level: 'Dukuh (Kepala Padukuhan)', slider: true },
-  { label: 'Dukuh X Banjarharjo', level: 'Dukuh (Kepala Padukuhan)', slider: true },
-  { label: 'Dukuh XI Sorasan', level: 'Dukuh (Kepala Padukuhan)', slider: true },
-  { label: 'Dukuh XII Koroulon Kidul', level: 'Dukuh (Kepala Padukuhan)', slider: true },
   { label: 'Ketua RT', level: 'Ketua RT & Ketua RW', slider: true },
   { label: 'Ketua RW', level: 'Ketua RT & Ketua RW', slider: true },
 ]
@@ -1090,11 +1078,14 @@ const padukuhanOptions = computed(() => {
   // Prioritas 1: Dari Data Wilayah (backend /api/region-areas)
   regionAreas.value.forEach((a) => pushName(a.dusun))
 
-  // Prioritas 2: Dari JABATAN_OPTIONS / padukuhanDirectory
-  padukuhanDirectory.value.forEach((item) => pushName(item.name))
-
-  // Prioritas 3: Dari assignments yang sudah ada
-  form.assignments.forEach((a) => pushName(a.padukuhan))
+  // Assignment lama hanya boleh ikut ditampilkan jika masih menunjuk
+  // ke padukuhan yang ada di Data Wilayah. Dengan begitu opsi stale seperti
+  // Purwobinangun tidak lagi muncul dari daftar hardcode lama.
+  const regionKeys = new Set(regionAreas.value.map((area) => normalizePadukuhanKey(area.dusun)))
+  form.assignments.forEach((a) => {
+    const key = normalizePadukuhanKey(a.padukuhan)
+    if (key && regionKeys.has(key)) pushName(a.padukuhan)
+  })
 
   return names
 })
