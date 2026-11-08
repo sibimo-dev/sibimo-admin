@@ -64,6 +64,16 @@ function composeDukuhLabel(number, name) {
     .join(' ')
 }
 
+function manualDukuhNumber(title, padukuhan) {
+  const name = String(padukuhan ?? '').trim()
+  if (!name) return ''
+  const rest = String(title ?? '').trim().replace(/^Dukuh\s*/i, '')
+  const match = rest.match(/^([IVXLCDM]+|\d+)\s+(.+)$/i)
+  return match && normalizePadukuhanKey(match[2]) === normalizePadukuhanKey(name)
+    ? match[1]
+    : ''
+}
+
 const GENDER_OPTIONS = ['LAKI-LAKI', 'PEREMPUAN']
 const EDUCATION_OPTIONS = [
   'SD/Sederajat',
@@ -219,7 +229,13 @@ function formatMasaJabatan(item) {
 function formatJabatanFormer(item) {
   if (isDukuhLabel(item?.jabatan)) {
     const padukuhan = String(item?.padukuhan ?? '').trim()
-    return padukuhan ? `${JABATAN_DUKUH} ${padukuhan}` : JABATAN_DUKUH
+    if (!padukuhan) return JABATAN_DUKUH
+
+    // Nomor hanya ditampilkan jika memang tersimpan pada jabatan karena
+    // diisi manual user; tidak pernah dibuat otomatis dari urutan wilayah.
+    const manualNumber = manualDukuhNumber(item?.jabatan, padukuhan)
+
+    return composeDukuhLabel(manualNumber, padukuhan)
   }
   if (item?.jabatan === JABATAN_KETUA_RT && item.rt_number) return `${item.jabatan} ${padNumber(item.rt_number)}`
   if (item?.jabatan === JABATAN_KETUA_RW && item.rw_number) return `${item.jabatan} ${padNumber(item.rw_number)}`
@@ -381,13 +397,15 @@ function deriveState(structure) {
     ;(level.people ?? []).forEach((src) => {
       const person = resolvePerson(src, src.name)
       const dukuh = isDukuhLabel(src.title)
-      const padukuhan = textValue(src.padukuhan).trim() || (dukuh ? legacyDukuhName(src.title) : '')
+      const storedPadukuhan = textValue(src.padukuhan).trim()
+      const padukuhan = storedPadukuhan || (dukuh ? legacyDukuhName(src.title) : '')
+      const manualNumber = manualDukuhNumber(src.title, storedPadukuhan)
       assignments.push({
         id: uid(),
         person_id: person.id,
         staff_id: src.staff_id ?? null,
         source: 'level',
-        jabatan: dukuh ? JABATAN_DUKUH : (normalizeJabatan(src.title) || null),
+        jabatan: dukuh ? composeDukuhLabel(manualNumber, padukuhan) : (normalizeJabatan(src.title) || null),
         desc: src.desc ?? '',
         rt_number: src.rt_number ?? '',
         rw_number: src.rw_number ?? '',
@@ -1255,7 +1273,7 @@ function startEditAssignment(a) {
   Object.assign(assignForm, {
     person_id: a.person_id,
     jabatan: dukuh ? JABATAN_DUKUH : a.jabatan,
-    dukuh_number: '',
+    dukuh_number: dukuh ? manualDukuhNumber(a.jabatan, a.padukuhan) : '',
     padukuhan: a.padukuhan ?? '',
     rw_number: a.rw_number ?? '',
     rt_number: a.rt_number ?? '',
@@ -1275,6 +1293,7 @@ function exclusiveKey(a) {
   const key = jabatanKey(a.jabatan)
   if (!key || key.startsWith('staff')) return null
   const area = jabatanKey(textValue(a.padukuhan))
+  if (isDukuhLabel(a.jabatan)) return `dukuh|${area}`
   if (a.jabatan === JABATAN_KETUA_RT) return `rt|${area}|${padNumber(a.rw_number)}|${padNumber(a.rt_number)}`
   if (a.jabatan === JABATAN_KETUA_RW) return `rw|${area}|${padNumber(a.rw_number)}`
   return key
