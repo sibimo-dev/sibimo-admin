@@ -50,6 +50,14 @@ function isDukuhLabel(label) {
   return /^Dukuh(\s|$)/i.test(String(label ?? '').trim())
 }
 
+// Hanya untuk memulihkan nama padukuhan dari data lama yang belum memiliki
+// kolom padukuhan. Nomor tidak pernah dipindahkan ke field nomor manual.
+function legacyDukuhName(label) {
+  const rest = String(label ?? '').trim().replace(/^Dukuh\s*/i, '')
+  const match = rest.match(/^([IVXLCDM]+|\d+)\s+(.+)$/)
+  return (match ? match[2] : rest).trim()
+}
+
 function composeDukuhLabel(number, name) {
   return ['Dukuh', String(number ?? '').trim(), String(name ?? '').trim()]
     .filter(Boolean)
@@ -209,6 +217,10 @@ function formatMasaJabatan(item) {
 }
 
 function formatJabatanFormer(item) {
+  if (isDukuhLabel(item?.jabatan)) {
+    const padukuhan = String(item?.padukuhan ?? '').trim()
+    return padukuhan ? `${JABATAN_DUKUH} ${padukuhan}` : JABATAN_DUKUH
+  }
   if (item?.jabatan === JABATAN_KETUA_RT && item.rt_number) return `${item.jabatan} ${padNumber(item.rt_number)}`
   if (item?.jabatan === JABATAN_KETUA_RW && item.rw_number) return `${item.jabatan} ${padNumber(item.rw_number)}`
   return item?.jabatan ?? ''
@@ -368,16 +380,18 @@ function deriveState(structure) {
   ;(structure.levels ?? []).forEach((level) => {
     ;(level.people ?? []).forEach((src) => {
       const person = resolvePerson(src, src.name)
+      const dukuh = isDukuhLabel(src.title)
+      const padukuhan = textValue(src.padukuhan).trim() || (dukuh ? legacyDukuhName(src.title) : '')
       assignments.push({
         id: uid(),
         person_id: person.id,
         staff_id: src.staff_id ?? null,
         source: 'level',
-        jabatan: isDukuhLabel(src.title) ? JABATAN_DUKUH : (normalizeJabatan(src.title) || null),
+        jabatan: dukuh ? JABATAN_DUKUH : (normalizeJabatan(src.title) || null),
         desc: src.desc ?? '',
         rt_number: src.rt_number ?? '',
         rw_number: src.rw_number ?? '',
-        padukuhan: textValue(src.padukuhan).trim(),
+        padukuhan,
         start_date: src.start_date ?? '',
         end_date: src.end_date ?? '',
         start_year: src.start_year ?? null,
