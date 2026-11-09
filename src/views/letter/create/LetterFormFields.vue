@@ -296,22 +296,23 @@ watch(
   { immediate: true },
 );
 
-/* ---------- Isian pekerjaan (tipe `occupation`) ----------
-   Sumber opsi: field.options berbentuk array objek { label: "5. Pegawai Negeri Sipil (PNS)", value: "Pegawai Negeri Sipil (PNS)" }
-   (dibuat oleh `numberedChoice` di letterFields). Dropdown menampilkan label bernomor, sedangkan nilai yang disimpan
-   di form[field.key] adalah `value` (teks tanpa nomor) supaya surat tercetak bersih dan autofill dari Data Warga cocok.
-   Bila petugas mengetik manual (tidak memilih dari daftar), teks apa adanya disimpan. */
-const jobOptionsOf = (field) => (typeof field.options === "function" ? field.options(props.form) : field.options ?? []);
-const normalizeJobOption = (option, i) => {
-  if (option && typeof option === "object") {
-    const label = String(option.label ?? option.value ?? "");
-    const value = String(option.value ?? option.label ?? "").replace(/^\s*\d+\s*[.)\-:]\s*/, "");
-    return { label, value };
+/* Isian pekerjaan (tipe `occupation`): cari di daftar bernomor (sama dengan Data Warga) atau ketik bebas.
+   Dropdown menampilkan "5. Pegawai Negeri Sipil (PNS)", tetapi yang disimpan hanya namanya ("Pegawai Negeri Sipil (PNS)")
+   supaya surat tercetak bersih tanpa nomor. Dipakai di field biasa dan di kolom baris berulang. */
+const cleanJobString = (val) => {
+  if (val == null) return "";
+  if (typeof val === "object") {
+    const raw = String(val.value ?? val.label ?? "").trim();
+    if (raw && !raw.includes("[object Object]")) {
+      return raw.replace(/^\s*\d+\s*[.)\-:]\s*/, "");
+    }
+    return "";
   }
-  const text = String(option ?? "");
-  const bare = text.replace(/^\s*\d+\s*[.)\-:]\s*/, "");
-  return { label: /^\s*\d+\s*[.)\-:]\s*/.test(text) ? text : `${i + 1}. ${bare}`, value: bare };
+  const str = String(val).trim();
+  if (str.toLowerCase().includes("[object object]")) return "";
+  return str.replace(/^\s*\d+\s*[.)\-:]\s*/, "");
 };
+const bareJob = cleanJobString;
 const jobSuggestions = ref([]);
 const searchJobs = (event, fieldOrOptions) => {
   const raw = Array.isArray(fieldOrOptions)
@@ -340,6 +341,7 @@ const onJobInput = (field, event) => {
   props.form[field.key] = text.replace(/^\s*\d+\s*[.)\-:]\s*/, "");
   edit(field.key);
 };
+const setJob = (target, key, value) => { target[key] = cleanJobString(value); };
 
 /* Kolom baris yang tidak berlaku (mis. Akta Perkawinan saat belum kawin) dinonaktifkan dan dikosongkan. */
 const colDisabled = (c, row) => !!c.disabledWhen && !!c.disabledWhen(row);

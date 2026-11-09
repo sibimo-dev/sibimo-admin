@@ -291,8 +291,39 @@ const isGenderField = (field) => {
   const label = String(field.label ?? "").toLowerCase();
   return field.from === "gender" || key.includes("gender") || key.includes("jeniskelamin") || label.includes("jenis kelamin");
 };
+/* Pemetaan nilai pendidikan dari Dukcapil/DB ke pilihan form.
+   DB menyimpan: "Tamat SD/Sederajat", "SLTA/Sederajat", dll.
+   Form memakai: "SD", "SMP", "SMA/SMK", "D1/D2/D3", "D4/S1", dst. */
+const EDUCATION_EQUIVALENTS = {
+  "tamatsddsederajat": "SD", "tamatsd": "SD", "belumsdsederajat": "SD",
+  "belumtamatsd": "SD", "belumtamatsddsederajat": "SD", "sd": "SD",
+  "sltpsederajat": "SMP", "sltp": "SMP", "smp": "SMP",
+  "sltasederajat": "SMA/SMK", "slta": "SMA/SMK", "smasmk": "SMA/SMK", "sma": "SMA/SMK", "smk": "SMA/SMK",
+  "akademidiplomaiiiisarjanamuda": "D1/D2/D3", "akademidiplomaii": "D1/D2/D3",
+  "akademidiploma": "D1/D2/D3", "d3": "D1/D2/D3", "d1": "D1/D2/D3", "d2": "D1/D2/D3", "d1d2d3": "D1/D2/D3",
+  "diplomaivstratai": "D4/S1", "d4s1": "D4/S1", "s1": "D4/S1", "d4": "D4/S1",
+  "s2": "S2", "s3": "S3",
+  "tidakbelumsekolah": "Tidak/Belum Sekolah", "tidaksekolah": "Tidak/Belum Sekolah",
+  "tidakbelum": "Tidak/Belum Sekolah",
+};
+const isEducationField = (field) => {
+  const key = String(field.key ?? "").toLowerCase();
+  return key.includes("education") || key.includes("pendidikan");
+};
 const matchOption = (field, raw) => {
   if (field.type !== "select" || !Array.isArray(field.options)) return isGenderField(field) ? numberedGender(raw) : raw;
+  /* Pendidikan: petakan nilai DB (mis. "Tamat SD/Sederajat") ke label form (mis. "SD"). */
+  if (isEducationField(field)) {
+    const normalized = canon(String(raw ?? ""));
+    const mapped = EDUCATION_EQUIVALENTS[normalized];
+    if (mapped) {
+      const hit = field.options.find((o) => {
+        const v = o && typeof o === "object" ? (o.value ?? o.label) : o;
+        return String(v).trim() === mapped;
+      });
+      if (hit !== undefined) return hit && typeof hit === "object" ? (hit.value ?? hit.label) : hit;
+    }
+  }
   const text = String(raw ?? "").trim().toLowerCase();
   const hit = field.options.find((option) => {
     const value = option && typeof option === "object" ? option.value ?? option.label : option;
@@ -324,13 +355,14 @@ export function applyResident(form, sections, resident, autoFilled = {}, options
     { from: "maritalStatus", keys: ["maritalStatus", "statusPerkawinan"], labels: ["status perkawinan", "status pernikahan"] },
     { from: "religion", keys: ["religion", "agama"], labels: ["agama"] },
     { from: "occupation", keys: ["occupation", "pekerjaan"], labels: ["pekerjaan"] },
+    { from: "education", keys: ["education", "pendidikan", "pendidikanTerakhir", "brideEducation", "groomEducation"], labels: ["pendidikan terakhir", "pendidikan", "riwayat pendidikan"] },
     { from: "phoneNumber", keys: ["phoneNumber", "phone", "whatsapp", "nomorTelepon", "noHp"], labels: ["nomor telepon", "telepon", "nomor hp", "whatsapp"] },
   ];
   // Label "Nama Lengkap" muncul di banyak blok (calon pengantin, orang tua, saksi, dst.).
   // Hanya field pemohon/root yang boleh memakai fallback label; blok orang lain harus memakai
   // `field.from` eksplisit agar tidak ikut terisi dengan nama pemohon.
   const directIdentityKeys = new Set([
-    "name", "nik", "address", "birthPlace", "birthDate", "gender", "maritalStatus", "religion", "occupation",
+    "name", "nik", "address", "birthPlace", "birthDate", "gender", "maritalStatus", "religion", "occupation", "education",
     "applicantName", "applicantNik", "applicantAddress", "applicantPhone", "fullName", "phoneNumber",
   ]);
   const residentGender = String(resident?.gender ?? "").trim().toLowerCase();
@@ -552,6 +584,40 @@ export function applyAliases(form, sections, index) {
     }
   }
   return filled;
+}
+
+/* Sinkronisasi data wali nikah (paket permohonan nikah perempuan):
+   - Jika pilih "Ayah Kandung": data wali nikah (guardian*) diisi otomatis dari data ayah catin wanita (brideFather*).
+   - Jika pilih "Wali Nasab": data wali nikah (guardian*) diisi dari isian manual wali nasab (wali*). */
+export function syncWaliNikah(form, bundleSlug = "permohonan-nikah-perempuan") {
+  if (bundleSlug && bundleSlug !== "permohonan-nikah-perempuan") return;
+  const isNasab = String(form.waliType ?? "").trim() === "Wali Nasab";
+  if (isNasab) {
+    if (form.waliName !== undefined) form.guardianName = form.waliName;
+    if (form.waliBin !== undefined) form.guardianBin = form.waliBin;
+    if (form.waliNik !== undefined) form.guardianNik = form.waliNik;
+    if (form.waliBirthPlace !== undefined) form.guardianBirthPlace = form.waliBirthPlace;
+    if (form.waliBirthDate !== undefined) form.guardianBirthDate = form.waliBirthDate;
+    if (form.waliNationality !== undefined) form.guardianNationality = form.waliNationality;
+    if (form.waliReligion !== undefined) form.guardianReligion = form.waliReligion;
+    if (form.waliOccupation !== undefined) form.guardianOccupation = form.waliOccupation;
+    if (form.waliAddress !== undefined) form.guardianAddress = form.waliAddress;
+    if (form.waliRelation !== undefined) form.guardianRelation = form.waliRelation;
+    if (form.waliReason !== undefined) form.guardianReason = form.waliReason;
+  } else {
+    // Ayah Kandung
+    if (form.brideFatherName !== undefined) form.guardianName = form.brideFatherName;
+    if (form.brideFatherBin !== undefined) form.guardianBin = form.brideFatherBin;
+    if (form.brideFatherNik !== undefined) form.guardianNik = form.brideFatherNik;
+    if (form.brideFatherBirthPlace !== undefined) form.guardianBirthPlace = form.brideFatherBirthPlace;
+    if (form.brideFatherBirthDate !== undefined) form.guardianBirthDate = form.brideFatherBirthDate;
+    if (form.brideFatherNationality !== undefined) form.guardianNationality = form.brideFatherNationality || "WNI";
+    if (form.brideFatherReligion !== undefined) form.guardianReligion = form.brideFatherReligion;
+    if (form.brideFatherOccupation !== undefined) form.guardianOccupation = form.brideFatherOccupation;
+    if (form.brideFatherAddress !== undefined) form.guardianAddress = form.brideFatherAddress;
+    form.guardianRelation = "Ayah kandung";
+    form.guardianReason = "";
+  }
 }
 
 /* Area isi halaman admin adalah <main> yang bisa di-scroll (bukan window), jadi scroll ke atas lewat elemen itu. */
