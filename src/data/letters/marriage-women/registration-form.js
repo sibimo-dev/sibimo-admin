@@ -1,11 +1,3 @@
-// Disalin dari public: views/services/letters/marriage-women/registration-form.vue (hanya bagian isian & dokumen).
-// Isian di sini harus tetap sama dengan di public. Tampilan wizard ada di views/letter/create/.
-// sections & documents di-export supaya juga dibaca paket surat (data/letterBundles.js) dan halaman register.
-// Ubah isian surat ini di sini saja; paket & register ikut berubah.
-// Data Isian Pendaftaran Nikah
-// Template PDF: letters/marriage-women/letters/registration-form.blade.php
-// 1 file = 1 surat. Isi `sections` (langkah 1) dan `documents` (langkah 2).
-// Langkah 3 (cek ulang, ceklis dokumen asli, kirim, pop-up hasil) sudah ditangani LetterWizard.
 import { DOC, OPT, N7, akad, calonIstri, calonSuami, f, opt, optional, ortuNikah, person } from "@/data/letterFields";
 
 const onlyWhen = (section, predicate) => ({
@@ -17,8 +9,8 @@ const onlyWhen = (section, predicate) => ({
 });
 const isDuda = (form) => /^(duda|cerai\s*(hidup|mati))$/i.test(String(form.groomStatus ?? "").trim());
 const isJanda = (form) => /^(janda|cerai\s*(hidup|mati))$/i.test(String(form.brideStatus ?? "").trim());
+const isWaliNasab = (form) => String(form.waliType ?? "").trim() === "Wali Nasab";
 
-// Langkah 1: isian sesuai surat yang diajukan
 export const sections = [
   akad(),
   { ...calonSuami(), title: "Data Catin Pria" },
@@ -29,11 +21,52 @@ export const sections = [
   { title: "Pendidikan & Status Catin Wanita", fields: [f.select("brideEducation", "Pendidikan Terakhir", OPT.education), f.select("brideStatus", "Status", ["Perawan", "Janda"], { from: "maritalStatus" })] },
   ortuNikah("brideFather", "Data Ayah Catin Wanita", "Bin (nama ayah dari ayah)"),
   ortuNikah("brideMother", "Data Ibu Catin Wanita", "Binti (nama ayah dari ibu)"),
+  {
+    title: "Data Wali Nikah",
+    fields: [
+      f.select("waliType", "Wali Nikah", ["Ayah Kandung", "Wali Nasab"], { default: "Ayah Kandung" }),
+      ...[
+        f.text("waliName", "Nama"),
+        f.text("waliBin", "Bin (nama ayah wali)"),
+        f.text("waliNik", "NIK"),
+        f.text("waliBirthPlace", "Tempat Lahir"),
+        f.date("waliBirthDate", "Tanggal Lahir"),
+        f.text("waliNationality", "Kewarganegaraan"),
+        f.select("waliReligion", "Agama", ["Islam"]),
+        f.text("waliOccupation", "Pekerjaan"),
+        f.text("waliAddress", "Alamat"),
+        f.select("waliRelation", "Hubungan Wali dengan Catin Wanita", [
+          "Kakek (ayah dari ayah)",
+          "Saudara laki-laki kandung",
+          "Saudara laki-laki seayah",
+          "Keponakan laki-laki",
+          "Paman (saudara ayah)",
+          "Lainnya",
+        ]),
+        f.select("waliReason", "Sebab wali bukan ayah kandung", [
+          "Ayah kandung meninggal dunia",
+          "Ayah kandung tidak diketahui keberadaannya",
+          "Ayah kandung tidak memenuhi syarat sebagai wali",
+          "Ayah kandung berhalangan / uzur",
+          "Anak di luar nikah / ayah tidak sah sebagai wali",
+          "Lainnya",
+        ]),
+      ].map((field) => ({ ...field, showIf: isWaliNasab })),
+    ],
+  },
   onlyWhen(optional(person("groomPrev", "Data Istri Terdahulu Catin Pria (bila duda)", N7, [f.text("groomPrevBin", "Bin/Binti (nama ayah)"), f.text("groomPrevParentName", "Nama orang tua istri terdahulu"), f.date("groomPrevDeathDate", "Tanggal Meninggal"), f.text("groomPrevDeathPlace", "Tempat Meninggal")])), isDuda),
   onlyWhen(optional(person("bridePrev", "Data Suami Terdahulu Catin Wanita (bila janda)", ["name", "nik"], [f.text("bridePrevBin", "Bin (nama ayah)"), f.date("bridePrevDeathDate", "Tanggal Meninggal"), f.text("bridePrevDeathPlace", "Tempat Meninggal")])), isJanda),
 ];
 
-// Langkah 2: dokumen pendukung (opt(...) = tidak wajib)
-export const documents = [DOC.ktp, DOC.kk, DOC.aktaLahir, DOC.pasFoto, opt("Fotokopi KTP orang tua kedua calon"), opt("Akta cerai/surat kematian pasangan terdahulu")];
+export const documents = [
+  DOC.ktp,
+  DOC.kk,
+  DOC.aktaLahir,
+  DOC.pasFoto,
+  opt("Fotokopi KTP orang tua kedua calon"),
+  opt("Fotokopi KTP wali nasab (bila wali bukan ayah kandung)"),
+  opt("Akta cerai/surat kematian pasangan terdahulu"),
+  opt("Akta kematian ayah kandung (bila wali nasab karena ayah meninggal)"),
+];
 
 export const meta = {"title": "Data Isian Pendaftaran Nikah", "code": "FPN"};

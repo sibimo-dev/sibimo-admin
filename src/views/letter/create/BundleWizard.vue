@@ -22,7 +22,7 @@ import LetterFormFields from "./LetterFormFields.vue";
 import WizardStepper from "./WizardStepper.vue";
 import ApplicantLookup from "./ApplicantLookup.vue";
 import { useApplicantLookup } from "./useApplicantLookup";
-import { applicantOf, applyAliases, buildAliasIndex, fillForm, reviewLocation, scrollTop, uniqueRowsByNik, validateFields, focusFirstInvalid } from "./formLogic";
+import { applicantOf, applyAliases, buildAliasIndex, fillForm, reviewLocation, scrollTop, uniqueRowsByNik, validateFields, focusFirstInvalid, syncWaliNikah } from "./formLogic";
 import { HUES, SECTION_HUES, hue } from "./pastel";
 import { LETTER_SOURCE, getLetterRequestError, submitLetterBundle } from "@/services/letter-create.service";
 
@@ -272,10 +272,41 @@ function goSub(idx) {
   scrollTop();
 }
 
+// Sinkronisasi otomatis data wali nikah (paket nikah perempuan)
+// - Ayah Kandung: data wali diisi dari ayah catin wanita (brideFather*)
+// - Wali Nasab: data wali diisi dari isian manual wali nasab (wali*)
+const waliSourceKeys = [
+  () => form.waliType,
+  () => form.waliName,
+  () => form.waliBin,
+  () => form.waliNik,
+  () => form.waliBirthPlace,
+  () => form.waliBirthDate,
+  () => form.waliNationality,
+  () => form.waliReligion,
+  () => form.waliOccupation,
+  () => form.waliAddress,
+  () => form.waliRelation,
+  () => form.waliReason,
+  () => form.brideFatherName,
+  () => form.brideFatherBin,
+  () => form.brideFatherNik,
+  () => form.brideFatherBirthPlace,
+  () => form.brideFatherBirthDate,
+  () => form.brideFatherNationality,
+  () => form.brideFatherReligion,
+  () => form.brideFatherOccupation,
+  () => form.brideFatherAddress,
+];
+watch(waliSourceKeys, () => {
+  syncWaliNikah(form, props.bundle?.slug);
+}, { immediate: true });
+
 // isi otomatis field yang masih kosong dari surat lain setiap kali sebuah surat ditampilkan
 watch([current, fieldIdx], () => {
   const l = isFields.value ? fLetter.value : null;
   if (!l) return;
+  syncWaliNikah(form, props.bundle?.slug);
   for (const key of applyAliases(form, sectionsOf(l), aliasIndex)) autoFilled[key] = true;
 });
 

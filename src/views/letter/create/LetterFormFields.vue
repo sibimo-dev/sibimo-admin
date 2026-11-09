@@ -299,13 +299,26 @@ watch(
 /* Isian pekerjaan (tipe `occupation`): cari di daftar bernomor (sama dengan Data Warga) atau ketik bebas.
    Dropdown menampilkan "5. Pegawai Negeri Sipil (PNS)", tetapi yang disimpan hanya namanya ("Pegawai Negeri Sipil (PNS)")
    supaya surat tercetak bersih tanpa nomor. Dipakai di field biasa dan di kolom baris berulang. */
-const bareJob = (v) => String(v ?? "").replace(/^\s*\d+\s*[.)\-:]\s*/, "").trim();
+const cleanJobString = (val) => {
+  if (val == null) return "";
+  if (typeof val === "object") {
+    const raw = String(val.value ?? val.label ?? "").trim();
+    if (raw && !raw.includes("[object Object]")) {
+      return raw.replace(/^\s*\d+\s*[.)\-:]\s*/, "");
+    }
+    return "";
+  }
+  const str = String(val).trim();
+  if (str.toLowerCase().includes("[object object]")) return "";
+  return str.replace(/^\s*\d+\s*[.)\-:]\s*/, "");
+};
+const bareJob = cleanJobString;
 const jobSuggestions = ref([]);
 const searchJobs = (event, options) => {
   const query = String(event?.query ?? "").trim().toLowerCase();
   jobSuggestions.value = (options ?? []).filter((option) => !query || String(option).toLowerCase().includes(query));
 };
-const setJob = (target, key, value) => { target[key] = value ?? ""; };
+const setJob = (target, key, value) => { target[key] = cleanJobString(value); };
 
 /* Kolom baris yang tidak berlaku (mis. Akta Perkawinan saat belum kawin) dinonaktifkan dan dikosongkan. */
 const colDisabled = (c, row) => !!c.disabledWhen && !!c.disabledWhen(row);
