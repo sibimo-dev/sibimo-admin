@@ -314,9 +314,32 @@ const cleanJobString = (val) => {
 };
 const bareJob = cleanJobString;
 const jobSuggestions = ref([]);
-const searchJobs = (event, options) => {
+const searchJobs = (event, fieldOrOptions) => {
+  const raw = Array.isArray(fieldOrOptions)
+    ? fieldOrOptions
+    : typeof fieldOrOptions === "function"
+      ? fieldOrOptions(props.form)
+      : fieldOrOptions?.options ?? [];
+  const list = raw.map(normalizeJobOption);
   const query = String(event?.query ?? "").trim().toLowerCase();
-  jobSuggestions.value = (options ?? []).filter((option) => !query || String(option).toLowerCase().includes(query));
+  const bareQuery = query.replace(/^\s*\d+\s*[.)\-:]\s*/, "");
+  jobSuggestions.value = !query
+    ? list
+    : list.filter((o) => o.label.toLowerCase().includes(query) || o.value.toLowerCase().includes(bareQuery));
+};
+/* Pilihan dari dropdown: simpan hanya `value` (teks tanpa nomor). */
+const onJobSelect = (field, event) => {
+  const picked = event?.value;
+  props.form[field.key] = picked && typeof picked === "object"
+    ? String(picked.value ?? picked.label ?? "").replace(/^\s*\d+\s*[.)\-:]\s*/, "")
+    : String(picked ?? "").replace(/^\s*\d+\s*[.)\-:]\s*/, "");
+  edit(field.key);
+};
+/* Ketik manual (bebas): simpan teks apa adanya, tapi buang nomor bila petugas menempelkan label bernomor. */
+const onJobInput = (field, event) => {
+  const text = String(event ?? "");
+  props.form[field.key] = text.replace(/^\s*\d+\s*[.)\-:]\s*/, "");
+  edit(field.key);
 };
 const setJob = (target, key, value) => { target[key] = cleanJobString(value); };
 
@@ -491,7 +514,23 @@ onMounted(normalizeRows);
 
             <Select v-if="field.type === 'select'" :id="`${idPrefix}-${field.key}`" v-model="form[field.key]" :options="field.options" :optionLabel="hasObjectOptions(field.options) ? 'label' : undefined" :optionValue="hasObjectOptions(field.options) ? 'value' : undefined" :editable="field.editable" :disabled="field.readonly || field.disabled" placeholder="Pilih" :invalid="fieldInvalid(field, form[field.key])" class="w-full" @update:modelValue="edit(field.key)" />
             <DatePicker v-else-if="field.type === 'date'" :id="`${idPrefix}-${field.key}`" v-model="form[field.key]" showIcon iconDisplay="input" dateFormat="dd/mm/yy" placeholder="dd/mm/yyyy" :disabled="field.readonly || field.disabled" :invalid="!!errors[field.key]" @update:modelValue="edit(field.key)" />
-            <AutoComplete v-else-if="field.type === 'occupation'" :inputId="`${idPrefix}-${field.key}`" :modelValue="form[field.key]" :suggestions="jobSuggestions" dropdown :forceSelection="false" :disabled="field.readonly || field.disabled" :invalid="!!errors[field.key]" placeholder="Cari atau ketik pekerjaan" class="w-full" inputClass="w-full" @complete="searchJobs($event, field.options)" @item-select="setJob(form, field.key, bareJob($event.value)); edit(field.key)" @update:modelValue="setJob(form, field.key, $event); edit(field.key)" />
+            <AutoComplete
+              v-else-if="field.type === 'occupation'"
+              :inputId="`${idPrefix}-${field.key}`"
+              :modelValue="form[field.key]"
+              :suggestions="jobSuggestions"
+              optionLabel="label"
+              dropdown
+              :forceSelection="false"
+              :disabled="field.readonly || field.disabled"
+              :invalid="!!errors[field.key]"
+              placeholder="Cari atau ketik pekerjaan"
+              class="w-full"
+              inputClass="w-full"
+              @complete="searchJobs($event, field)"
+              @item-select="onJobSelect(field, $event)"
+              @update:modelValue="onJobInput(field, $event)"
+            />
             <AutoComplete v-else-if="field.type === 'hamlet'" :id="`${idPrefix}-${field.key}`" v-model="form[field.key]" :suggestions="hamletSuggestions" dropdown placeholder="Pilih atau ketik nama dusun" :disabled="field.readonly || field.disabled" :invalid="!!errors[field.key]" class="w-full" inputClass="w-full" @complete="searchHamlets" @update:modelValue="edit(field.key)" />
             <AutoComplete v-else-if="field.type === 'combo'" :inputId="`${idPrefix}-${field.key}`" :modelValue="form[field.key]" :suggestions="comboSuggestions" dropdown :forceSelection="false" placeholder="Pilih atau ketik manual" :disabled="field.readonly || field.disabled" :invalid="!!errors[field.key]" class="w-full" inputClass="w-full" @complete="searchCombo($event, field)" @update:modelValue="form[field.key] = $event ?? ''; edit(field.key)" />
             <Textarea v-else-if="field.type === 'textarea'" :id="`${idPrefix}-${field.key}`" v-model="form[field.key]" rows="3" autoResize :placeholder="field.placeholder" :readonly="field.readonly" :disabled="field.disabled" :invalid="!!errors[field.key]" @update:modelValue="edit(field.key)" />

@@ -12,7 +12,8 @@ export const sections = [
     title: "Data Pemohon",
     fields: [
       f.text("name", "Nama"),
-      f.text("birthPlaceDate", "Tempat/Tgl. Lahir", { placeholder: "Contoh: Sleman, 17 Agustus 1990" }),
+      f.text("birthPlace", "Tempat Lahir", { from: "birthPlace", placeholder: "Contoh: Sleman" }),
+      f.date("birthDate", "Tanggal Lahir", { from: "birthDate" }),
       f.text("nik", "NIK"),
       f.select("maritalStatus", "Status Perkawinan", OPT.marital),
       f.select("gender", "Jenis Kelamin", OPT.gender),
