@@ -592,7 +592,7 @@ const ktpAddress = computed(() => {
 /* Catatan 11: nomor akta abu-abu bila aktanya tidak ada               */
 /* ------------------------------------------------------------------ */
 const birthCertificateNumberDisabled = computed(() => birthCertificateStatus.value !== 'Ada')
-const isNeverMarried = computed(() => maritalStatus.value === 'Belum Menikah')
+const isNeverMarried = computed(() => ['Belum Menikah', 'Belum Kawin'].includes(maritalStatus.value))
 const isDivorced = computed(() => ['Cerai Hidup', 'Cerai Mati'].includes(maritalStatus.value))
 const marriageDataDisabled = computed(() => isNeverMarried.value)
 const marriageNumberDisabled = computed(() => marriageDataDisabled.value || marriageCertificateStatus.value !== 'Ada')
@@ -600,7 +600,7 @@ const divorceDataDisabled = computed(() => !isDivorced.value)
 const divorceNumberDisabled = computed(() => divorceDataDisabled.value || divorceCertificateStatus.value !== 'Ada')
 
 watch(maritalStatus, (value) => {
-  if (value === 'Belum Menikah') {
+  if (['Belum Menikah', 'Belum Kawin'].includes(value)) {
     Object.assign(spouse, newParent())
     marriageCertificateStatus.value = ''
     marriageCertificateNumber.value = ''
@@ -716,7 +716,9 @@ async function fetchCitizenDetail() {
     phoneNumber.value = data.phone_number ?? ''
     occupation.value = data.occupation ?? ''
     education.value = data.education ?? 'SMA/SMK'
-    maritalStatus.value = data.marital_status ?? 'Belum Menikah'
+    // Normalisasi nilai dari DB ('Kawin'/'Belum Kawin') ke nilai opsi form ('Menikah'/'Belum Menikah')
+    const maritalNorm = { 'Kawin': 'Menikah', 'Belum Kawin': 'Belum Menikah' }
+    maritalStatus.value = maritalNorm[data.marital_status] ?? data.marital_status ?? 'Belum Menikah'
     marriageCertificateStatus.value = data.marriage_certificate_status ?? ''
     marriageCertificateNumber.value = data.marriage_certificate_number ?? ''
     marriageDate.value = fromApiDate(data.marriage_date)
@@ -748,8 +750,9 @@ async function fetchCitizenDetail() {
 
 async function fetchCitizenLookup() {
   try {
-    const data = await getCitizens()
-    citizenLookup.value = Array.isArray(data) ? data : []
+    const response = await getCitizens({ all: true })
+    // getCitizens() returns the full API envelope: { success, data: [...], meta: {...} }
+    citizenLookup.value = Array.isArray(response?.data) ? response.data : []
   } catch {
     // Form tetap dapat diisi manual bila daftar warga gagal dimuat.
     citizenLookup.value = []
