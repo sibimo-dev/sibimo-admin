@@ -245,10 +245,18 @@ const familyCardValid = computed(() => hasValid16Digits(familyCardNumber.value))
 const familyCardMembers = computed(() => {
   const kk = String(familyCardNumber.value ?? '').trim()
   if (!/^\d{16}$/.test(kk)) return []
-  return citizenLookup.value.filter(citizen => (
-    String(citizen.family_card_number ?? '') === kk
-    && citizen.status !== 'Pindah'
-  ))
+  const relationOrder = (rel) => {
+    const r = String(rel ?? '').toLowerCase()
+    if (r.includes('kepala')) return 0
+    if (r.includes('istri') || r.includes('suami')) return 1
+    return 2
+  }
+  return citizenLookup.value
+    .filter(citizen => (
+      String(citizen.family_card_number ?? '') === kk
+      && citizen.status !== 'Pindah'
+    ))
+    .sort((a, b) => relationOrder(a.family_relationship) - relationOrder(b.family_relationship))
 })
 const familyCardHead = computed(() => (
   familyCardMembers.value.find(citizen => /kepala/i.test(String(citizen.family_relationship ?? '')))
