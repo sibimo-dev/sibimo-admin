@@ -915,6 +915,9 @@ async function handleFileSelect(event) {
 
 const downloadDialogVisible = ref(false)
 const previewDialogVisible = ref(false)
+const exportLoading = ref(false)
+const exportLoadingText = ref('')
+const exportError = ref('')
 
 const reportPeriodOptions = [
   { label: 'Laporan Bulanan', value: 'monthly' },
@@ -928,6 +931,9 @@ const reportTitle = ref('')
 function openDownloadDialog() {
   reportPeriodType.value = 'monthly'
   reportDate.value = new Date()
+  exportError.value = ''
+  exportLoading.value = false
+  exportLoadingText.value = ''
   downloadDialogVisible.value = true
 }
 
@@ -1342,27 +1348,35 @@ function buildDemographicReport(sourceResidents) {
   return rows
 }
 
-// Catatan: laporan periodik belum memfilter berdasarkan createdAt,
-// sehingga "Laporan Bulanan" dan "Laporan Tahunan" merekap seluruh data warga
-// sebagai gambaran populasi terkini, dengan judul mengikuti periode
-// (bulan/tahun) yang dipilih pengguna. Export Excel Lengkap di bawah mengambil
-// seluruh baris data warga tanpa filter periode.
-function getResidentsForPeriod() {
-  return residents.value
+async function fetchAllResidents() {
+  const response = await getCitizens({ all: true })
+  const normalized = Array.isArray(response?.data) ? response.data : []
+  return normalized.map(mapCitizenFromApi)
 }
 
-function generatePreview() {
-  const filteredResidents = getResidentsForPeriod()
-  reportRows.value = buildDemographicReport(filteredResidents)
+async function generatePreview() {
+  exportError.value = ''
+  exportLoading.value = true
+  exportLoadingText.value = 'Mengambil seluruh data warga untuk laporan...'
 
-  const selectedDate = reportDate.value instanceof Date ? reportDate.value : new Date(reportDate.value)
+  try {
+    const allResidents = await fetchAllResidents()
+    reportRows.value = buildDemographicReport(allResidents)
 
-  reportTitle.value = reportPeriodType.value === 'monthly'
-    ? `LAPORAN BULANAN DATA WARGA - ${selectedDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}`
-    : `LAPORAN TAHUNAN DATA WARGA - TAHUN ${selectedDate.getFullYear()}`
+    const selectedDate = reportDate.value instanceof Date ? reportDate.value : new Date(reportDate.value)
 
-  downloadDialogVisible.value = false
-  previewDialogVisible.value = true
+    reportTitle.value = reportPeriodType.value === 'monthly'
+      ? `LAPORAN BULANAN DATA WARGA - ${selectedDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}`
+      : `LAPORAN TAHUNAN DATA WARGA - TAHUN ${selectedDate.getFullYear()}`
+
+    downloadDialogVisible.value = false
+    previewDialogVisible.value = true
+  } catch (err) {
+    exportError.value = err.response?.data?.message || 'Gagal mengambil seluruh data warga.'
+  } finally {
+    exportLoading.value = false
+    exportLoadingText.value = ''
+  }
 }
 
 function exportReportToExcel() {
@@ -1406,84 +1420,97 @@ function exportReportToExcel() {
   XLSX.writeFile(workbook, `Data-Warga-${fileLabel}.xlsx`)
 }
 
-function exportAllCitizensToExcel() {
-  // Kolom diurutkan sama persis dengan citizenImportColumns agar file hasil export
-  // langsung bisa di-re-import tanpa perlu mengatur ulang kolom.
-  const columns = [
-    ['JENIS DATA', 'recordType'],
-    ['Nomor KK', 'familyCardNumber'],
-    ['DUSUN', 'dusun'],
-    ['RW', 'rw'],
-    ['RT', 'rt'],
-    ['NIK', 'nationalId'],
-    ['NAMA LENGKAP', 'name'],
-    ['L/P', 'gender'],
-    ['TEMPAT LAHIR', 'birthPlace'],
-    ['TANGGAL LAHIR', 'birthDate'],
-    ['UMUR', 'age'],
-    ['AKTA LAHIR', 'birthCertificateStatus'],
-    ['NOMOR AKTA LAHIR', 'birthCertificateNumber'],
-    ['GOL. DARAH', 'bloodType'],
-    ['AGAMA', 'religion'],
-    ['STATUS KAWIN', 'maritalStatus'],
-    ['AKTA KAWIN', 'marriageCertificateStatus'],
-    ['NOMOR AKTA KAWIN', 'marriageCertificateNumber'],
-    ['TANGGAL KAWIN', 'marriageDate'],
-    ['AKTA CERAI', 'divorceCertificateStatus'],
-    ['NOMOR AKTA CERAI', 'divorceCertificateNumber'],
-    ['TANGGAL CERAI', 'divorceDate'],
-    ['STATUS HUB DLM KELUARGA', 'familyRelationship'],
-    ['KELAINAN FISIK', 'disabilityStatus'],
-    ['PENYANDANG CACAT', 'disabilityType'],
-    ['KETERANGAN CACAT', 'physicalDisability'],
-    ['PENDIDIKAN TERAKHIR', 'education'],
-    ['JENIS PEKERJAAN', 'occupation'],
-    ['NIK IBU', 'motherNationalId'],
-    ['NAMA LENGKAP IBU', 'motherName'],
-    ['NIK AYAH', 'fatherNationalId'],
-    ['NAMA LENGKAP AYAH', 'fatherName'],
-    ['NIK PASANGAN', 'spouseNationalId'],
-    ['KEWARGANEGARAAN', 'nationality'],
-    ['NOMOR TELEPON', 'phoneNumber'],
-    ['ALAMAT', 'address'],
-    ['ALAMAT SESUAI KTP', 'ktpAddress'],
-    ['ALAMAT SEBELUMNYA', 'previousAddress'],
-    ['NOMOR PASPOR', 'passportNumber'],
-    ['TANGGAL BERAKHIR PASPOR', 'passportExpiryDate'],
-    ['ORGANISASI KEPERCAYAAN', 'beliefOrganization'],
-    ['STATUS', 'status'],
-  ]
-  // Mapping transformasi kolom khusus yang perlu dikonversi formatnya
-  // agar file hasil export langsung bisa di-re-import.
-  const columnTransforms = {
-    gender: (val) => {
-      const g = String(val ?? '').trim().toLowerCase()
-      if (g === 'laki-laki' || g === 'l') return 'L'
-      if (g === 'perempuan' || g === 'p') return 'P'
-      return val ?? ''
-    },
+async function exportAllCitizensToExcel() {
+  exportError.value = ''
+  exportLoading.value = true
+  exportLoadingText.value = 'Mengambil seluruh data warga dari database...'
+
+  try {
+    const allResidents = await fetchAllResidents()
+
+    // Kolom diurutkan sama persis dengan citizenImportColumns agar file hasil export
+    // langsung bisa di-re-import tanpa perlu mengatur ulang kolom.
+    const columns = [
+      ['JENIS DATA', 'recordType'],
+      ['Nomor KK', 'familyCardNumber'],
+      ['DUSUN', 'dusun'],
+      ['RW', 'rw'],
+      ['RT', 'rt'],
+      ['NIK', 'nationalId'],
+      ['NAMA LENGKAP', 'name'],
+      ['L/P', 'gender'],
+      ['TEMPAT LAHIR', 'birthPlace'],
+      ['TANGGAL LAHIR', 'birthDate'],
+      ['UMUR', 'age'],
+      ['AKTA LAHIR', 'birthCertificateStatus'],
+      ['NOMOR AKTA LAHIR', 'birthCertificateNumber'],
+      ['GOL. DARAH', 'bloodType'],
+      ['AGAMA', 'religion'],
+      ['STATUS KAWIN', 'maritalStatus'],
+      ['AKTA KAWIN', 'marriageCertificateStatus'],
+      ['NOMOR AKTA KAWIN', 'marriageCertificateNumber'],
+      ['TANGGAL KAWIN', 'marriageDate'],
+      ['AKTA CERAI', 'divorceCertificateStatus'],
+      ['NOMOR AKTA CERAI', 'divorceCertificateNumber'],
+      ['TANGGAL CERAI', 'divorceDate'],
+      ['STATUS HUB DLM KELUARGA', 'familyRelationship'],
+      ['KELAINAN FISIK', 'disabilityStatus'],
+      ['PENYANDANG CACAT', 'disabilityType'],
+      ['KETERANGAN CACAT', 'physicalDisability'],
+      ['PENDIDIKAN TERAKHIR', 'education'],
+      ['JENIS PEKERJAAN', 'occupation'],
+      ['NIK IBU', 'motherNationalId'],
+      ['NAMA LENGKAP IBU', 'motherName'],
+      ['NIK AYAH', 'fatherNationalId'],
+      ['NAMA LENGKAP AYAH', 'fatherName'],
+      ['NIK PASANGAN', 'spouseNationalId'],
+      ['KEWARGANEGARAAN', 'nationality'],
+      ['NOMOR TELEPON', 'phoneNumber'],
+      ['ALAMAT', 'address'],
+      ['ALAMAT SESUAI KTP', 'ktpAddress'],
+      ['ALAMAT SEBELUMNYA', 'previousAddress'],
+      ['NOMOR PASPOR', 'passportNumber'],
+      ['TANGGAL BERAKHIR PASPOR', 'passportExpiryDate'],
+      ['ORGANISASI KEPERCAYAAN', 'beliefOrganization'],
+      ['STATUS', 'status'],
+    ]
+    // Mapping transformasi kolom khusus yang perlu dikonversi formatnya
+    // agar file hasil export langsung bisa di-re-import.
+    const columnTransforms = {
+      gender: (val) => {
+        const g = String(val ?? '').trim().toLowerCase()
+        if (g === 'laki-laki' || g === 'l') return 'L'
+        if (g === 'perempuan' || g === 'p') return 'P'
+        return val ?? ''
+      },
+    }
+
+    const rows = [
+      columns.map(([label]) => label),
+      ...allResidents.map((resident) =>
+        columns.map(([, key]) => {
+          const val = resident[key] ?? ''
+          return columnTransforms[key] ? columnTransforms[key](val) : val
+        }),
+      ),
+    ]
+
+    const worksheet = XLSX.utils.aoa_to_sheet(rows)
+    worksheet['!cols'] = columns.map(([label]) => ({ wch: Math.min(Math.max(label.length + 3, 14), 28) }))
+    worksheet['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(columns.length - 1)}${rows.length}` }
+
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Data Warga Lengkap')
+
+    const dateLabel = new Date().toISOString().slice(0, 10)
+    XLSX.writeFile(workbook, `Data-Warga-Lengkap-${dateLabel}.xlsx`)
+    downloadDialogVisible.value = false
+  } catch (err) {
+    exportError.value = err.response?.data?.message || 'Gagal mengunduh seluruh data warga.'
+  } finally {
+    exportLoading.value = false
+    exportLoadingText.value = ''
   }
-
-  const rows = [
-    columns.map(([label]) => label),
-    ...residents.value.map((resident) =>
-      columns.map(([, key]) => {
-        const val = resident[key] ?? ''
-        return columnTransforms[key] ? columnTransforms[key](val) : val
-      }),
-    ),
-  ]
-
-  const worksheet = XLSX.utils.aoa_to_sheet(rows)
-  worksheet['!cols'] = columns.map(([label]) => ({ wch: Math.min(Math.max(label.length + 3, 14), 28) }))
-  worksheet['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(columns.length - 1)}${rows.length}` }
-
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Data Warga Lengkap')
-
-  const dateLabel = new Date().toISOString().slice(0, 10)
-  XLSX.writeFile(workbook, `Data-Warga-Lengkap-${dateLabel}.xlsx`)
-  downloadDialogVisible.value = false
 }
 
 
@@ -1884,6 +1911,15 @@ function exportReportToPdf() {
       }"
     >
       <div class="flex flex-col gap-5">
+        <div v-if="exportError" class="rounded-lg border border-red-200 bg-red-50 p-3 text-[13px] text-red-700">
+          {{ exportError }}
+        </div>
+
+        <div v-if="exportLoading" class="flex items-center gap-2.5 rounded-lg border border-primary-200 bg-primary-50 p-3 text-[13px] font-medium text-primary-800">
+          <i class="pi pi-spin pi-spinner text-base text-primary-700"></i>
+          <span>{{ exportLoadingText }}</span>
+        </div>
+
         <div class="flex flex-col gap-2">
           <span class="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Jenis Laporan</span>
           <SelectButton
@@ -1892,6 +1928,7 @@ function exportReportToPdf() {
             optionLabel="label"
             optionValue="value"
             :allowEmpty="false"
+            :disabled="exportLoading"
             class="w-full"
           />
         </div>
@@ -1905,6 +1942,7 @@ function exportReportToPdf() {
             :view="reportPeriodType === 'monthly' ? 'month' : 'year'"
             :dateFormat="reportPeriodType === 'monthly' ? 'MM yy' : 'yy'"
             showIcon
+            :disabled="exportLoading"
             class="w-full"
           />
         </div>
@@ -1915,7 +1953,8 @@ function exportReportToPdf() {
           label="Batal"
           severity="secondary"
           outlined
-          class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
+          :disabled="exportLoading"
+          class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 disabled:opacity-50"
           @click="downloadDialogVisible = false"
         />
         <Button
@@ -1923,13 +1962,17 @@ function exportReportToPdf() {
           icon="pi pi-file-excel"
           severity="success"
           outlined
-          class="rounded-lg border border-green-600 bg-white px-3.5 py-2 text-[13px] font-medium text-green-700 hover:bg-green-50"
+          :loading="exportLoading"
+          :disabled="exportLoading"
+          class="rounded-lg border border-green-600 bg-white px-3.5 py-2 text-[13px] font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
           @click="exportAllCitizensToExcel"
         />
         <Button
           label="Lihat Preview"
           icon="pi pi-eye"
-          class="rounded-lg border border-transparent bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
+          :loading="exportLoading"
+          :disabled="exportLoading"
+          class="rounded-lg border border-transparent bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800 disabled:opacity-50"
           @click="generatePreview"
         />
       </template>
