@@ -54,8 +54,8 @@ export const sections = [
       ].map((field) => ({ ...field, showIf: isWaliNasab })),
     ],
   },
-  onlyWhen(optional(person("groomPrev", "Data Istri Terdahulu Catin Pria (bila duda)", N7, [f.text("groomPrevBin", "Bin/Binti (nama ayah)"), f.text("groomPrevParentName", "Nama orang tua istri terdahulu"), f.date("groomPrevDeathDate", "Tanggal Meninggal"), f.text("groomPrevDeathPlace", "Tempat Meninggal")])), isDuda),
-  onlyWhen(optional(person("bridePrev", "Data Suami Terdahulu Catin Wanita (bila janda)", ["name", "nik"], [f.text("bridePrevBin", "Bin (nama ayah)"), f.date("bridePrevDeathDate", "Tanggal Meninggal"), f.text("bridePrevDeathPlace", "Tempat Meninggal")])), isJanda),
+  onlyWhen(optional(person("groomPrev", "Data Istri Terdahulu Catin Pria (bila duda)", N7.filter(p => p !== "occupation"), [f.select("groomPrevOccupation", "Pekerjaan", OPT.occupation), f.text("groomPrevBin", "Bin/Binti (nama ayah)"), f.text("groomPrevParentName", "Nama orang tua istri terdahulu"), f.date("groomPrevDeathDate", "Tanggal Meninggal"), f.text("groomPrevDeathPlace", "Tempat Meninggal")])), isDuda),
+  onlyWhen(optional(person("bridePrev", "Data Suami Terdahulu Catin Wanita (bila janda)", N7.filter(p => p !== "occupation"), [f.select("bridePrevOccupation", "Pekerjaan", OPT.occupation), f.text("bridePrevBin", "Bin (nama ayah)"), f.date("bridePrevDeathDate", "Tanggal Meninggal"), f.text("bridePrevDeathPlace", "Tempat Meninggal")])), isJanda),
 ];
 
 export const documents = [
