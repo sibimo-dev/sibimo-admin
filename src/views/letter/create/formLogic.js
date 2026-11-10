@@ -120,7 +120,7 @@ export const uniqueRowsByNik = (rows = []) => {
   const seen = new Set();
   return rows.filter((row) => {
     const nik = rowNik(row);
-    if (!nik) return true;
+    if (!nik || nik.length < 16) return true;
     if (seen.has(nik)) return false;
     seen.add(nik);
     return true;
@@ -320,6 +320,29 @@ const matchOption = (field, raw) => {
       const hit = field.options.find((o) => {
         const v = o && typeof o === "object" ? (o.value ?? o.label) : o;
         return String(v).trim() === mapped;
+      });
+      if (hit !== undefined) return hit && typeof hit === "object" ? (hit.value ?? hit.label) : hit;
+    }
+  }
+  /* Status perkawinan catin: petakan Dukcapil (mis. "Belum Kawin") ke opsi nikah ("Jejaka" / "Perawan"). */
+  const isCatinStatus = field.options.some((o) => {
+    const v = String(o && typeof o === "object" ? (o.value ?? o.label) : o).trim().toLowerCase();
+    return ["jejaka", "perawan", "duda", "janda", "beristri"].includes(v);
+  });
+  if (isCatinStatus) {
+    const rawLower = String(raw ?? "").trim().toLowerCase();
+    let target = null;
+    if (/belum|lajang|single|unmarried|jejaka|perawan/.test(rawLower)) {
+      target = field.options.some((o) => /jejaka/i.test(o?.value ?? o)) ? "Jejaka" : "Perawan";
+    } else if (/duda|janda|cerai|widow|balu/.test(rawLower)) {
+      target = field.options.some((o) => /duda/i.test(o?.value ?? o)) ? "Duda" : "Janda";
+    } else if (/kawin|menikah|beristri/.test(rawLower)) {
+      target = field.options.some((o) => /beristri/i.test(o?.value ?? o)) ? "Beristri" : null;
+    }
+    if (target) {
+      const hit = field.options.find((o) => {
+        const v = o && typeof o === "object" ? (o.value ?? o.label) : o;
+        return String(v).trim().toLowerCase() === target.toLowerCase();
       });
       if (hit !== undefined) return hit && typeof hit === "object" ? (hit.value ?? hit.label) : hit;
     }
@@ -564,6 +587,22 @@ export function buildAliasIndex(pairs = []) {
 export function applyAliases(form, sections, index) {
   const filled = [];
   const aliasValue = (field, peer, value) => {
+    const hasCatinOption = Array.isArray(field.options) && field.options.some((o) => {
+      const optVal = String(o && typeof o === "object" ? (o.value ?? o.label) : o).toLowerCase();
+      return ["jejaka", "perawan", "duda", "janda", "beristri"].includes(optVal);
+    });
+    if (hasCatinOption) {
+      const status = bareOption(value);
+      if (/jejaka|perawan|belum|lajang|single|unmarried/.test(status)) {
+        return field.options.some((o) => /jejaka/i.test(o?.value ?? o)) ? "Jejaka" : "Perawan";
+      }
+      if (/duda|janda|cerai|widow|balu/.test(status)) {
+        return field.options.some((o) => /duda/i.test(o?.value ?? o)) ? "Duda" : "Janda";
+      }
+      if (/beristri|kawin|menikah|married/.test(status)) {
+        return field.options.some((o) => /beristri/i.test(o?.value ?? o)) ? "Beristri" : (field.options.some((o) => /duda/i.test(o?.value ?? o)) ? "Beristri" : "Kawin");
+      }
+    }
     if (field.key === "maritalStatus" && /status$/i.test(String(peer))) {
       const status = bareOption(value);
       if (/jejaka|perawan|belum|lajang|single|unmarried/.test(status)) return "Belum Kawin";
