@@ -12,8 +12,19 @@ const onlyWhen = (section, predicate) => ({
 });
 const isDuda = (form) => /duda|cerai\s*(hidup|mati)/i.test(String(form.groomStatus ?? form.maritalStatus ?? "").trim());
 
+const catinPria = pemohon([
+  ...eduNat(),
+  ...onlyWhen({ fields: [f.text("previousSpouseName", "Nama istri terdahulu (bila ada)", { optional: true })] }, isDuda).fields,
+]);
+catinPria.title = "Data Catin Pria";
+catinPria.fields = catinPria.fields.map((field) =>
+  field.key === "maritalStatus"
+    ? f.select("maritalStatus", "Status Perkawinan", ["Jejaka", "Duda", "Beristri"], { from: "maritalStatus" })
+    : field
+);
+
 export const sections = [
-  { ...pemohon([...eduNat(), ...onlyWhen({ fields: [f.text("previousSpouseName", "Nama istri terdahulu (bila ada)", { optional: true })] }, isDuda).fields]), title: "Data Catin Pria" },
+  catinPria,
   ortuNikah("father", "Data Ayah Catin", "Bin (nama ayah dari ayah)"),
   ortuNikah("mother", "Data Ibu Catin", "Binti (nama ayah dari ibu)"),
 ];
