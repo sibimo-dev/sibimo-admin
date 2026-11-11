@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
@@ -19,6 +19,7 @@ import Textarea from 'primevue/textarea'
 import Select from 'primevue/select'
 import InputText from 'primevue/inputtext'
 import DatePicker from 'primevue/datepicker'
+import ToggleSwitch from 'primevue/toggleswitch'
 import AppInput from '@/components/common/AppInput.vue'
 import AppLocationPicker from '@/components/common/AppLocationPicker.vue'
 
@@ -144,6 +145,129 @@ function removeCategory(category) {
 }
 /* ---------- /Kelola Kategori ---------- */
 
+/* ---------- Geocoding otomatis alamat -> titik peta ---------- */
+const REGION_HINT = 'Sleman, Daerah Istimewa Yogyakarta' // sesuaikan wilayah kalurahan
+
+// Proyek memanjang (jalan, saluran, jembatan) punya titik akhir. Gedung cukup satu titik.
+const isLinear = ref(false)
+// Alamat titik akhir hanya untuk pencarian di peta, tidak dikirim ke backend.
+const endAddress = ref('')
+
+// "RT 04/RW 25" tidak dikenali OSM, jadi dibuang sebelum dicari
+function cleanAddress(text) {
+  return text
+    .replace(/\bRT\s*\.?\s*\d+/gi, '')
+    .replace(/\bRW\s*\.?\s*\d+/gi, '')
+    .replace(/\s*\/\s*/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^[\s,]+|[\s,]+$/g, '')
+}
+
+async function searchNominatim(query, signal) {
+  const url =
+    'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=id' +
+    `&q=${encodeURIComponent(query)}`
+  const res = await fetch(url, { signal, headers: { 'Accept-Language': 'id' } })
+  const [hit] = await res.json()
+  return hit ?? null
+}
+
+/**
+ * Satu "geocoder" per titik (awal / akhir).
+ * - getText : fungsi yang mengembalikan teks alamat
+ * - getPoint: fungsi yang mengembalikan titik saat ini
+ * - setPoint: fungsi untuk mengisi titik
+ * - isActive: fungsi, geocoding hanya jalan kalau true
+ */
+function createGeocoder({ getText, getPoint, setPoint, isActive = () => true, delay = 0 }) {
+  const state = reactive({ geocoding: false, autoPlaced: false })
+  let lastAuto = null
+  let timer = null
+  let controller = null
+
+  async function run(text) {
+    const query = cleanAddress(text)
+    if (query.length < 5) return
+
+    controller?.abort()
+    controller = new AbortController()
+    state.geocoding = true
+
+    try {
+      // Coba dengan konteks wilayah dulu, kalau kosong coba tanpa konteks
+      const hit =
+        (await searchNominatim(`${query}, ${REGION_HINT}`, controller.signal)) ??
+        (await searchNominatim(query, controller.signal))
+
+      if (!hit) {
+        toast.add({ severity: 'warn', summary: 'Alamat tidak ditemukan, klik peta untuk menandai manual', life: 3000 })
+        return
+      }
+
+      lastAuto = { lat: Number(hit.lat), lng: Number(hit.lon) }
+      state.autoPlaced = true
+      setPoint({ ...lastAuto })
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        toast.add({ severity: 'warn', summary: 'Gagal mencari lokasi', life: 2500 })
+      }
+    } finally {
+      state.geocoding = false
+    }
+  }
+
+  // Debounce setelah berhenti mengetik
+  watch(getText, (value) => {
+    clearTimeout(timer)
+    if (!isActive() || !value?.trim()) return
+    // Jangan timpa titik yang diatur manual atau berasal dari data edit
+    if (getPoint() && !state.autoPlaced) return
+    timer = setTimeout(() => run(value), 1000 + delay)
+  })
+
+  // Kalau user klik peta manual, matikan mode otomatis
+  watch(getPoint, (p) => {
+    const sameAsAuto = p && lastAuto && p.lat === lastAuto.lat && p.lng === lastAuto.lng
+    if (!sameAsAuto) state.autoPlaced = false
+  })
+
+  function reset() {
+    clearTimeout(timer)
+    controller?.abort()
+    lastAuto = null
+    state.autoPlaced = false
+    state.geocoding = false
+  }
+
+  return { state, reset }
+}
+
+// Titik awal (A)
+const { state: startGeo } = createGeocoder({
+  getText: () => form.address,
+  getPoint: () => form.start_point,
+  setPoint: (p) => (form.start_point = p),
+})
+
+// Titik akhir (B). Delay tambahan supaya tidak bentrok dengan request titik awal
+// (Nominatim membatasi 1 request per detik).
+const { state: endGeo, reset: resetEndGeo } = createGeocoder({
+  getText: () => endAddress.value,
+  getPoint: () => form.end_point,
+  setPoint: (p) => (form.end_point = p),
+  isActive: () => isLinear.value,
+  delay: 600,
+})
+
+// Matikan mode memanjang -> bersihkan titik akhir
+watch(isLinear, (on) => {
+  if (on) return
+  endAddress.value = ''
+  form.end_point = null
+  resetEndGeo()
+})
+/* ---------- /Geocoding ---------- */
+
 /* --------------------------------- Helpers --------------------------------- */
 
 function toPoint(lat, lng) {
@@ -207,6 +331,7 @@ onMounted(async () => {
   form.description = existing.description ?? ''
   form.start_point = toPoint(existing.latitude, existing.longitude)
   form.end_point = toPoint(existing.end_latitude, existing.end_longitude)
+  isLinear.value = !!form.end_point
   coverPreview.value = existing.cover_image ? mediaUrl(existing.cover_image) : null
   form.progress = PROGRESS_PERCENTAGES.map((percentage) => {
     const entry = (existing.progress ?? []).find((item) => Number(item.percentage) === percentage)
@@ -401,13 +526,47 @@ function handleCancel() {
 
               <div class="flex flex-col gap-2">
                 <label for="address" class="text-[13px] font-semibold text-slate-700">
-                  Alamat / Lokasi
+                  {{ isLinear ? 'Alamat / Lokasi Titik Awal' : 'Alamat / Lokasi' }}
                 </label>
                 <AppInput
                   id="address"
                   v-model="form.address"
                   placeholder="Contoh: Padukuhan Sorasan, RT 04/RW 25"
                 />
+                <small v-if="startGeo.geocoding" class="text-xs text-slate-400">
+                  <i class="pi pi-spin pi-spinner text-xs" /> Mencari lokasi di peta...
+                </small>
+                <small v-else-if="startGeo.autoPlaced" class="text-xs text-slate-400">
+                  Titik awal (A) diisi otomatis dari alamat. Klik peta untuk menggeser.
+                </small>
+              </div>
+
+              <!-- Proyek memanjang: opsional, punya titik akhir -->
+              <div class="flex items-center gap-3">
+                <ToggleSwitch v-model="isLinear" inputId="is_linear" />
+                <label for="is_linear" class="cursor-pointer text-[13px] text-slate-700">
+                  Proyek memanjang (jalan, saluran, jembatan) dan punya titik akhir
+                </label>
+              </div>
+
+              <div v-if="isLinear" class="flex flex-col gap-2">
+                <label for="end_address" class="text-[13px] font-semibold text-slate-700">
+                  Alamat / Lokasi Titik Akhir
+                </label>
+                <AppInput
+                  id="end_address"
+                  v-model="endAddress"
+                  placeholder="Contoh: Padukuhan Gempol, RT 02/RW 10"
+                />
+                <small v-if="endGeo.geocoding" class="text-xs text-slate-400">
+                  <i class="pi pi-spin pi-spinner text-xs" /> Mencari lokasi titik akhir...
+                </small>
+                <small v-else-if="endGeo.autoPlaced" class="text-xs text-slate-400">
+                  Titik akhir (B) diisi otomatis dari alamat. Klik peta untuk menggeser.
+                </small>
+                <small v-else class="text-xs text-slate-400">
+                  Opsional. Bisa juga langsung klik peta pada tab "Titik akhir (B)".
+                </small>
               </div>
 
               <div class="flex flex-col gap-2">

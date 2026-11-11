@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import Button from 'primevue/button'
@@ -10,6 +10,8 @@ import SelectButton from 'primevue/selectbutton'
  * - `start` is the main point (always used).
  * - `end` is optional, for activities that cover a stretch (drainage, road).
  * Both are `{ lat, lng }` objects or null. Pins can be dragged to adjust.
+ * When the parent sets a point from outside (saved data, address search),
+ * the map moves to it automatically.
  */
 const props = defineProps({
   start: { type: Object, default: null },
@@ -43,7 +45,19 @@ let map = null
 let startMarker = null
 let endMarker = null
 let routeLine = null
-let focusedByUser = false
+// True while a change comes from the user's own click/drag on this map
+let internalChange = false
+// False until the map has moved to a point once (first jump is not animated)
+let hasFocused = false
+
+// Emit a change that originates from this map, so the watcher below does not re-center it
+function emitInternal(eventName, value) {
+  internalChange = true
+  emit(eventName, value)
+  nextTick(() => {
+    internalChange = false
+  })
+}
 
 function pinIcon(color, label) {
   return L.divIcon({
@@ -67,8 +81,7 @@ function buildMarker(point, color, label, eventName) {
     draggable: true,
   }).addTo(map)
   marker.on('dragend', () => {
-    focusedByUser = true
-    emit(eventName, toPoint(marker.getLatLng()))
+    emitInternal(eventName, toPoint(marker.getLatLng()))
   })
   return marker
 }
@@ -105,7 +118,7 @@ function syncMarkers() {
   }
 }
 
-function focusOnPoints() {
+function focusOnPoints({ animate = false } = {}) {
   if (!map || !props.start) return
   if (props.end) {
     map.fitBounds(
@@ -113,28 +126,29 @@ function focusOnPoints() {
         [props.start.lat, props.start.lng],
         [props.end.lat, props.end.lng],
       ]),
-      { padding: [48, 48], maxZoom: 18 },
+      { padding: [48, 48], maxZoom: 18, animate },
     )
+  } else if (animate) {
+    map.flyTo([props.start.lat, props.start.lng], 17, { duration: 0.8 })
   } else {
     map.setView([props.start.lat, props.start.lng], 17)
   }
 }
 
 function handleMapClick(event) {
-  focusedByUser = true
   const point = toPoint(event.latlng)
-  if (mode.value === 'end' && props.start) emit('update:end', point)
-  else emit('update:start', point)
+  if (mode.value === 'end' && props.start) emitInternal('update:end', point)
+  else emitInternal('update:start', point)
 }
 
 function clearEnd() {
-  emit('update:end', null)
+  emitInternal('update:end', null)
   mode.value = 'start'
 }
 
 function clearAll() {
-  emit('update:start', null)
-  emit('update:end', null)
+  emitInternal('update:start', null)
+  emitInternal('update:end', null)
   mode.value = 'start'
 }
 
@@ -142,10 +156,12 @@ watch(
   () => [props.start, props.end],
   () => {
     syncMarkers()
-    // Saved data loads after the map is created (edit page): jump to it once.
-    if (!focusedByUser && props.start) {
-      focusOnPoints()
-      focusedByUser = true
+    // Clicks and drags already happen where the user is looking: do not re-center.
+    if (internalChange) return
+    // Points set from outside (saved data on the edit page, address search): move the map there.
+    if (props.start) {
+      focusOnPoints({ animate: hasFocused })
+      hasFocused = true
     }
   },
   { deep: true },
@@ -175,7 +191,7 @@ onMounted(() => {
   syncMarkers()
   if (props.start) {
     focusOnPoints()
-    focusedByUser = true
+    hasFocused = true
   }
 
   // Make sure tiles render correctly when the card finishes laying out.
