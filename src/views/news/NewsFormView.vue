@@ -329,11 +329,17 @@ function moveToTrash() {
       />
     </div>
 
-    <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+    <div class="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
 
-      <Card>
+      <Card
+        :pt="{
+          root: { class: 'h-full flex flex-col' },
+          body: { class: 'flex-1 flex flex-col' },
+          content: { class: 'flex-1 flex flex-col' },
+        }"
+      >
         <template #content>
-          <div class="flex flex-col gap-5">
+          <div class="flex flex-1 flex-col gap-5">
 
             <div class="flex flex-col gap-2">
               <span class="text-[13px] font-semibold text-neutral-700">
@@ -413,14 +419,16 @@ function moveToTrash() {
               />
             </div>
 
-            <div class="flex flex-col gap-2">
+            <div class="flex flex-1 flex-col gap-2">
               <label class="text-[13px] font-semibold text-neutral-700">
                 Isi Konten
               </label>
 
               <Editor
                 v-model="content"
-                editorStyle="height: 220px"
+                class="flex-1 [&.p-editor]:flex [&.p-editor]:flex-col [&_.ql-container]:relative [&_.ql-container]:h-auto [&_.ql-container]:flex-1 [&_.ql-editor]:absolute [&_.ql-editor]:inset-0 [&_.ql-editor]:h-auto [&_.ql-editor]:overflow-y-auto"
+                editorStyle="min-height: 220px"
+                :pt="{ content: { class: 'flex-1' } }"
                 placeholder="Tulis isi berita di sini..."
               />
             </div>

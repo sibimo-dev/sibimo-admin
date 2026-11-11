@@ -313,6 +313,17 @@ const cleanJobString = (val) => {
   return str.replace(/^\s*\d+\s*[.)\-:]\s*/, "");
 };
 const bareJob = cleanJobString;
+const normalizeJobOption = (o, i) => {
+  if (o && typeof o === "object") {
+    const label = String(o.label ?? o.value ?? "");
+    const value = String(o.value ?? o.label ?? "").replace(/^\s*\d+\s*[.)\-:]\s*/, "");
+    return { label, value };
+  }
+  const text = String(o ?? "").trim();
+  const label = /^\s*\d+\s*[.)\-:]\s*/.test(text) ? text : `${(i ?? 0) + 1}. ${text}`;
+  const value = text.replace(/^\s*\d+\s*[.)\-:]\s*/, "");
+  return { label, value };
+};
 const jobSuggestions = ref([]);
 const searchJobs = (event, fieldOrOptions) => {
   const raw = Array.isArray(fieldOrOptions)
@@ -337,7 +348,7 @@ const onJobSelect = (field, event) => {
 };
 /* Ketik manual (bebas): simpan teks apa adanya, tapi buang nomor bila petugas menempelkan label bernomor. */
 const onJobInput = (field, event) => {
-  const text = String(event ?? "");
+  const text = typeof event === "object" ? String(event?.value ?? event?.label ?? "") : String(event ?? "");
   props.form[field.key] = text.replace(/^\s*\d+\s*[.)\-:]\s*/, "");
   edit(field.key);
 };

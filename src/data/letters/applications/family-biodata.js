@@ -54,6 +54,7 @@ export const sections = [
 
   // DATA KEPALA KELUARGA
   pemohonRingkas([
+    f.kk("kkNumber", "Nomor Kartu Keluarga (KK)", { from: "familyCardNumber", optional: true }),
     f.text("postalCode", "Kode Pos"),
     f.text("rt", "RT"),
     f.text("rw", "RW"),
