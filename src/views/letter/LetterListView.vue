@@ -214,7 +214,7 @@ function groupLetterRows(rawList) {
   const result = []
 
   for (const group of allGroups) {
-    if (group.length === 1 && !group[0].formData?.__bundle_id) {
+    if (group.length === 1) {
       result.push(group[0])
       continue
     }
@@ -966,6 +966,26 @@ function downloadExcel() {
           :sort-order="sortOrder"
           @sort="handleSort"
         >
+          <template #purpose="{ data }">
+            <div class="flex flex-col gap-0.5">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="font-medium text-slate-800">{{ data.purpose }}</span>
+                <Tag
+                  v-if="data.isBundle && data.bundleLettersCount > 1"
+                  :value="`${data.bundleLettersCount} Surat`"
+                  severity="info"
+                  class="!text-[10px] !px-1.5 !py-0"
+                />
+              </div>
+              <span
+                v-if="data.isBundle && data.bundleLettersCount > 1 && data.bundleSubtitles"
+                class="text-xs text-slate-400 line-clamp-1"
+                :title="data.allPurposes"
+              >
+                {{ data.bundleSubtitles }}
+              </span>
+            </div>
+          </template>
           <template #status="{ data }">
             <Tag
               :value="data.status"

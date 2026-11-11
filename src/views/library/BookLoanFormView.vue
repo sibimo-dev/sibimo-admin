@@ -65,7 +65,29 @@ async function saveLoan() {
   }
 }
 
-function printReceipt() { window.print() }
+const safeFilePart = (text) =>
+  String(text ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60)
+
+function printReceipt() {
+  const originalTitle = document.title
+  const id = loanReceipt.value?.loan_id ?? ''
+  const namePart = safeFilePart(loanReceipt.value?.borrower_name || 'Umum')
+  document.title = `Bukti-Peminjaman-Buku-${id}${namePart ? `-${namePart}` : ''}`
+
+  const restoreTitle = () => {
+    document.title = originalTitle
+    window.removeEventListener('afterprint', restoreTitle)
+  }
+  window.addEventListener('afterprint', restoreTitle)
+
+  window.print()
+  setTimeout(restoreTitle, 2000)
+}
 
 onMounted(() => loadFormData({ background: Boolean(cachedBooks) }))
 </script>
@@ -88,13 +110,13 @@ onMounted(() => loadFormData({ background: Boolean(cachedBooks) }))
     </div>
 
     <Dialog v-model:visible="showReceiptDialog" modal header="Bukti Peminjaman Buku" :style="{ width: '32rem' }">
-      <div v-if="loanReceipt">
-        <p>No. Peminjaman: {{ loanReceipt.loan_id }}</p>
-        <p>Peminjam: {{ loanReceipt.borrower_name }}</p>
-        <p>Buku: {{ loanReceipt.title }}</p>
+      <div v-if="loanReceipt" class="space-y-1.5 text-sm">
+        <p>No. Peminjaman: <strong>{{ loanReceipt.loan_id }}</strong></p>
+        <p>Peminjam: <strong>{{ loanReceipt.borrower_name }}</strong></p>
+        <p>Buku: <strong>{{ loanReceipt.title }}</strong></p>
         <p>Tanggal Pinjam: {{ loanReceipt.borrowed_at }}</p>
         <p>Jatuh Tempo: {{ loanReceipt.due_date }}</p>
-        <div class="flex justify-end gap-3">
+        <div class="mt-4 flex justify-end gap-3">
           <AppButton label="Tutup" variant="outline" @click="showReceiptDialog = false" />
           <AppButton label="Cetak Bukti" icon="pi pi-print" variant="primary" @click="printReceipt" />
         </div>
@@ -102,15 +124,15 @@ onMounted(() => loadFormData({ background: Boolean(cachedBooks) }))
     </Dialog>
 
     <!-- Bukti cetak: hanya tampil saat mencetak, styling pakai utility class Tailwind -->
-    <div v-if="loanReceipt" class="hidden print:block">
+    <div v-if="loanReceipt" class="hidden print:block print-receipt-card">
       <div class="mx-auto max-w-[480px] text-slate-900">
-        <div class="mb-5 text-center">
+        <div class="mb-4 text-center">
           <p class="m-0 text-base font-bold uppercase tracking-wide">Perpustakaan Kalurahan Bimomartani</p>
           <p class="mt-0.5 text-[11px] text-slate-600">Kalurahan Bimomartani, Kec. Ngemplak, Kab. Sleman, Daerah Istimewa Yogyakarta</p>
           <div class="mt-2 border-b-2 border-slate-900"></div>
         </div>
 
-        <h2 class="mb-5 text-center text-[15px] font-bold uppercase underline">Bukti Peminjaman Buku</h2>
+        <h2 class="mb-4 text-center text-[15px] font-bold uppercase underline">Bukti Peminjaman Buku</h2>
 
         <table class="w-full border-collapse text-[13px]">
           <tbody>
@@ -120,7 +142,7 @@ onMounted(() => loadFormData({ background: Boolean(cachedBooks) }))
               <td class="py-0.5 align-top">{{ loanReceipt.loan_id }}</td>
             </tr>
             <tr>
-            <td class="w-[140px] py-0.5 align-top">Nama Peminjam</td>
+              <td class="w-[140px] py-0.5 align-top">Nama Peminjam</td>
               <td class="w-3 py-0.5 align-top">:</td>
               <td class="py-0.5 align-top">{{ loanReceipt.borrower_name }}</td>
             </tr>
@@ -142,9 +164,9 @@ onMounted(() => loadFormData({ background: Boolean(cachedBooks) }))
           </tbody>
         </table>
 
-        <div class="mt-10 pr-6 text-right text-[13px]">
+        <div class="mt-8 pr-6 text-right text-[13px]">
           <p>Petugas Perpustakaan</p>
-          <p class="mt-16">( ...................... )</p>
+          <p class="mt-14">( ...................... )</p>
         </div>
       </div>
     </div>
@@ -152,8 +174,17 @@ onMounted(() => loadFormData({ background: Boolean(cachedBooks) }))
 </template>
 
 <style>
-
 @media print {
-  @page { margin: 20mm 18mm; }
+  @page {
+    size: portrait;
+    margin: 12mm 15mm;
+  }
+  .p-dialog,
+  .p-dialog-mask,
+  .p-component-overlay,
+  .p-toast,
+  .p-toast-message {
+    display: none !important;
+  }
 }
 </style>
