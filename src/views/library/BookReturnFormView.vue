@@ -59,7 +59,8 @@ const sorters = {
 
 function formatDate(value) {
   if (!value) return '-'
-  return new Date(value).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+  const d = new Date(String(value).includes('T') ? value : `${value}T00:00:00`)
+  return isNaN(d.getTime()) ? value : d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 function messageFrom(error, fallback) { return error.response?.data?.message ?? fallback }
 
@@ -122,8 +123,8 @@ async function processReturn() {
       ...result,
       full_name: selectedLoan.value.full_name,
       title: selectedLoan.value.title,
-      borrowed_at: selectedLoan.value.borrowed_label,
-      due_date: selectedLoan.value.due_label,
+      borrowed_at: formatDate(selectedLoan.value.borrowed_at),
+      due_date: formatDate(selectedLoan.value.due_date),
       returned_at: formatDate(returnedAt),
       status_label: info.days ? 'Terlambat' : 'Tepat Waktu',
     }
@@ -142,7 +143,30 @@ async function processReturn() {
 }
 
 function cancelForm() { showReturnDialog.value = false; selectedLoan.value = null }
-function printReturnReceipt() { window.print() }
+
+const safeFilePart = (text) =>
+  String(text ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60)
+
+function printReturnReceipt() {
+  const originalTitle = document.title
+  const id = returnReceipt.value?.loan_id ?? ''
+  const namePart = safeFilePart(returnReceipt.value?.full_name || 'Umum')
+  document.title = `Bukti-Pengembalian-Buku-${id}${namePart ? `-${namePart}` : ''}`
+
+  const restoreTitle = () => {
+    document.title = originalTitle
+    window.removeEventListener('afterprint', restoreTitle)
+  }
+  window.addEventListener('afterprint', restoreTitle)
+
+  window.print()
+  setTimeout(restoreTitle, 2000)
+}
 onMounted(() => loadLoans({ background: Boolean(cachedLoans) }))
 </script>
 
@@ -198,10 +222,14 @@ onMounted(() => loadLoans({ background: Boolean(cachedLoans) }))
     </Dialog>
 
     <Dialog v-model:visible="showReceiptDialog" modal header="Bukti Pengembalian Buku" :style="{ width: '32rem', maxWidth: '95vw' }">
-      <div v-if="returnReceipt">
-        <p>No. Peminjaman: {{ returnReceipt.loan_id }}</p>
-        <p>Peminjam: {{ returnReceipt.full_name }}</p>
-        <p>Buku: {{ returnReceipt.title }}</p>
+      <div v-if="returnReceipt" class="space-y-1.5 text-sm">
+        <p>No. Peminjaman: <strong>{{ returnReceipt.loan_id }}</strong></p>
+        <p>Peminjam: <strong>{{ returnReceipt.full_name }}</strong></p>
+        <p>Buku: <strong>{{ returnReceipt.title }}</strong></p>
+        <p>Tanggal Pinjam: {{ returnReceipt.borrowed_at }}</p>
+        <p>Jatuh Tempo: {{ returnReceipt.due_date }}</p>
+        <p>Tanggal Kembali: {{ returnReceipt.returned_at }}</p>
+        <p>Status: <Tag :value="returnReceipt.status_label" :severity="returnReceipt.status_label === 'Terlambat' ? 'danger' : 'success'" /></p>
         <div class="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <AppButton label="Tutup" variant="outline" @click="showReceiptDialog = false" />
           <AppButton label="Cetak Bukti" icon="pi pi-print" variant="primary" @click="printReturnReceipt" />
@@ -209,15 +237,15 @@ onMounted(() => loadLoans({ background: Boolean(cachedLoans) }))
       </div>
     </Dialog>
 
-    <div v-if="returnReceipt" class="hidden print:block">
+    <div v-if="returnReceipt" class="hidden print:block print-receipt-card">
       <div class="mx-auto max-w-[480px] text-slate-900">
-        <div class="mb-5 text-center">
+        <div class="mb-4 text-center">
           <p class="m-0 text-base font-bold uppercase tracking-wide">Perpustakaan Kalurahan Bimomartani</p>
           <p class="mt-0.5 text-[11px] text-slate-600">Kalurahan Bimomartani, Kec. Ngemplak, Kab. Sleman, Daerah Istimewa Yogyakarta</p>
           <div class="mt-2 border-b-2 border-slate-900"></div>
         </div>
 
-        <h2 class="mb-5 text-center text-[15px] font-bold uppercase underline">Bukti Pengembalian Buku</h2>
+        <h2 class="mb-4 text-center text-[15px] font-bold uppercase underline">Bukti Pengembalian Buku</h2>
 
         <table class="w-full border-collapse text-[13px]">
           <tbody>
@@ -259,9 +287,9 @@ onMounted(() => loadLoans({ background: Boolean(cachedLoans) }))
           </tbody>
         </table>
 
-        <div class="mt-10 pr-6 text-right text-[13px]">
+        <div class="mt-8 pr-6 text-right text-[13px]">
           <p>Petugas Perpustakaan</p>
-          <p class="mt-16">( ...................... )</p>
+          <p class="mt-14">( ...................... )</p>
         </div>
       </div>
     </div>
@@ -287,11 +315,14 @@ onMounted(() => loadLoans({ background: Boolean(cachedLoans) }))
 </style>
 
 <style>
-
 @media print {
-  @page { margin: 20mm 18mm; }
+  @page {
+    size: portrait;
+    margin: 12mm 15mm;
+  }
   .p-dialog,
   .p-dialog-mask,
+  .p-component-overlay,
   .p-toast,
   .p-toast-message {
     display: none !important;
