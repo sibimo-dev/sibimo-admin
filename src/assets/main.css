@@ -167,3 +167,62 @@ body {
   padding-left: 0;
   padding-right: 0;
 }
+
+/* ============================================
+   Print styling - pastikan hasil cetak 1 halaman,
+   layout responsive tidak membatasi tinggi,
+   dan dialog/modal/toast disembunyikan.
+   ============================================ */
+@media print {
+  @page {
+    size: portrait;
+    margin: 12mm 15mm;
+  }
+
+  html,
+  body {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  #app {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Reset kelas tinggi & overflow agar tidak memicu halaman kedua yang kosong */
+  .h-screen,
+  .min-h-screen,
+  .overflow-hidden,
+  .overflow-y-auto {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Sembunyikan semua dialog modal PrimeVue, overlay mask, toast, confirm dialog saat print */
+  .p-dialog-mask,
+  .p-dialog,
+  .p-component-overlay,
+  .p-toast,
+  .p-confirm-dialog,
+  .p-tooltip {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Container bukti cetak tidak boleh dipotong atau memicu halaman kedua */
+  .print-receipt-card {
+    display: block !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    margin: 0 auto !important;
+  }
+}
