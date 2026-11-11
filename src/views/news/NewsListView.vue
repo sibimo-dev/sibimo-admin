@@ -260,10 +260,10 @@ function exportData() {
 </script>
 
 <template>
-  <div>
+  <div class="min-w-0">
 
-    <div class="mb-6">
-      <h1 class="m-0 text-2xl font-bold text-primary-900">
+    <div class="mb-4 sm:mb-6">
+      <h1 class="m-0 text-xl font-bold text-primary-900 sm:text-2xl">
         Berita &amp; Pengumuman
       </h1>
 
@@ -272,19 +272,20 @@ function exportData() {
       </p>
     </div>
 
-    <Card>
+    <Card class="min-w-0">
       <template #content>
 
-        <div class="mb-4 flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
-          <div class="flex items-center gap-2">
+        <!-- Toolbar: bertumpuk di HP, satu baris di layar lebar -->
+        <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 
+          <div class="flex items-center gap-2">
             <Button
               label="Baru"
               icon="pi pi-plus"
               iconPos="left"
               aria-haspopup="true"
               aria-controls="add_menu"
-              class="rounded-lg border border-primary-700 bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
+              class="shrink-0 rounded-lg border border-primary-700 bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
               @click="toggleAddMenu"
             />
             <Menu id="add_menu" ref="addMenu" :model="addItems" :popup="true" />
@@ -295,20 +296,18 @@ function exportData() {
               severity="secondary"
               outlined
               :disabled="selectedNews.length === 0"
-              class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
+              class="shrink-0 rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
               @click="deleteSelected"
             />
-
           </div>
 
-          <div class="flex items-center gap-2">
-
-            <IconField>
+          <div class="flex min-w-0 items-center gap-2">
+            <IconField class="min-w-0 flex-1 lg:flex-none">
               <InputIcon class="pi pi-search text-neutral-400" />
               <InputText
                 v-model="filters.global.value"
                 placeholder="Cari judul, penulis, kategori"
-                class="w-[220px] rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
+                class="w-full rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10 lg:w-[220px]"
               />
             </IconField>
 
@@ -317,24 +316,28 @@ function exportData() {
               icon="pi pi-download"
               severity="secondary"
               outlined
-              class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
+              class="shrink-0 rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
               @click="exportData"
             />
-
           </div>
         </div>
 
-        <div class="mb-3">
+        <!-- Tab tipe: bisa digeser horizontal jika layar sangat sempit -->
+        <div class="mb-3 overflow-x-auto">
           <SelectButton
             v-model="activeTab"
             :options="tabOptions"
             optionLabel="label"
             optionValue="value"
             :allowEmpty="false"
-            class="text-[13px]"
+            class="inline-flex min-w-max text-[13px]"
           />
         </div>
 
+        <!--
+          `scrollable` membuat tabel bisa digeser ke samping di dalam kotaknya sendiri,
+          sementara paginator tetap diam dan tidak ikut meluber keluar layar.
+        -->
         <DataTable
           v-model:selection="selectedNews"
           :value="filteredNews"
@@ -343,19 +346,22 @@ function exportData() {
           :paginator="true"
           :rows="rowsPerPage"
           :rowsPerPageOptions="[10, 25, 50]"
+          :pageLinkSize="3"
+          scrollable
+          :tableStyle="{ minWidth: '58rem' }"
           currentPageReportTemplate="Menampilkan {first}–{last} dari {totalRecords} data"
           paginatorTemplate="CurrentPageReport FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown"
           dataKey="id"
           removableSort
           stripedRows
-          class="w-full overflow-hidden rounded-lg border border-neutral-200 text-[13px]"
+          class="w-full max-w-full overflow-hidden rounded-lg border border-neutral-200 text-[13px]"
           :pt="{
             header: { class: 'bg-neutral-50' },
             headerRow: { class: 'bg-neutral-50' },
             headerCell: { class: 'whitespace-nowrap border-b border-neutral-200 bg-neutral-50 px-3 py-2.5 text-left font-semibold text-neutral-500' },
             bodyRow: { class: 'border-b border-neutral-100 last:border-b-0 hover:bg-neutral-50/70' },
             bodyCell: { class: 'px-3 py-3 align-middle text-neutral-700' },
-            paginator: { root: { class: 'flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 px-3 py-3 text-[13px] text-neutral-500' } },
+            paginator: { root: { class: 'flex flex-wrap items-center justify-center gap-3 border-t border-neutral-100 px-3 py-3 text-[13px] text-neutral-500 sm:justify-between' } },
           }"
         >
           <template #empty>
@@ -366,19 +372,19 @@ function exportData() {
 
           <Column selectionMode="multiple" headerStyle="width: 2.5rem" />
 
-          <Column field="title" header="Judul" sortable />
+          <Column field="title" header="Judul" sortable :style="{ minWidth: '14rem' }" />
 
-          <Column field="type" header="Tipe" sortable>
+          <Column field="type" header="Tipe" sortable :style="{ minWidth: '8rem' }">
             <template #body="{ data }">
               <Tag
                 :value="typeLabel(data.type)"
                 :severity="typeSeverity(data.type)"
-                class="rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-[0.02em]"
+                class="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-[0.02em]"
               />
             </template>
           </Column>
 
-          <Column field="author" header="Penulis" sortable />
+          <Column field="author" header="Penulis" sortable :style="{ minWidth: '8rem' }" />
 
           <Column header="Gambar" headerStyle="width: 4rem">
             <template #body="{ data }">
@@ -393,9 +399,9 @@ function exportData() {
             </template>
           </Column>
 
-          <Column field="date" header="Tanggal" sortable />
+          <Column field="date" header="Tanggal" sortable :style="{ minWidth: '7rem' }" />
 
-          <Column field="validUntil" header="Berlaku Sampai">
+          <Column field="validUntil" header="Berlaku Sampai" :style="{ minWidth: '9rem' }">
             <template #body="{ data }">
               <span :class="data.expired ? 'font-semibold text-danger-600' : ''">
                 {{ data.validUntil }}
@@ -404,9 +410,9 @@ function exportData() {
             </template>
           </Column>
 
-          <Column field="category" header="Kategori" sortable />
+          <Column field="category" header="Kategori" sortable :style="{ minWidth: '8rem' }" />
 
-          <Column field="status" header="Status" sortable>
+          <Column field="status" header="Status" sortable :style="{ minWidth: '7rem' }">
             <template #body="{ data }">
               <Tag
                 :value="data.status"
