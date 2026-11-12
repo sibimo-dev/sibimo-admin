@@ -314,10 +314,10 @@ function moveToTrash() {
 </script>
 
 <template>
-  <div>
+  <div class="min-w-0">
 
-    <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-      <h1 class="m-0 text-2xl font-bold text-primary-900">
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3 sm:mb-6">
+      <h1 class="m-0 text-xl font-bold text-primary-900 sm:text-2xl">
         {{ pageTitle }}
       </h1>
 
@@ -329,11 +329,19 @@ function moveToTrash() {
       />
     </div>
 
-    <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+    <!-- min-w-0 pada kedua kolom: mencegah isi (mis. toolbar editor) mendorong layout keluar layar di HP -->
+    <div class="grid grid-cols-1 items-stretch gap-4 sm:gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
 
-      <Card>
+      <!--
+        Tidak memakai :pt di Card ini, karena pt root/body/content menimpa class bawaan
+        PrimeVue (p-card, p-card-body) sehingga latar putih, bayangan, dan padding kartu hilang.
+        Sebagai gantinya, tinggi kartu diatur lewat class + selector anak.
+      -->
+      <Card
+        class="h-full min-w-0 [&>.p-card-body]:min-w-0 [&>.p-card-body]:flex-1 [&_.p-card-content]:flex [&_.p-card-content]:min-w-0 [&_.p-card-content]:flex-1 [&_.p-card-content]:flex-col"
+      >
         <template #content>
-          <div class="flex flex-col gap-5">
+          <div class="flex min-w-0 flex-1 flex-col gap-5">
 
             <div class="flex flex-col gap-2">
               <span class="text-[13px] font-semibold text-neutral-700">
@@ -361,22 +369,27 @@ function moveToTrash() {
                 <template #empty>
                   <div
                     v-if="!imagePreview"
-                    class="rounded-xl border-2 border-dashed border-primary-200 bg-primary-50/40 flex flex-col items-center justify-center py-10 cursor-pointer hover:bg-primary-50 transition-colors"
+                    class="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-primary-200 bg-primary-50/40 px-4 py-8 text-center transition-colors hover:bg-primary-50 sm:py-10"
                     @click="fileUploadRef?.choose()"
                   >
-                    <i class="pi pi-cloud-upload text-3xl text-primary-400 mb-2" />
-                    <p class="text-sm text-neutral-600 m-0">
-                      <span class="text-primary-700 font-medium">Klik untuk unggah</span> atau seret gambar ke sini
+                    <i class="pi pi-cloud-upload mb-2 text-3xl text-primary-400" />
+                    <p class="m-0 text-sm text-neutral-600">
+                      <span class="font-medium text-primary-700">Klik untuk unggah</span>
+                      <span class="hidden sm:inline"> atau seret gambar ke sini</span>
                     </p>
-                    <p class="text-xs text-neutral-400 mt-1">PNG, JPG, maks. 5MB</p>
+                    <p class="mt-1 text-xs text-neutral-400">PNG, JPG, maks. 5MB</p>
                   </div>
                 </template>
 
                 <template #content="{ removeFileCallback }">
-                  <div v-if="imagePreview" class="relative overflow-hidden rounded-xl border border-neutral-200 group">
-                    <img :src="imagePreview" alt="Preview gambar" class="h-48 w-full object-cover" />
+                  <div v-if="imagePreview" class="group relative overflow-hidden rounded-xl border border-neutral-200">
+                    <img :src="imagePreview" alt="Preview gambar" class="h-40 w-full object-cover sm:h-48" />
+                    <!--
+                      HP tidak punya "hover", jadi di layar kecil tombolnya selalu tampil di pojok kanan atas.
+                      Di layar >= md, kembali ke overlay yang muncul saat di-hover.
+                    -->
                     <div
-                      class="absolute inset-0 bg-neutral-900/0 group-hover:bg-neutral-900/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100"
+                      class="absolute right-2 top-2 flex gap-2 md:inset-0 md:items-center md:justify-center md:bg-neutral-900/0 md:opacity-0 md:transition-colors md:group-hover:bg-neutral-900/40 md:group-hover:opacity-100"
                     >
                       <Button
                         type="button"
@@ -413,14 +426,16 @@ function moveToTrash() {
               />
             </div>
 
-            <div class="flex flex-col gap-2">
+            <div class="flex min-w-0 flex-1 flex-col gap-2">
               <label class="text-[13px] font-semibold text-neutral-700">
                 Isi Konten
               </label>
 
               <Editor
                 v-model="content"
-                editorStyle="height: 220px"
+                class="min-w-0 max-w-full flex-1 [&.p-editor]:flex [&.p-editor]:flex-col [&_.ql-container]:relative [&_.ql-container]:h-auto [&_.ql-container]:flex-1 [&_.ql-editor]:absolute [&_.ql-editor]:inset-0 [&_.ql-editor]:h-auto [&_.ql-editor]:overflow-y-auto [&_.ql-toolbar]:flex [&_.ql-toolbar]:flex-wrap"
+                editorStyle="min-height: 220px"
+                :pt="{ content: { class: 'flex-1' } }"
                 placeholder="Tulis isi berita di sini..."
               />
             </div>
@@ -428,7 +443,7 @@ function moveToTrash() {
         </template>
       </Card>
 
-      <aside class="flex flex-col gap-5">
+      <aside class="flex min-w-0 flex-col gap-4 sm:gap-5">
 
         <Card>
           <template #content>
@@ -438,7 +453,7 @@ function moveToTrash() {
                 severity="secondary"
                 outlined
                 :disabled="saving"
-                class="flex-1 rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
+                class="min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
                 @click="saveDraft"
               />
 
@@ -446,7 +461,7 @@ function moveToTrash() {
                 :label="mainButtonLabel"
                 :loading="saving"
                 :disabled="saving"
-                class="flex-1 rounded-lg border border-primary-700 bg-primary-700 px-3.5 py-2.5 text-[13px] font-medium text-white hover:bg-primary-800"
+                class="min-w-0 flex-1 rounded-lg border border-primary-700 bg-primary-700 px-3.5 py-2.5 text-[13px] font-medium text-white hover:bg-primary-800"
                 @click="publishNews"
               />
             </div>
@@ -509,6 +524,7 @@ function moveToTrash() {
                 dateFormat="yy-mm-dd"
                 showIcon
                 iconDisplay="input"
+                appendTo="body"
                 class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
                 :pt="{ pcInputText: { root: { class: 'w-full px-3 py-2.5' } } }"
               />
@@ -528,6 +544,7 @@ function moveToTrash() {
                 :options="authorOptions"
                 optionLabel="label"
                 optionValue="value"
+                appendTo="body"
                 class="w-full rounded-lg border border-neutral-300 bg-white text-[13px] text-neutral-800 outline-none focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
                 :pt="{ label: { class: 'px-3 py-2.5' } }"
               />

@@ -32,7 +32,10 @@ export const newsService = {
   get: (id) => unwrap(api.get(`/news/${id}`)),
   create: (payload) => unwrap(api.post('/news', newsFormData(payload), { headers: { 'Content-Type': 'multipart/form-data' } })),
   update: (id, payload) => {
-    if (!payload.thumbnail) return unwrap(api.put(`/news/${id}`, { ...payload, thumbnail: undefined }))
+    // No file selected: plain JSON PUT. A thumbnail (news) or attachment (announcement) needs multipart.
+    if (!payload.thumbnail && !payload.attachment) {
+      return unwrap(api.put(`/news/${id}`, { ...payload, thumbnail: undefined, attachment: undefined }))
+    }
     const data = newsFormData(payload)
     data.append('_method', 'PUT')
     return unwrap(api.post(`/news/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } }))
@@ -44,6 +47,10 @@ export const newsCategoryService = {
   create: (payload) => unwrap(api.post('/news-categories', payload)),
   update: (id, payload) => unwrap(api.put(`/news-categories/${id}`, payload)),
   remove: (id) => unwrap(api.delete(`/news-categories/${id}`)),
+}
+export const serviceHoursService = {
+  list: () => unwrap(api.get('/service-hours')),
+  save: (payload) => unwrap(api.put('/service-hours', payload)),
 }
 export const agendaService = crud('/agendas')
 export const potentialService = {

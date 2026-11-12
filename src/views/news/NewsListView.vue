@@ -1,6 +1,6 @@
 <script setup>
 
-import { ref, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { FilterMatchMode } from '@primevue/core/api'
 import { useConfirm } from 'primevue/useconfirm'
@@ -12,10 +12,14 @@ import InputText from 'primevue/inputtext'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import Button from 'primevue/button'
+import Menu from 'primevue/menu'
+import SelectButton from 'primevue/selectbutton'
 import Tag from 'primevue/tag'
 import { newsService } from '@/services/content.service'
 import { getListCache, setListCache } from '@/services/list-cache'
 import { mediaUrl } from '@/services/media'
+import AnnouncementFormDialog from './AnnouncementFormDialog.vue'
+import ServiceHoursFormDialog from '../service-hours/ServiceHoursFormDialog.vue'
 
 const router = useRouter()
 const confirm = useConfirm()
@@ -24,20 +28,38 @@ const loading = ref(!cachedNews)
 const loadError = ref('')
 const news = ref((cachedNews ?? []).map(mapNewsItem))
 
+function formatDate(value) {
+  return value
+    ? new Date(value).toLocaleDateString('id-ID', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+    : '-'
+}
+
+function isExpired(validUntil) {
+  if (!validUntil) return false
+  const end = new Date(validUntil)
+  end.setHours(23, 59, 59, 999)
+  return end < new Date()
+}
+
 function mapNewsItem(item) {
+  const categoryName = item.category?.category_name ?? item.category?.name ?? '-'
+  // An item is an announcement when its category is "Pengumuman"
+  const isAnnouncement = categoryName.trim().toLowerCase() === 'pengumuman'
+
   return {
     id: item.news_id,
+    type: isAnnouncement ? 'announcement' : 'news',
     title: item.title,
     author: item.author?.full_name ?? item.author?.name ?? '-',
-      image: mediaUrl(item.thumbnail),
-    date: item.published_at
-      ? new Date(item.published_at).toLocaleDateString('id-ID', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-        })
-      : '-',
-    category: item.category?.category_name ?? item.category?.name ?? '-',
+    image: mediaUrl(item.thumbnail),
+    date: formatDate(item.published_at),
+    validUntil: isAnnouncement ? formatDate(item.valid_until) : '-',
+    expired: isAnnouncement && isExpired(item.valid_until),
+    category: categoryName,
     status: item.status?.toUpperCase() ?? '-',
   }
 }
@@ -60,117 +82,6 @@ async function loadNews({ background = false } = {}) {
 }
 onMounted(() => loadNews({ background: Boolean(cachedNews) }))
 
-/* const newsDummy = [
-  {
-    id: 1,
-    title: 'Musyawarah Perencanaan Desa Tetapkan Prioritas Pembangunan 2027',
-    author: 'Admin Desa',
-    image: null,
-    date: '18/03/2026',
-    category: 'Infrastruktur',
-    status: 'PUBLISHED',
-  },
-  {
-    id: 2,
-    title: 'Posyandu Melati Catat Peningkatan Kunjungan Balita Bulan Ini',
-    author: 'Siti Rahayu',
-    image: null,
-    date: '27/07/2026',
-    category: 'Kesehatan',
-    status: 'PUBLISHED',
-  },
-  {
-    id: 3,
-    title: 'Rencana Perbaikan Jalan Penghubung Dusun Sukamaju Segera Dimulai',
-    author: 'Budi Santoso',
-    image: null,
-    date: '25/07/2026',
-    category: 'Infrastruktur',
-    status: 'DRAFT',
-  },
-  {
-    id: 4,
-    title: 'Penyuluhan Pertanian Organik Diikuti Puluhan Petani Lokal',
-    author: 'Agus Setiawan',
-    image: null,
-    date: '13/07/2026',
-    category: 'Pertanian',
-    status: 'PUBLISHED',
-  },
-  {
-    id: 5,
-    title: 'BUMDes Salurkan Bantuan Modal Usaha untuk 20 Pelaku UMKM',
-    author: 'Dewi Lestari',
-    image: null,
-    date: '10/07/2026',
-    category: 'Keuangan',
-    status: 'PUBLISHED',
-  },
-  {
-    id: 6,
-    title: 'Pelatihan Digitalisasi Administrasi Desa Bersama Dinas Kominfo',
-    author: 'Rudi Hartono',
-    image: null,
-    date: '07/07/2026',
-    category: 'Teknologi',
-    status: 'DRAFT',
-  },
-  {
-    id: 7,
-    title: 'Kerja Bakti Serentak Bersihkan Saluran Irigasi Menjelang Musim Hujan',
-    author: 'Admin Desa',
-    image: null,
-    date: '04/07/2026',
-    category: 'Sosial',
-    status: 'PUBLISHED',
-  },
-  {
-    id: 8,
-    title: 'Vaksinasi Massal Hewan Ternak Cegah Penyebaran Penyakit Mulut dan Kuku',
-    author: 'Ani Wulandari',
-    image: null,
-    date: '28/06/2026',
-    category: 'Kesehatan',
-    status: 'PUBLISHED',
-  },
-  {
-    id: 9,
-    title: 'Pembangunan Jembatan Gantung Dusun Kenanga Capai 70 Persen',
-    author: 'Budi Santoso',
-    image: null,
-    date: '22/06/2026',
-    category: 'Infrastruktur',
-    status: 'PUBLISHED',
-  },
-  {
-    id: 10,
-    title: 'Sosialisasi Bantuan Sosial Tahap III Digelar di Balai Desa',
-    author: 'Siti Rahayu',
-    image: null,
-    date: '15/06/2026',
-    category: 'Sosial',
-    status: 'PUBLISHED',
-  },
-  {
-    id: 11,
-    title: 'Panen Raya Jagung Hibrida Naikkan Pendapatan Petani Desa',
-    author: 'Agus Setiawan',
-    image: null,
-    date: '09/06/2026',
-    category: 'Pertanian',
-    status: 'DRAFT',
-  },
-  {
-    id: 12,
-    title: 'Pelatihan Kerajinan Anyaman Bambu Buka Peluang Usaha Baru',
-    author: 'Dewi Lestari',
-    image: null,
-    date: '02/06/2026',
-    category: 'Sosial',
-    status: 'PUBLISHED',
-  },
-]
-*/
 const selectedNews = ref([])
 const rowsPerPage = ref(10)
 
@@ -178,21 +89,89 @@ const filters = ref({
   global: { value: null, matchMode: FilterMatchMode.CONTAINS },
 })
 
+/* Type filter tabs: All / News / Announcement */
+const activeTab = ref('all')
+const tabOptions = [
+  { label: 'Semua', value: 'all' },
+  { label: 'Berita', value: 'news' },
+  { label: 'Pengumuman', value: 'announcement' },
+]
+
+const filteredNews = computed(() =>
+  activeTab.value === 'all'
+    ? news.value
+    : news.value.filter(item => item.type === activeTab.value)
+)
+
+// SelectButton can emit null when the active option is clicked again
+watch(activeTab, (value) => {
+  if (!value) activeTab.value = 'all'
+  selectedNews.value = []
+})
+
+function typeLabel(type) {
+  return type === 'announcement' ? 'Pengumuman' : 'Berita'
+}
+
+function typeSeverity(type) {
+  return type === 'announcement' ? 'warn' : 'success'
+}
+
 function statusSeverity(status) {
   return status === 'PUBLISHED' ? 'info' : 'secondary'
 }
 
-function addNew() {
-  router.push({ name: 'news-create' })
+/* Dialogs: announcement form and service hours form */
+const announcementDialogVisible = ref(false)
+const editingAnnouncementId = ref(null)
+const serviceHoursDialogVisible = ref(false)
+
+function openAnnouncementDialog(id = null) {
+  editingAnnouncementId.value = id
+  announcementDialogVisible.value = true
 }
 
-function editNews(id) {
-  router.push({ name: 'news-edit', params: { id } })
+function openServiceHoursDialog() {
+  serviceHoursDialogVisible.value = true
+}
+
+/* "New" button menu: News opens its page, the others open dialogs */
+const addMenu = ref()
+
+const addItems = [
+  {
+    label: 'Berita',
+    icon: 'pi pi-file',
+    command: () => router.push({ name: 'news-create' }),
+  },
+  {
+    label: 'Pengumuman',
+    icon: 'pi pi-megaphone',
+    command: () => openAnnouncementDialog(),
+  },
+  { separator: true },
+  {
+    label: 'Jam Pelayanan',
+    icon: 'pi pi-clock',
+    command: () => openServiceHoursDialog(),
+  },
+]
+
+function toggleAddMenu(event) {
+  addMenu.value.toggle(event)
+}
+
+function editNews(data) {
+  if (data.type === 'announcement') {
+    openAnnouncementDialog(data.id)
+    return
+  }
+  router.push({ name: 'news-edit', params: { id: data.id } })
 }
 
 function deleteNews(data) {
   confirm.require({
-    message: `Hapus berita "${data.title}"?`,
+    message: `Hapus ${typeLabel(data.type).toLowerCase()} "${data.title}"?`,
     header: 'Konfirmasi Hapus',
     icon: 'pi pi-exclamation-triangle',
     acceptLabel: 'Hapus',
@@ -204,7 +183,7 @@ function deleteNews(data) {
         await loadNews()
         selectedNews.value = selectedNews.value.filter(newsItem => newsItem.id !== data.id)
       } catch (error) {
-        window.alert(error.response?.data?.message ?? 'Gagal menghapus berita.')
+        window.alert(error.response?.data?.message ?? 'Gagal menghapus data.')
       }
     },
   })
@@ -212,7 +191,7 @@ function deleteNews(data) {
 
 function deleteSelected() {
   confirm.require({
-    message: `Hapus ${selectedNews.value.length} berita terpilih?`,
+    message: `Hapus ${selectedNews.value.length} data terpilih?`,
     header: 'Konfirmasi Hapus',
     icon: 'pi pi-exclamation-triangle',
     acceptLabel: 'Hapus',
@@ -225,7 +204,7 @@ function deleteSelected() {
         await loadNews()
         selectedNews.value = []
       } catch (error) {
-        window.alert(error.response?.data?.message ?? 'Gagal menghapus sebagian berita.')
+        window.alert(error.response?.data?.message ?? 'Gagal menghapus sebagian data.')
         await loadNews()
       }
     },
@@ -233,11 +212,11 @@ function deleteSelected() {
 }
 
 function exportData() {
-  const rows = selectedNews.value.length > 0 ? selectedNews.value : news.value
+  const rows = selectedNews.value.length > 0 ? selectedNews.value : filteredNews.value
 
   if (rows.length === 0) return
 
-  const headers = ['Judul', 'Penulis', 'Tanggal', 'Kategori', 'Status']
+  const headers = ['Judul', 'Tipe', 'Penulis', 'Tanggal', 'Berlaku Sampai', 'Kategori', 'Status']
 
   const escapeCsv = (value) => {
     const stringValue = String(value ?? '')
@@ -250,7 +229,15 @@ function exportData() {
   const csvLines = [
     headers.join(','),
     ...rows.map(newsItem =>
-      [newsItem.title, newsItem.author, newsItem.date, newsItem.category, newsItem.status]
+      [
+        newsItem.title,
+        typeLabel(newsItem.type),
+        newsItem.author,
+        newsItem.date,
+        newsItem.validUntil,
+        newsItem.category,
+        newsItem.status,
+      ]
         .map(escapeCsv)
         .join(',')
     ),
@@ -273,30 +260,35 @@ function exportData() {
 </script>
 
 <template>
-  <div>
+  <div class="min-w-0">
 
-    <div class="mb-6">
-      <h1 class="m-0 text-2xl font-bold text-primary-900">
-        Berita Desa
+    <div class="mb-4 sm:mb-6">
+      <h1 class="m-0 text-xl font-bold text-primary-900 sm:text-2xl">
+        Berita &amp; Pengumuman
       </h1>
 
       <p class="m-0 mt-1 text-sm text-neutral-500">
-        Kelola daftar berita yang dimiliki desa.
+        Kelola berita, pengumuman, dan jam pelayanan desa.
       </p>
     </div>
 
-    <Card>
+    <Card class="min-w-0">
       <template #content>
 
-        <div class="mb-4 flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
-          <div class="flex items-center gap-2">
+        <!-- Toolbar: bertumpuk di HP, satu baris di layar lebar -->
+        <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 
+          <div class="flex items-center gap-2">
             <Button
               label="Baru"
               icon="pi pi-plus"
-              class="rounded-lg border border-primary-700 bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
-              @click="addNew"
+              iconPos="left"
+              aria-haspopup="true"
+              aria-controls="add_menu"
+              class="shrink-0 rounded-lg border border-primary-700 bg-primary-700 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-primary-800"
+              @click="toggleAddMenu"
             />
+            <Menu id="add_menu" ref="addMenu" :model="addItems" :popup="true" />
 
             <Button
               label="Hapus"
@@ -304,20 +296,18 @@ function exportData() {
               severity="secondary"
               outlined
               :disabled="selectedNews.length === 0"
-              class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
+              class="shrink-0 rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
               @click="deleteSelected"
             />
-
           </div>
 
-          <div class="flex items-center gap-2">
-
-            <IconField>
+          <div class="flex min-w-0 items-center gap-2">
+            <IconField class="min-w-0 flex-1 lg:flex-none">
               <InputIcon class="pi pi-search text-neutral-400" />
               <InputText
                 v-model="filters.global.value"
                 placeholder="Cari judul, penulis, kategori"
-                class="w-[220px] rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10"
+                class="w-full rounded-lg border border-neutral-300 bg-white py-2 pl-8 pr-3 text-[13px] text-neutral-800 outline-none transition focus:border-primary-700 focus:ring-4 focus:ring-primary-700/10 lg:w-[220px]"
               />
             </IconField>
 
@@ -326,46 +316,75 @@ function exportData() {
               icon="pi pi-download"
               severity="secondary"
               outlined
-              class="rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
+              class="shrink-0 rounded-lg border border-neutral-300 bg-white px-3.5 py-2 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
               @click="exportData"
             />
-
           </div>
         </div>
 
+        <!-- Tab tipe: bisa digeser horizontal jika layar sangat sempit -->
+        <div class="mb-3 overflow-x-auto">
+          <SelectButton
+            v-model="activeTab"
+            :options="tabOptions"
+            optionLabel="label"
+            optionValue="value"
+            :allowEmpty="false"
+            class="inline-flex min-w-max text-[13px]"
+          />
+        </div>
+
+        <!--
+          `scrollable` membuat tabel bisa digeser ke samping di dalam kotaknya sendiri,
+          sementara paginator tetap diam dan tidak ikut meluber keluar layar.
+        -->
         <DataTable
           v-model:selection="selectedNews"
-          :value="news"
+          :value="filteredNews"
           :loading="loading"
           :filters="filters"
           :paginator="true"
           :rows="rowsPerPage"
           :rowsPerPageOptions="[10, 25, 50]"
-          currentPageReportTemplate="Menampilkan {first}–{last} dari {totalRecords} berita"
+          :pageLinkSize="3"
+          scrollable
+          :tableStyle="{ minWidth: '58rem' }"
+          currentPageReportTemplate="Menampilkan {first}–{last} dari {totalRecords} data"
           paginatorTemplate="CurrentPageReport FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown"
           dataKey="id"
           removableSort
           stripedRows
-          class="w-full overflow-hidden rounded-lg border border-neutral-200 text-[13px]"
+          class="w-full max-w-full overflow-hidden rounded-lg border border-neutral-200 text-[13px]"
           :pt="{
             header: { class: 'bg-neutral-50' },
             headerRow: { class: 'bg-neutral-50' },
             headerCell: { class: 'whitespace-nowrap border-b border-neutral-200 bg-neutral-50 px-3 py-2.5 text-left font-semibold text-neutral-500' },
             bodyRow: { class: 'border-b border-neutral-100 last:border-b-0 hover:bg-neutral-50/70' },
             bodyCell: { class: 'px-3 py-3 align-middle text-neutral-700' },
-            paginator: { root: { class: 'flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 px-3 py-3 text-[13px] text-neutral-500' } },
+            paginator: { root: { class: 'flex flex-wrap items-center justify-center gap-3 border-t border-neutral-100 px-3 py-3 text-[13px] text-neutral-500 sm:justify-between' } },
           }"
         >
           <template #empty>
             <div class="px-3 py-8 text-center text-neutral-400">
-              {{ loadError || 'Tidak ada berita yang cocok dengan pencarian.' }}
+              {{ loadError || 'Tidak ada data yang cocok dengan pencarian.' }}
             </div>
           </template>
 
           <Column selectionMode="multiple" headerStyle="width: 2.5rem" />
 
-          <Column field="title" header="Judul" sortable />
-          <Column field="author" header="Penulis" sortable />
+          <Column field="title" header="Judul" sortable :style="{ minWidth: '14rem' }" />
+
+          <Column field="type" header="Tipe" sortable :style="{ minWidth: '8rem' }">
+            <template #body="{ data }">
+              <Tag
+                :value="typeLabel(data.type)"
+                :severity="typeSeverity(data.type)"
+                class="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-[0.02em]"
+              />
+            </template>
+          </Column>
+
+          <Column field="author" header="Penulis" sortable :style="{ minWidth: '8rem' }" />
 
           <Column header="Gambar" headerStyle="width: 4rem">
             <template #body="{ data }">
@@ -380,10 +399,20 @@ function exportData() {
             </template>
           </Column>
 
-          <Column field="date" header="Tanggal" sortable />
-          <Column field="category" header="Kategori" sortable />
+          <Column field="date" header="Tanggal" sortable :style="{ minWidth: '7rem' }" />
 
-          <Column field="status" header="Status" sortable>
+          <Column field="validUntil" header="Berlaku Sampai" :style="{ minWidth: '9rem' }">
+            <template #body="{ data }">
+              <span :class="data.expired ? 'font-semibold text-danger-600' : ''">
+                {{ data.validUntil }}
+              </span>
+              <span v-if="data.expired" class="ml-1 text-[11px] text-danger-600">(berakhir)</span>
+            </template>
+          </Column>
+
+          <Column field="category" header="Kategori" sortable :style="{ minWidth: '8rem' }" />
+
+          <Column field="status" header="Status" sortable :style="{ minWidth: '7rem' }">
             <template #body="{ data }">
               <Tag
                 :value="data.status"
@@ -403,7 +432,7 @@ function exportData() {
                   severity="secondary"
                   class="h-8 w-8 text-neutral-500 hover:bg-neutral-100 hover:text-primary-700"
                   title="Edit"
-                  @click="editNews(data.id)"
+                  @click="editNews(data)"
                 />
                 <Button
                   icon="pi pi-trash"
@@ -421,5 +450,13 @@ function exportData() {
 
       </template>
     </Card>
+
+    <AnnouncementFormDialog
+      v-model:visible="announcementDialogVisible"
+      :announcement-id="editingAnnouncementId"
+      @saved="loadNews()"
+    />
+
+    <ServiceHoursFormDialog v-model:visible="serviceHoursDialogVisible" />
   </div>
 </template>
