@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
@@ -101,6 +101,86 @@ function handleImageSelect(event) {
     imagePreview.value = reader.result
   }
   reader.readAsDataURL(file)
+}
+
+// ---------- Kontrol gambar di rich editor (klik gambar -> atur ukuran / posisi / hapus) ----------
+const hasSelectedImage = ref(false)
+let quillInstance = null
+let selectedImage = null
+
+function handleEditorLoad({ instance }) {
+  quillInstance = instance
+  instance.root.addEventListener('click', onEditorClick)
+  instance.root.addEventListener('keydown', onEditorKeydown)
+}
+
+onBeforeUnmount(() => {
+  quillInstance?.root.removeEventListener('click', onEditorClick)
+  quillInstance?.root.removeEventListener('keydown', onEditorKeydown)
+})
+
+function selectImage(img) {
+  selectedImage?.classList.remove('img-selected')
+  selectedImage = img
+  img.classList.add('img-selected')
+  hasSelectedImage.value = true
+}
+
+function clearImageSelection() {
+  selectedImage?.classList.remove('img-selected')
+  selectedImage = null
+  hasSelectedImage.value = false
+}
+
+function onEditorClick(event) {
+  if (event.target?.tagName === 'IMG') selectImage(event.target)
+  else clearImageSelection()
+}
+
+function onEditorKeydown(event) {
+  if (!selectedImage) return
+  if (event.key === 'Delete' || event.key === 'Backspace') {
+    event.preventDefault()
+    deleteSelectedImage()
+  } else if (!['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) {
+    clearImageSelection()
+  }
+}
+
+function getSelectedImageIndex() {
+  if (!quillInstance || !selectedImage) return -1
+  const blot = quillInstance.constructor.find(selectedImage)
+  return blot ? quillInstance.getIndex(blot) : -1
+}
+
+// Setelah format diterapkan, node gambar bisa dibuat ulang oleh editor, jadi pilih ulang gambarnya.
+function reselectImageAt(index) {
+  nextTick(() => {
+    const [leaf] = quillInstance.getLeaf(index)
+    if (leaf?.domNode?.tagName === 'IMG') selectImage(leaf.domNode)
+    else clearImageSelection()
+  })
+}
+
+function resizeSelectedImage(width) {
+  const index = getSelectedImageIndex()
+  if (index < 0) return
+  quillInstance.formatText(index, 1, { width, height: false }, 'user')
+  reselectImageAt(index)
+}
+
+function alignSelectedImage(value) {
+  const index = getSelectedImageIndex()
+  if (index < 0) return
+  quillInstance.formatLine(index, 1, 'align', value === 'left' ? false : value, 'user')
+  reselectImageAt(index)
+}
+
+function deleteSelectedImage() {
+  const index = getSelectedImageIndex()
+  if (index < 0) return
+  quillInstance.deleteText(index, 1, 'user')
+  clearImageSelection()
 }
 
 function categoryErrorMessage(error) {
@@ -329,19 +409,19 @@ function moveToTrash() {
       />
     </div>
 
-    <!-- min-w-0 pada kedua kolom: mencegah isi (mis. toolbar editor) mendorong layout keluar layar di HP -->
-    <div class="grid grid-cols-1 items-stretch gap-4 sm:gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+    <!--
+      items-start: kolom kanan tidak dipaksa setinggi kolom kiri.
+      min-w-0 pada kedua kolom: mencegah isi (mis. toolbar editor) mendorong layout keluar layar di HP.
+    -->
+    <div class="grid grid-cols-1 items-start gap-4 sm:gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
 
       <!--
         Tidak memakai :pt di Card ini, karena pt root/body/content menimpa class bawaan
         PrimeVue (p-card, p-card-body) sehingga latar putih, bayangan, dan padding kartu hilang.
-        Sebagai gantinya, tinggi kartu diatur lewat class + selector anak.
       -->
-      <Card
-        class="h-full min-w-0 [&>.p-card-body]:min-w-0 [&>.p-card-body]:flex-1 [&_.p-card-content]:flex [&_.p-card-content]:min-w-0 [&_.p-card-content]:flex-1 [&_.p-card-content]:flex-col"
-      >
+      <Card class="min-w-0 [&>.p-card-body]:min-w-0">
         <template #content>
-          <div class="flex min-w-0 flex-1 flex-col gap-5">
+          <div class="flex min-w-0 flex-col gap-5">
 
             <div class="flex flex-col gap-2">
               <span class="text-[13px] font-semibold text-neutral-700">
@@ -426,18 +506,59 @@ function moveToTrash() {
               />
             </div>
 
-            <div class="flex min-w-0 flex-1 flex-col gap-2">
+            <div class="flex min-w-0 flex-col gap-2">
               <label class="text-[13px] font-semibold text-neutral-700">
                 Isi Konten
               </label>
 
+              <!--
+                Editor memakai alur layout normal (tanpa position absolute):
+                tinggi minimum 220px, tumbuh mengikuti isi sampai batas maksimum,
+                lalu scroll di dalam editor sehingga tidak menimpa elemen lain.
+                Tanda "!" dipakai untuk menimpa style bawaan Quill (height: 100%).
+              -->
               <Editor
                 v-model="content"
-                class="min-w-0 max-w-full flex-1 [&.p-editor]:flex [&.p-editor]:flex-col [&_.ql-container]:relative [&_.ql-container]:h-auto [&_.ql-container]:flex-1 [&_.ql-editor]:absolute [&_.ql-editor]:inset-0 [&_.ql-editor]:h-auto [&_.ql-editor]:overflow-y-auto [&_.ql-toolbar]:flex [&_.ql-toolbar]:flex-wrap"
-                editorStyle="min-height: 220px"
-                :pt="{ content: { class: 'flex-1' } }"
                 placeholder="Tulis isi berita di sini..."
+                @load="handleEditorLoad"
+                class="news-editor w-full min-w-0 max-w-full
+                       [&_.ql-toolbar]:flex [&_.ql-toolbar]:flex-wrap
+                       [&_.ql-container]:!h-auto
+                       [&_.ql-editor]:!h-auto
+                       [&_.ql-editor]:!min-h-[220px]
+                       [&_.ql-editor]:!max-h-[50vh]
+                       [&_.ql-editor]:overflow-y-auto
+                       [&_.ql-editor]:break-words
+                       md:[&_.ql-editor]:!max-h-[60vh]"
               />
+
+              <!-- Muncul saat sebuah gambar di dalam editor diklik. mousedown.prevent menjaga fokus tetap di editor. -->
+              <div
+                v-if="hasSelectedImage"
+                class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-primary-200 bg-primary-50/60 px-3 py-2 text-[12px] text-neutral-700"
+              >
+                <span class="font-medium">Gambar dipilih</span>
+
+                <div class="flex flex-wrap items-center gap-1">
+                  <span class="mr-1 text-neutral-500">Ukuran:</span>
+                  <Button type="button" label="25%" size="small" severity="secondary" outlined @mousedown.prevent @click="resizeSelectedImage('25%')" />
+                  <Button type="button" label="50%" size="small" severity="secondary" outlined @mousedown.prevent @click="resizeSelectedImage('50%')" />
+                  <Button type="button" label="75%" size="small" severity="secondary" outlined @mousedown.prevent @click="resizeSelectedImage('75%')" />
+                  <Button type="button" label="100%" size="small" severity="secondary" outlined @mousedown.prevent @click="resizeSelectedImage('100%')" />
+                </div>
+
+                <div class="flex items-center gap-1">
+                  <span class="mr-1 text-neutral-500">Posisi:</span>
+                  <Button type="button" icon="pi pi-align-left" size="small" severity="secondary" outlined aria-label="Rata kiri" @mousedown.prevent @click="alignSelectedImage('left')" />
+                  <Button type="button" icon="pi pi-align-center" size="small" severity="secondary" outlined aria-label="Rata tengah" @mousedown.prevent @click="alignSelectedImage('center')" />
+                  <Button type="button" icon="pi pi-align-right" size="small" severity="secondary" outlined aria-label="Rata kanan" @mousedown.prevent @click="alignSelectedImage('right')" />
+                </div>
+
+                <Button type="button" icon="pi pi-trash" label="Hapus" size="small" severity="danger" outlined @mousedown.prevent @click="deleteSelectedImage" />
+              </div>
+              <small v-else class="text-[11px] text-neutral-400">
+                Tip: klik gambar di dalam editor untuk mengatur ukuran, posisi, atau menghapusnya.
+              </small>
             </div>
           </div>
         </template>
@@ -445,15 +566,16 @@ function moveToTrash() {
 
       <aside class="flex min-w-0 flex-col gap-4 sm:gap-5">
 
-        <Card>
+        <!-- Di layar kecil kartu ini menempel di bawah layar agar tombol selalu mudah dijangkau -->
+        <Card class="max-lg:sticky max-lg:bottom-2 max-lg:z-10 max-lg:shadow-lg">
           <template #content>
-            <div class="flex gap-2.5">
+            <div class="flex flex-wrap gap-2.5">
               <Button
                 label="Simpan Draft"
                 severity="secondary"
                 outlined
                 :disabled="saving"
-                class="min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
+                class="min-w-[120px] flex-1 whitespace-nowrap rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-[13px] font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100"
                 @click="saveDraft"
               />
 
@@ -461,7 +583,7 @@ function moveToTrash() {
                 :label="mainButtonLabel"
                 :loading="saving"
                 :disabled="saving"
-                class="min-w-0 flex-1 rounded-lg border border-primary-700 bg-primary-700 px-3.5 py-2.5 text-[13px] font-medium text-white hover:bg-primary-800"
+                class="min-w-[120px] flex-1 whitespace-nowrap rounded-lg border border-primary-700 bg-primary-700 px-3.5 py-2.5 text-[13px] font-medium text-white hover:bg-primary-800"
                 @click="publishNews"
               />
             </div>
@@ -628,3 +750,17 @@ function moveToTrash() {
     </div>
   </div>
 </template>
+
+<style>
+/* Gambar di dalam rich editor: bisa diklik dan tidak pernah melebihi lebar editor */
+.news-editor .ql-editor img {
+  max-width: 100%;
+  height: auto;
+  cursor: pointer;
+}
+
+.news-editor .ql-editor img.img-selected {
+  outline: 3px solid #0284c7;
+  outline-offset: 2px;
+}
+</style>
