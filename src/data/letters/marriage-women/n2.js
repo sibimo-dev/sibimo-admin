@@ -8,8 +8,21 @@
 // Langkah 3 (cek ulang, ceklis dokumen asli, kirim, pop-up hasil) sudah ditangani LetterWizard.
 import { DOC, akad, calonPengantin, opt, pemohonRingkas } from "@/data/letterFields";
 
+const penandatanganKua = () => ({
+  title: "Penandatangan KUA (opsional)",
+  fields: [
+    {
+      key: "kua_head_name",
+      label: "Nama Kepala KUA / Penghulu",
+      type: "text",
+      optional: true,
+      placeholder: "Boleh dikosongkan",
+    },
+  ],
+});
+
 // Langkah 1: isian sesuai surat yang diajukan
-export const sections = [pemohonRingkas(), calonPengantin(), akad()];
+export const sections = [pemohonRingkas(), calonPengantin(), akad(), penandatanganKua()];
 
 // Langkah 2: dokumen pendukung (opt(...) = tidak wajib)
 export const documents = ["Surat pengantar nikah dari desa/kelurahan (N1)", "Persetujuan calon mempelai (N3)", DOC.ktp, DOC.aktaLahir, DOC.kk, DOC.pasFoto, opt("Surat keterangan wali nikah")];

@@ -182,10 +182,18 @@ const firstHasDualCatin = computed(() => {
 const showApplicantLookup = computed(() => !ui.value.hideApplicantLookup && !firstHasDualCatin.value && (selectedVisibleCount.value > 1 || !requiresDualCatinLookup.value));
 const sectionsOf = (letter) => (letter.id === selectedLetters.value[0]?.id ? [...letter.sections, NOTIF_SECTION] : letter.sections);
 
+const isFemaleMarriage = computed(() => props.bundle.slug === "permohonan-nikah-perempuan");
+const isMaleMarriage = computed(() => props.bundle.slug === "permohonan-nikah-laki-laki");
+const bundlePreferredRole = computed(() => {
+  if (isFemaleMarriage.value) return "bride";
+  if (isMaleMarriage.value) return "groom";
+  return null;
+});
+
 const applicantLookupSections = computed(() => {
   const allSections = selectedLetters.value.flatMap(sectionsOf);
   if (!requiresDualCatinLookup.value) return allSections;
-  const primaryLookupKey = allSections.find((section) =>
+  const primaryLookupKey = bundlePreferredRole.value || allSections.find((section) =>
     section.lookupKey === "groom" || section.lookupKey === "bride" || section.lookupKey === "child" || section.lookupKey === "spouse"
   )?.lookupKey;
   if (!primaryLookupKey) return allSections;
@@ -406,6 +414,11 @@ const isSubmitting = ref(false);
 // (services/letter-create.service.js): backend yang membuat kode surat dan men-generate PDF per surat.
 function buildPayload() {
   const bundleId = `BND-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const allSections = selectedLetters.value.flatMap(sectionsOf);
+  const bundleApplicant = lookup.withApplicant(
+    applicantOf(allSections, form, bundlePreferredRole.value)
+  );
+
   return {
     source: LETTER_SOURCE,
     bundle: props.bundle.slug,
@@ -418,7 +431,7 @@ function buildPayload() {
       slug: l.slug,
       code: l.code,
       title: l.title,
-      applicant: lookup.withApplicant(applicantOf(sectionsOf(l), form)),
+      applicant: bundleApplicant,
       fields: Object.fromEntries(sectionsOf(l).flatMap((s) => s.fields).map((f) => [f.key, f.type === "rows" ? uniqueRowsByNik(form[f.key] ?? []) : form[f.key]])),
       fieldDefinitions: sectionsOf(l).flatMap((s) => s.fields.map(({ key, label }) => ({ key, label, section: s.title }))),
       files: [],
