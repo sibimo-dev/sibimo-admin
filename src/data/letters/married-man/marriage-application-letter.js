@@ -8,7 +8,7 @@ const penandatanganKua = () => ({
       key: "kua_head_name",
       label: "Nama Kepala KUA / Penghulu",
       type: "text",
-      required: false,
+      optional: true,
       placeholder: "Boleh dikosongkan",
     },
   ],

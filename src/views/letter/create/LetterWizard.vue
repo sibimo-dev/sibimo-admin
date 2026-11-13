@@ -127,6 +127,14 @@ function next() {
 
 /* ---------- Kirim ---------- */
 const isSubmitting = ref(false);
+const preferredRole = computed(() => {
+  const isFemale = String(props.slug || '').includes('marriage-women') || ['N1','N2','N4','N5','N6','FPN','PNN','PHK','KBM','PBN','SWN','SWH'].includes(String(props.code).toUpperCase());
+  if (isFemale) return "bride";
+  const isMale = String(props.slug || '').includes('married-man') || ['DPN','KHN','PNK','SKN','KNN','KBP','PBM','KKN','SCM','SIO'].includes(String(props.code).toUpperCase());
+  if (isMale) return "groom";
+  return null;
+});
+
 const submitError = ref(""); // gagal simpan: pesan inline di bawah form, bukan pop-up
 
 function buildPayload() {
@@ -136,7 +144,7 @@ function buildPayload() {
     code: props.code,
     slug: props.slug,
     title: props.title,
-    applicant: lookup.withApplicant(applicantOf(allSections.value, form)),
+    applicant: lookup.withApplicant(applicantOf(allSections.value, form, preferredRole.value)),
     fields: Object.fromEntries(allSections.value.flatMap((s) => s.fields).map((f) => [f.key, f.type === "rows" ? uniqueRowsByNik(form[f.key] ?? []) : form[f.key]])),
     fieldDefinitions: allSections.value.flatMap((s) => s.fields.map(({ key, label }) => ({ key, label, section: s.title }))),
     files: [],
