@@ -447,14 +447,32 @@ function firstValue(fields, keys) {
   return "";
 }
 
-function applicantFrom(fields, allowEmpty = false, requireAddress = true, suppliedApplicant = {}) {
+function applicantFrom(fields, allowEmpty = false, requireAddress = true, suppliedApplicant = {}, preferredRole = null) {
   // Surat seperti KIA memakai field anak sebagai isian utama, bukan field
   // identitas pemohon. Wizard mengirim data pemohon hasil pencarian NIK melalui
   // `letter.applicant`, sehingga data itu harus ikut menjadi sumber identitas.
   const supplied = applicantFromFields(suppliedApplicant, {});
-  const applicantName = supplied.name || firstValue(fields, ["name", "applicantName", "reporterName", "groomName", "brideName", "childName", "deceasedName", "headOfFamilyName", "fatherName", "motherName"]);
-  const applicantNik = supplied.nik || firstValue(fields, ["nik", "applicantNik", "reporterNik", "groomNik", "brideNik", "childNik", "deceasedNik", "fatherNik", "motherNik"]);
-  const applicantAddress = supplied.address || firstValue(fields, ["address", "applicantAddress", "reporterAddress", "groomAddress", "brideAddress", "deceasedAddress", "fatherAddress", "motherAddress", "originAddress"]);
+  const nameKeys = preferredRole === "bride"
+    ? ["brideName", "name", "applicantName", "reporterName", "groomName", "childName", "deceasedName", "headOfFamilyName", "fatherName", "motherName"]
+    : ["name", "applicantName", "reporterName", "groomName", "brideName", "childName", "deceasedName", "headOfFamilyName", "fatherName", "motherName"];
+  const nikKeys = preferredRole === "bride"
+    ? ["brideNik", "nik", "applicantNik", "reporterNik", "groomNik", "childNik", "deceasedNik", "fatherNik", "motherNik"]
+    : ["nik", "applicantNik", "reporterNik", "groomNik", "brideNik", "childNik", "deceasedNik", "fatherNik", "motherNik"];
+  const addressKeys = preferredRole === "bride"
+    ? ["brideAddress", "address", "applicantAddress", "reporterAddress", "groomAddress", "deceasedAddress", "fatherAddress", "motherAddress", "originAddress"]
+    : ["address", "applicantAddress", "reporterAddress", "groomAddress", "brideAddress", "deceasedAddress", "fatherAddress", "motherAddress", "originAddress"];
+
+  // Jika preferredRole ditetapkan (mis. "bride"), prioritaskan data dari fields
+  // (yang sudah diurutkan sesuai role) sebelum fallback ke suppliedApplicant.
+  // Tanpa ini, supplied.name (dari lookup pria) selalu menang meski preferredRole = "bride".
+  const fromFields = {
+    name: firstValue(fields, nameKeys),
+    nik: firstValue(fields, nikKeys),
+    address: firstValue(fields, addressKeys),
+  };
+  const applicantName = preferredRole ? (fromFields.name || supplied.name) : (supplied.name || fromFields.name);
+  const applicantNik = preferredRole ? (fromFields.nik || supplied.nik) : (supplied.nik || fromFields.nik);
+  const applicantAddress = preferredRole ? (fromFields.address || supplied.address) : (supplied.address || fromFields.address);
   const applicantPhone = supplied.phone || firstValue(fields, ["whatsapp", "applicantPhone", "phone", "reporterPhone"]);
 
   if (!allowEmpty && (!applicantName || !applicantNik || (requireAddress && !applicantAddress))) {
@@ -505,7 +523,11 @@ async function submitOne(letter) {
   const internal = Boolean(letter.internal);
   // F-1.02 hanya meminta nama, NIK, dan nomor KK. Alamat tidak ada di
   // formulirnya, sehingga tidak boleh dipaksa oleh validasi umum pemohon.
-  const applicant = applicantFrom(fields, internal, letter.slug !== "population-occurrence-registration", letter.applicant);
+  const isFemaleMarriage = letter.bundleInfo?.bundle_slug === "permohonan-nikah-perempuan"
+    || String(letter.slug).includes("marriage-women")
+    || ['n1','n2','n4','n5','n6','fpn','pnn','phk','kbm','pbn','swn','swh'].includes(String(letter.code || '').toLowerCase());
+  const preferredRole = isFemaleMarriage ? "bride" : null;
+  const applicant = applicantFrom(fields, internal, letter.slug !== "population-occurrence-registration", letter.applicant, preferredRole);
   const labels = Object.fromEntries((letter.fieldDefinitions ?? []).map((field) => [field.key, field.label]));
   const mapped = mapFieldsToBackend(fields, type.fields ?? [], letter.slug, labels);
   const mappedFields = fillFromDocuments(mapped.fields, type.fields ?? [], type.documents ?? [], letter.files ?? []);

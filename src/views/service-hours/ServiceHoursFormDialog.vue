@@ -116,8 +116,9 @@ function close() {
     :draggable="false"
     :closable="!saving"
     header="Jam Pelayanan"
-    :style="{ width: '34rem', maxWidth: '95vw' }"
+    :style="{ width: '38rem', maxWidth: '95vw' }"
     :breakpoints="{ '640px': '95vw' }"
+    :pt="{ content: { class: 'overflow-x-hidden' } }"
     @update:visible="emit('update:visible', $event)"
   >
     <p class="m-0 mb-4 text-[13px] text-neutral-500">
@@ -127,39 +128,48 @@ function close() {
     <div v-if="loading" class="py-10 text-center text-neutral-400">Memuat data...</div>
 
     <div v-else class="flex flex-col gap-2.5">
-
       <div
         v-for="day in hours"
         :key="day.day_of_week"
-        class="flex flex-col gap-2.5 rounded-lg border border-neutral-200 px-3.5 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3"
+        class="flex flex-col gap-2.5 rounded-lg border px-3.5 py-2.5 sm:flex-row sm:items-center sm:justify-between transition-colors"
+        :class="day.is_closed ? 'border-neutral-200 bg-neutral-50/70 border-dashed' : 'border-neutral-200 bg-white'"
       >
-        <!-- Baris atas: nama hari + toggle -->
+        <!-- Sisi kiri: nama hari + toggle libur -->
         <div class="flex items-center gap-3">
-          <span class="w-16 shrink-0 text-[13px] font-semibold text-neutral-700">{{ day.label }}</span>
+          <span
+            class="w-16 shrink-0 text-[13px] font-semibold"
+            :class="day.is_closed ? 'text-neutral-400' : 'text-neutral-700'"
+          >
+            {{ day.label }}
+          </span>
           <div class="flex items-center gap-2">
             <ToggleSwitch v-model="day.is_closed" :inputId="`closed-${day.day_of_week}`" />
-            <label :for="`closed-${day.day_of_week}`" class="text-[13px] text-neutral-500">Libur</label>
+            <label :for="`closed-${day.day_of_week}`" class="text-[13px] text-neutral-500 cursor-pointer select-none">
+              Libur
+            </label>
           </div>
         </div>
 
-        <!-- Baris jam: selalu muat di dalam kartu -->
-        <div v-if="!day.is_closed" class="flex w-full min-w-0 items-center gap-2 sm:ml-auto sm:w-auto">
+        <!-- Sisi kanan: isian jam atau keterangan tutup -->
+        <div v-if="!day.is_closed" class="flex items-center justify-end gap-2 w-full sm:w-auto">
           <InputText
             v-model="day.open_time"
             type="time"
-            fluid
-            class="min-w-0 flex-1 rounded-lg border border-neutral-300 px-2 py-1.5 text-[13px] sm:w-32 sm:flex-none"
+            class="w-28 sm:w-32 rounded-lg border border-neutral-300 px-2 py-1.5 text-center text-[13px] focus:border-primary-600 focus:ring-1 focus:ring-primary-600"
           />
-          <span class="shrink-0 text-neutral-400">–</span>
+          <span class="shrink-0 text-neutral-400 font-bold">–</span>
           <InputText
             v-model="day.close_time"
             type="time"
-            fluid
-            class="min-w-0 flex-1 rounded-lg border border-neutral-300 px-2 py-1.5 text-[13px] sm:w-32 sm:flex-none"
+            class="w-28 sm:w-32 rounded-lg border border-neutral-300 px-2 py-1.5 text-center text-[13px] focus:border-primary-600 focus:ring-1 focus:ring-primary-600"
           />
         </div>
 
-        <span v-else class="text-[13px] text-neutral-400 sm:ml-auto">Tutup</span>
+        <div v-else class="flex items-center justify-end sm:w-auto pr-1">
+          <span class="rounded-md bg-neutral-200/60 px-3 py-1 text-xs font-medium text-neutral-500">
+            Tutup
+          </span>
+        </div>
       </div>
 
       <p v-if="errorMessage" class="m-0 mt-1 text-[13px] text-danger-600">{{ errorMessage }}</p>

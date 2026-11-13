@@ -516,14 +516,15 @@ export function validateFields(sections, form) {
     for (const field of section.fields) {
       if (!visible(field, form)) continue;
       const v = form[field.key];
+      const isFieldOptional = Boolean(field.optional || field.required === false);
       if (field.type === "rows") {
         const rows = v.filter((r) => Object.values(r).some(isFilled));
-        if (!field.optional && rows.length < (field.min ?? 1)) e[field.key] = `${field.label} minimal ${field.min ?? 1} baris.`;
+        if (!isFieldOptional && rows.length < (field.min ?? 1)) e[field.key] = `${field.label} minimal ${field.min ?? 1} baris.`;
         else if (rows.some((r) => field.columns.some((c) => !c.optional && !isFilled(r[c.key])))) e[field.key] = "Lengkapi semua kolom pada setiap baris yang diisi.";
         continue;
       }
       if (!isFilled(v)) {
-        if (!field.optional && !section.requireOne) e[field.key] = `${field.label} wajib diisi.`;
+        if (!isFieldOptional && !section.requireOne) e[field.key] = `${field.label} wajib diisi.`;
         continue;
       }
       if (field.digits && !new RegExp(`^\\d{${field.digits}}$`).test(String(v).trim())) e[field.key] = `${field.label} harus ${field.digits} digit angka.`;
@@ -676,12 +677,21 @@ const APPLICANT_LABELS = {
   address: ["alamat", "alamat pemohon", "alamat sesuai ktp", "alamat tempat tinggal"],
 };
 const normalizeApplicantText = (v) => String(v ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-export function applicantOf(sections, values) {
+export function applicantOf(sections, values, preferredRole = null) {
   // Pada form nikah dua catin, tidak ada lagi satu pencarian pemohon umum.
   // Ambil metadata pemohon dari blok catin utama agar payload tetap punya
   // identitas, bukan salah mengambil nama ayah/ibu dari section sebelumnya.
-  const primaryCatin = sections.find((section) => section.lookupKey === "groom")
-    ?? sections.find((section) => section.lookupKey === "bride");
+  let primaryCatin = null;
+  if (preferredRole === "bride") {
+    primaryCatin = sections.find((section) => section.lookupKey === "bride")
+      ?? sections.find((section) => section.lookupKey === "groom");
+  } else if (preferredRole === "groom") {
+    primaryCatin = sections.find((section) => section.lookupKey === "groom")
+      ?? sections.find((section) => section.lookupKey === "bride");
+  } else {
+    primaryCatin = sections.find((section) => section.lookupKey === "groom")
+      ?? sections.find((section) => section.lookupKey === "bride");
+  }
   const fields = [
     ...(primaryCatin?.fields ?? []),
     ...sections.filter((section) => section !== primaryCatin).flatMap((section) => section.fields ?? []),
