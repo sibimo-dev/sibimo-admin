@@ -365,15 +365,44 @@ const saveDraft = () => persist('Draft')
 const saveMain = () => persist('Published')
 
 function moveToTrash() {
+  if (!isEditMode.value || !potentialId.value) {
+    router.push({ name: 'village-potential-list' })
+    return
+  }
+
   confirm.require({
     message: `Pindahkan potensi "${title.value || 'ini'}" ke sampah?`,
-    header: 'Konfirmasi Hapus',
+    header: 'Pindahkan ke Sampah',
     icon: 'pi pi-exclamation-triangle',
-    acceptLabel: 'Hapus',
+    acceptLabel: 'Pindahkan',
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
-    accept: () => {
-      router.push({ name: 'village-potential-list' })
+    accept: async () => {
+      saving.value = true
+      try {
+        const archived = await potentialService.update(potentialId.value, { status: 'Archived' })
+        updateListCache('village-potentials', items => items.map(item => (
+          item.potential_id === Number(potentialId.value)
+            ? { ...item, ...archived, status: 'Archived' }
+            : item
+        )))
+        toast.add({
+          severity: 'success',
+          summary: 'Potensi dipindahkan ke sampah',
+          detail: 'Potensi tidak akan tampil di halaman publik.',
+          life: 3500,
+        })
+        router.push({ name: 'village-potential-list' })
+      } catch (error) {
+        toast.add({
+          severity: 'error',
+          summary: 'Gagal memindahkan potensi',
+          detail: error.response?.data?.message ?? 'Periksa koneksi backend.',
+          life: 4000,
+        })
+      } finally {
+        saving.value = false
+      }
     },
   })
 }
@@ -1376,6 +1405,7 @@ async function onImageSelect(event) {
         </Card>
 
         <Button
+          v-if="isEditMode"
           label="Pindahkan ke sampah"
           icon="pi pi-trash"
           severity="secondary"
