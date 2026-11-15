@@ -846,19 +846,33 @@ function goBack() {
   router.push({ name: 'news-list' })
 }
 
-function saveDraft() {
-  status.value = 'Draft'
-  router.push({ name: 'news-list' })
-}
-
-async function publishNews() {
+async function persistNews(targetStatus) {
   if (saving.value) return
-  status.value = 'Published'
+  if (!title.value.trim()) {
+    toast.add({ severity: 'warn', summary: 'Judul wajib diisi', life: 3000 })
+    return
+  }
+
+  status.value = targetStatus
   const selected = categoryOptions.value.find(option => option.checked)
-  if (!selected) { toast.add({ severity: 'warn', summary: 'Pilih kategori berita terlebih dahulu', life: 3000 }); return }
+  if (targetStatus === 'Published' && !selected) {
+    toast.add({ severity: 'warn', summary: 'Pilih kategori berita terlebih dahulu', life: 3000 })
+    return
+  }
   const normalize = value => String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
-  const category = newsCategories.value.find(item => normalize(item.slug) === normalize(selected.id) || normalize(item.category_name) === normalize(selected.label))
-  const payload = { category_id: category?.category_id, category_name: selected.label, title: title.value, slug: isEditMode.value ? undefined : `${title.value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`, content: content.value, thumbnail: imageFile.value, status: 'Published', published_at: publishDate.value.toISOString() }
+  const category = selected
+    ? newsCategories.value.find(item => normalize(item.slug) === normalize(selected.id) || normalize(item.category_name) === normalize(selected.label))
+    : null
+  const payload = {
+    category_id: category?.category_id,
+    category_name: selected?.label,
+    title: title.value,
+    slug: isEditMode.value ? undefined : `${title.value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`,
+    content: content.value || '<p><br></p>',
+    thumbnail: imageFile.value,
+    status: targetStatus,
+    published_at: targetStatus === 'Published' ? publishDate.value.toISOString() : undefined,
+  }
 
   saving.value = true
   try {
@@ -869,7 +883,7 @@ async function publishNews() {
     updateListCache('news', items => {
       const cachedItem = {
         ...saved,
-        category: { category_name: selected.label },
+        category: selected ? { category_name: selected.label } : saved?.category,
         author: { full_name: authStore.user?.full_name ?? authStore.user?.username ?? '-' },
       }
 
@@ -885,7 +899,9 @@ async function publishNews() {
   } catch (error) {
     toast.add({
       severity: 'error',
-      summary: isEditMode.value ? 'Gagal memperbarui berita' : 'Gagal menerbitkan berita',
+      summary: targetStatus === 'Draft'
+        ? 'Gagal menyimpan draft berita'
+        : isEditMode.value ? 'Gagal memperbarui berita' : 'Gagal menerbitkan berita',
       detail: error.response?.data?.message ?? 'Periksa data dan koneksi backend.',
       life: 4000,
     })
@@ -894,16 +910,55 @@ async function publishNews() {
   }
 }
 
+function saveDraft() {
+  persistNews('Draft')
+}
+
+function publishNews() {
+  persistNews('Published')
+}
+
 function moveToTrash() {
+  if (!isEditMode.value || !newsId.value) {
+    router.push({ name: 'news-list' })
+    return
+  }
+
   confirm.require({
-    message: `Pindahkan berita "${title.value || 'ini'}" ke sampah?`,
-    header: 'Konfirmasi Hapus',
+    message: `Pindahkan berita "${title.value || 'ini'}" ke sampah? Data tetap tersimpan dan bisa dipulihkan nanti.`,
+    header: 'Pindahkan ke Sampah',
     icon: 'pi pi-exclamation-triangle',
-    acceptLabel: 'Hapus',
+    acceptLabel: 'Pindahkan',
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
-    accept: () => {
-      router.push({ name: 'news-list' })
+    accept: async () => {
+      saving.value = true
+      try {
+        const archived = await newsService.update(newsId.value, { status: 'Archived' })
+
+        updateListCache('news', items => items.map(item => (
+          item.news_id === Number(newsId.value)
+            ? { ...item, ...archived, status: 'Archived' }
+            : item
+        )))
+
+        toast.add({
+          severity: 'success',
+          summary: 'Berita dipindahkan ke sampah',
+          detail: 'Berita tidak akan tampil di halaman publik.',
+          life: 3500,
+        })
+        router.push({ name: 'news-list' })
+      } catch (error) {
+        toast.add({
+          severity: 'error',
+          summary: 'Gagal memindahkan berita',
+          detail: error.response?.data?.message ?? 'Periksa koneksi backend.',
+          life: 4000,
+        })
+      } finally {
+        saving.value = false
+      }
     },
   })
 }
@@ -1401,6 +1456,7 @@ function moveToTrash() {
         </Card>
 
         <Button
+          v-if="isEditMode"
           label="Pindahkan ke sampah"
           icon="pi pi-trash"
           severity="secondary"

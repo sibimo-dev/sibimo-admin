@@ -5,7 +5,6 @@ import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 
 import InputText from 'primevue/inputtext'
-import Select from 'primevue/select'
 import DatePicker from 'primevue/datepicker'
 import Button from 'primevue/button'
 import FileUpload from 'primevue/fileupload'
@@ -61,24 +60,13 @@ const attachmentName = ref(null)
 const attachmentFile = ref(null)
 const saving = ref(false)
 
-const status = ref('Draft')
-const statusOpen = ref(true)
 const visibility = ref('publik')
-
-const statusOptions = [
-  { label: 'Draft', value: 'Draft' },
-  { label: 'Terbit', value: 'Published' },
-]
 
 const visibilityOptions = [
   { label: 'Publik', value: 'publik' },
   { label: 'Dilindungi kata sandi', value: 'password' },
   { label: 'Privat', value: 'privat' },
 ]
-
-const statusDisplay = computed(() => (
-  statusOptions.find(item => item.value === status.value)?.label ?? status.value
-))
 
 onMounted(async () => {
   if (!isEditMode.value) return
@@ -91,7 +79,6 @@ onMounted(async () => {
     eventDate.value = parseDateValue(existing.event_date)
     startTime.value = createTime(existing.start_time)
     endTime.value = createTime(existing.end_time)
-    status.value = existing.status ?? 'Published'
   } catch (error) {
     toast.add({
       severity: 'error',
@@ -150,14 +137,8 @@ function previewAgenda() {
   window.open(`/agenda/preview/${agendaId.value ?? ''}`, '_blank')
 }
 
-function saveDraft() {
-  status.value = 'Draft'
-  router.push({ name: 'agenda-list' })
-}
-
-async function saveMain() {
+async function persistAgenda(targetStatus) {
   if (saving.value) return
-  status.value = 'Published'
   const payload = {
     title: eventName.value,
     attendee: attendees.value,
@@ -165,6 +146,7 @@ async function saveMain() {
     start_time: startTime.value.toTimeString().slice(0, 5),
     end_time: endTime.value.toTimeString().slice(0, 5),
     location: place.value,
+    status: targetStatus,
   }
 
   saving.value = true
@@ -174,7 +156,7 @@ async function saveMain() {
       : await agendaService.create(payload)
 
     updateListCache('agendas', items => {
-      const cachedItem = { ...saved, status: saved?.status ?? 'Published' }
+      const cachedItem = { ...saved, status: saved?.status ?? targetStatus }
 
       if (agendaId.value) {
         return items.map(item => item.agenda_id === Number(agendaId.value)
@@ -191,7 +173,9 @@ async function saveMain() {
   } catch (error) {
     toast.add({
       severity: 'error',
-      summary: agendaId.value ? 'Gagal memperbarui agenda' : 'Gagal menerbitkan agenda',
+      summary: targetStatus === 'Draft'
+        ? 'Gagal menyimpan draft agenda'
+        : agendaId.value ? 'Gagal memperbarui agenda' : 'Gagal menerbitkan agenda',
       detail: error.response?.data?.message ?? 'Periksa data dan koneksi backend.',
       life: 4000,
     })
@@ -200,16 +184,53 @@ async function saveMain() {
   }
 }
 
+function saveDraft() {
+  persistAgenda('Draft')
+}
+
+function saveMain() {
+  persistAgenda('Published')
+}
+
 function moveToTrash() {
+  if (!agendaId.value) {
+    router.push({ name: 'agenda-list' })
+    return
+  }
+
   confirm.require({
     message: `Pindahkan agenda "${eventName.value || 'ini'}" ke sampah?`,
-    header: 'Konfirmasi Hapus',
+    header: 'Pindahkan ke Sampah',
     icon: 'pi pi-exclamation-triangle',
-    acceptLabel: 'Hapus',
+    acceptLabel: 'Pindahkan',
     rejectLabel: 'Batal',
     acceptClass: 'p-button-danger',
-    accept: () => {
-      router.push({ name: 'agenda-list' })
+    accept: async () => {
+      saving.value = true
+      try {
+        const archived = await agendaService.update(agendaId.value, { status: 'Archived' })
+        updateListCache('agendas', items => items.map(item => (
+          item.agenda_id === Number(agendaId.value)
+            ? { ...item, ...archived, status: 'Archived' }
+            : item
+        )))
+        toast.add({
+          severity: 'success',
+          summary: 'Agenda dipindahkan ke sampah',
+          detail: 'Agenda tidak akan tampil di halaman publik.',
+          life: 3500,
+        })
+        router.push({ name: 'agenda-list' })
+      } catch (error) {
+        toast.add({
+          severity: 'error',
+          summary: 'Gagal memindahkan agenda',
+          detail: error.response?.data?.message ?? 'Periksa koneksi backend.',
+          life: 4000,
+        })
+      } finally {
+        saving.value = false
+      }
     },
   })
 }
@@ -441,37 +462,6 @@ function moveToTrash() {
         <Card>
           <template #content>
             <div class="flex flex-col gap-2.5">
-              <button
-                type="button"
-                class="flex items-center justify-between text-left text-[13px] text-gray-700"
-                @click="statusOpen = !statusOpen"
-              >
-                <span>
-                  Status:
-                  <strong>{{ statusDisplay }}</strong>
-                </span>
-
-                <i
-                  class="pi pi-chevron-down text-xs text-gray-400 transition-transform"
-                  :class="{ 'rotate-180': statusOpen }"
-                />
-              </button>
-
-              <Select
-                v-show="statusOpen"
-                v-model="status"
-                :options="statusOptions"
-                optionLabel="label"
-                optionValue="value"
-                fluid
-              />
-            </div>
-          </template>
-        </Card>
-
-        <Card>
-          <template #content>
-            <div class="flex flex-col gap-2.5">
               <span class="text-[13px] text-gray-700">
                 Keterlihatan:
                 <strong>
@@ -504,6 +494,7 @@ function moveToTrash() {
         </Card>
 
         <Button
+          v-if="isEditMode"
           label="Pindahkan ke sampah"
           icon="pi pi-trash"
           severity="secondary"
