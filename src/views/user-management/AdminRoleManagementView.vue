@@ -350,22 +350,23 @@ function cancel() {
           <div
             v-for="role in roles"
             :key="role.id"
-            class="group flex items-center justify-between rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+            class="flex items-center justify-between rounded-lg text-sm text-gray-600 hover:bg-gray-50"
             :class="{
               'bg-gray-100 text-gray-900 font-semibold': role.id === activeRoleId,
             }"
           >
             <button
-              class="flex-1 text-left px-3 py-2.5 bg-transparent border-0"
+              class="flex-1 min-w-0 text-left px-3 py-2.5 bg-transparent border-0"
               :class="{ 'border-l-[3px] border-gray-800': role.id === activeRoleId }"
               @click="selectRole(role.id)"
             >
               {{ role.name }}
             </button>
 
-            <div class="flex items-center gap-1 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <!-- Selalu tampil (tanpa hover) supaya bisa dipakai di layar sentuh -->
+            <div class="flex items-center gap-1 pr-2 shrink-0">
               <button
-                class="w-6 h-6 rounded-md inline-flex items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-800"
+                class="w-8 h-8 rounded-md inline-flex items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-800"
                 title="Edit nama role"
                 @click.stop="openEditRole(role)"
               >
@@ -373,7 +374,7 @@ function cancel() {
               </button>
               <button
                 v-if="!role.isProtected"
-                class="w-6 h-6 rounded-md inline-flex items-center justify-center text-gray-500 hover:bg-red-100 hover:text-red-600"
+                class="w-8 h-8 rounded-md inline-flex items-center justify-center text-gray-500 hover:bg-red-100 hover:text-red-600"
                 title="Hapus role"
                 @click.stop="handleDeleteRole(role)"
               >
