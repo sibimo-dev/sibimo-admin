@@ -14,6 +14,8 @@ const logoFile = ref(null)
 const stampFile = ref(null)
 const logoPreview = ref('')
 const stampPreview = ref('')
+const logoRemoved = ref(false)
+const stampRemoved = ref(false)
 
 const form = reactive({
   footer_setting_id: null,
@@ -40,6 +42,8 @@ function resetForm(data) {
   })
   logoPreview.value = data.logo ?? ''
   stampPreview.value = data.stamp ?? ''
+  logoRemoved.value = false
+  stampRemoved.value = false
 }
 
 function addSocialMedia() {
@@ -57,9 +61,11 @@ function selectFile(event, type) {
   if (type === 'logo') {
     logoFile.value = file
     logoPreview.value = URL.createObjectURL(file)
+    logoRemoved.value = false
   } else {
     stampFile.value = file
     stampPreview.value = URL.createObjectURL(file)
+    stampRemoved.value = false
   }
 }
 
@@ -67,9 +73,11 @@ function clearFile(type) {
   if (type === 'logo') {
     logoFile.value = null
     logoPreview.value = ''
+    logoRemoved.value = true
   } else {
     stampFile.value = null
     stampPreview.value = ''
+    stampRemoved.value = true
   }
 }
 
@@ -114,6 +122,8 @@ async function save() {
       },
       logo: logoFile.value,
       stamp: stampFile.value,
+      removeLogo: logoRemoved.value,
+      removeStamp: stampRemoved.value,
     })
     resetForm(saved)
     logoFile.value = null
