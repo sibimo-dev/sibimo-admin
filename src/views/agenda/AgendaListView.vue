@@ -12,6 +12,7 @@ import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import Button from 'primevue/button'
 import Select from 'primevue/select'
+import Menu from 'primevue/menu'
 import Tag from 'primevue/tag'
 import Card from 'primevue/card'
 import { agendaService } from '@/services/content.service'
@@ -88,6 +89,13 @@ function toIso(date) {
   return `${date.getFullYear()}-${mm}-${dd}`
 }
 
+// Ambil jam & menit saja: '08:00:00' -> '08:00'
+function formatTime(value) {
+  if (!value) return ''
+  const match = String(value).match(/(\d{1,2})[:.](\d{2})/)
+  return match ? `${match[1].padStart(2, '0')}:${match[2]}` : ''
+}
+
 function mapAgendaItem(item) {
   const rawDate = item.event_date ?? item.date
   const parsedDate = parseDate(rawDate)
@@ -101,7 +109,12 @@ function mapAgendaItem(item) {
     month: valid ? parsedDate.getMonth() : null,
     year: valid ? parsedDate.getFullYear() : null,
     day: valid ? dayNames[parsedDate.getDay()] : '-',
-    time: `${item.start_time ?? ''}${item.end_time ? ` - ${item.end_time}` : ''}`.trim() || '-',
+    time: (() => {
+      const start = formatTime(item.start_time)
+      const end = formatTime(item.end_time)
+      if (!start) return '-'
+      return end && end !== start ? `${start} - ${end}` : start
+    })(),
     location: item.location ?? '-',
     status: item.status?.toUpperCase() ?? 'PUBLISHED',
   }
@@ -211,14 +224,105 @@ function deleteSelected() {
   })
 }
 
-/* ---------- Export CSV (sesuai bulan yang dipilih) ---------- */
-function exportData() {
-  const rows = selected.value.length > 0
-    ? selected.value
-    : filteredAgendas.value
+/* ---------- Export CSV ---------- */
+const exportMenu = ref(null)
+const exporting = ref(false)
 
-  if (rows.length === 0) return
+const exportMenuItems = computed(() => {
+  const items = []
 
+  if (selected.value.length > 0) {
+    items.push({
+      label: `Agenda terpilih (${selected.value.length})`,
+      icon: 'pi pi-check-square',
+      command: () => exportData('selected'),
+    })
+  }
+
+  items.push(
+    {
+      label: `Bulan ${periodLabel.value}`,
+      icon: 'pi pi-calendar',
+      command: () => exportData('month'),
+    },
+    {
+      label: `Seluruh tahun ${selectedYear.value}`,
+      icon: 'pi pi-calendar-plus',
+      command: () => exportData('year'),
+    },
+    {
+      label: 'Semua agenda',
+      icon: 'pi pi-database',
+      command: () => exportData('all'),
+    },
+  )
+
+  return items
+})
+
+function toggleExportMenu(event) {
+  exportMenu.value?.toggle(event)
+}
+
+// Ambil data terbaru dari server agar benar-benar lengkap
+async function fetchAllAgendas() {
+  try {
+    const data = await agendaService.list()
+    return (Array.isArray(data) ? data : []).map(mapAgendaItem)
+  } catch (error) {
+    console.error('Gagal mengambil semua agenda untuk export:', error)
+    return agendas.value // cadangan: data yang sudah tampil di halaman
+  }
+}
+
+function sortByDate(rows) {
+  return [...rows].sort((a, b) =>
+    a.dateIso.localeCompare(b.dateIso) || a.time.localeCompare(b.time),
+  )
+}
+
+async function exportData(scope = 'month') {
+  if (exporting.value) return
+
+  const monthStr = String(selectedMonth.value + 1).padStart(2, '0')
+  const today = toIso(new Date()).replaceAll('-', '')
+  let rows = []
+  let fileName = ''
+
+  exporting.value = true
+  try {
+    if (scope === 'selected') {
+      rows = sortByDate(selected.value)
+      fileName = 'agenda-terpilih.csv'
+    } else if (scope === 'month') {
+      rows = sortByDate(filteredAgendas.value)
+      fileName = `agenda-${selectedYear.value}-${monthStr}.csv`
+    } else if (scope === 'year') {
+      const all = await fetchAllAgendas()
+      rows = sortByDate(all.filter(item => item.year === selectedYear.value))
+      fileName = `agenda-${selectedYear.value}.csv`
+    } else {
+      rows = sortByDate(await fetchAllAgendas())
+      fileName = `agenda-semua-${today}.csv`
+    }
+
+    if (rows.length === 0) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Tidak ada agenda untuk diekspor',
+        detail: 'Pilihan export yang dipilih belum memiliki data.',
+        life: 4000,
+      })
+      return
+    }
+
+    downloadCsv(rows, fileName)
+  } finally {
+    exporting.value = false
+  }
+}
+
+function downloadCsv(rows, fileName) {
   const headers = ['Nama Agenda', 'Hari', 'Tanggal', 'Jam', 'Lokasi', 'Status']
 
   const escapeCsv = (value) => {
@@ -251,7 +355,7 @@ function exportData() {
   const link = document.createElement('a')
 
   link.href = url
-  link.download = `agenda-${selectedYear.value}-${String(selectedMonth.value + 1).padStart(2, '0')}.csv`
+  link.download = fileName
 
   document.body.appendChild(link)
   link.click()
@@ -546,12 +650,23 @@ async function handleImportSelect(event) {
                 type="button"
                 severity="secondary"
                 outlined
+                :disabled="exporting"
+                aria-haspopup="true"
+                aria-controls="export_menu"
                 class="w-full justify-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-2 py-2 text-xs font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-100 sm:w-auto sm:px-3.5 sm:text-[13px]"
-                @click="exportData"
+                @click="toggleExportMenu"
               >
-                <i class="pi pi-download text-xs" />
+                <i :class="exporting ? 'pi pi-spinner pi-spin' : 'pi pi-download'" class="text-xs" />
                 <span>Export</span>
+                <i class="pi pi-chevron-down text-[10px]" />
               </Button>
+
+              <Menu
+                id="export_menu"
+                ref="exportMenu"
+                :model="exportMenuItems"
+                :popup="true"
+              />
             </div>
           </div>
 
@@ -658,6 +773,7 @@ async function handleImportSelect(event) {
           <Column
             field="time"
             header="Jam"
+            bodyClass="whitespace-nowrap"
           />
 
           <Column
