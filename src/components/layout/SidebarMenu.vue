@@ -12,6 +12,26 @@ const emit = defineEmits(['navigate'])
 const route = useRoute()
 const authStore = useAuthStore()
 
+const permissionAliases = {
+  'pengelolaan-surat': ['pengelolaan-surat', 'letter', 'letter-management', 'persuratan'],
+  'tipe-surat': ['tipe-surat', 'letter-type'],
+  pengaduan: ['pengaduan', 'aduan', 'complaint'],
+  perpustakaan: ['perpustakaan', 'library-catalog', 'library-loan', 'library-return'],
+  berita: ['berita', 'news', 'berita-pengumuman'],
+  agenda: ['agenda'],
+  gallery: ['gallery', 'galeri'],
+  pembangunan: ['pembangunan', 'development'],
+  'produk-hukum': ['produk-hukum', 'legal-product'],
+  footer: ['footer', 'footer-settings', 'pengaturan-footer'],
+  'data-warga': ['data-warga', 'citizen'],
+  'potensi-kalurahan': ['potensi-kalurahan', 'village-potential'],
+  sejarah: ['sejarah', 'history', 'profil-kalurahan'],
+  'visi-misi': ['visi-misi', 'vision-mission', 'profil-kalurahan'],
+  'struktur-organisasi': ['struktur-organisasi', 'organization-structure', 'profil-kalurahan'],
+  'data-wilayah': ['data-wilayah', 'village-area', 'profil-kalurahan'],
+  'user-management': ['user-management', 'user-list', 'role-permission', 'role-management', 'role-hak-akses'],
+}
+
 const menuGroups = [
   {
     label: 'Utama',
@@ -58,7 +78,7 @@ const menuGroups = [
     label: 'Data Kalurahan',
     showLabel: true,
     items: [
-      { label: 'Data Warga', icon: 'pi pi-users', route: '/citizen' },
+      { label: 'Data Warga', icon: 'pi pi-users', route: '/citizen', permission: 'data-warga' },
       { label: 'Potensi Kalurahan', icon: 'pi pi-star', route: '/village-potential', permission: 'potensi-kalurahan' },
       { label: 'Hasil Survei', icon: 'pi pi-chart-bar', route: '/survey' },
     ],
@@ -87,10 +107,15 @@ const visibleMenuGroups = computed(() => {
   const permissions = authStore.user?.permissions
   if (!Array.isArray(permissions)) return menuGroups
 
+  const hasPermission = (permission) => {
+    const aliases = permissionAliases[permission] ?? [permission]
+    return aliases.some(alias => permissions.includes(alias))
+  }
+
   const filterItems = (items) => items
     .map((item) => {
       const children = item.items ? filterItems(item.items) : []
-      const allowed = !item.permission || permissions.includes(item.permission)
+      const allowed = !item.permission || hasPermission(item.permission)
       if (!allowed && children.length === 0) return null
       return children.length > 0 ? { ...item, items: children } : item
     })
