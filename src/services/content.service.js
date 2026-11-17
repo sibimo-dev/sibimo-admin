@@ -27,6 +27,36 @@ const potentialFormData = (payload) => {
   })
   return data
 }
+
+/* ---------- Agenda (mendukung lampiran) ---------- */
+// String kosong tetap dikirim agar admin bisa mengosongkan Tempat/Keterangan saat edit.
+const agendaFormData = (payload) => {
+  const data = new FormData()
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value === undefined || value === null) return
+    data.append(key, typeof value === 'boolean' ? (value ? '1' : '0') : value)
+  })
+  return data
+}
+const hasFile = (payload) => payload?.attachment instanceof File
+const multipart = { headers: { 'Content-Type': 'multipart/form-data' } }
+
+export const agendaService = {
+  list: () => unwrap(api.get('/agendas')),
+  get: (id) => unwrap(api.get(`/agendas/${id}`)),
+  // Tanpa file tetap JSON (dipakai juga oleh import Excel & "pindah ke sampah")
+  create: (payload) => hasFile(payload)
+    ? unwrap(api.post('/agendas', agendaFormData(payload), multipart))
+    : unwrap(api.post('/agendas', payload)),
+  update: (id, payload) => {
+    if (!hasFile(payload)) return unwrap(api.put(`/agendas/${id}`, payload))
+    const data = agendaFormData(payload)
+    data.append('_method', 'PUT')
+    return unwrap(api.post(`/agendas/${id}`, data, multipart))
+  },
+  remove: (id) => unwrap(api.delete(`/agendas/${id}`)),
+}
+
 export const newsService = {
   list: () => unwrap(api.get('/news')),
   get: (id) => unwrap(api.get(`/news/${id}`)),
@@ -52,7 +82,6 @@ export const serviceHoursService = {
   list: () => unwrap(api.get('/service-hours')),
   save: (payload) => unwrap(api.put('/service-hours', payload)),
 }
-export const agendaService = crud('/agendas')
 export const potentialService = {
   list: () => unwrap(api.get('/village-potentials')),
   get: (id) => unwrap(api.get(`/village-potentials/${id}`)),

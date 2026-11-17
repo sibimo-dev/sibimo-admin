@@ -105,6 +105,7 @@ import { useAuthStore } from '@/stores/auth.store'
 import { newsService, newsCategoryService } from '@/services/content.service'
 import { updateListCache } from '@/services/list-cache'
 import { mediaUrl } from '@/services/media'
+import PublicContentPreviewDialog from '@/components/content/PublicContentPreviewDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -122,8 +123,10 @@ const imagePreview = ref(null)
 const imageFile = ref(null)
 const fileUploadRef = ref(null)
 const saving = ref(false)
+const previewVisible = ref(false)
 const title = ref('')
 const content = ref('')
+const slug = ref('')
 
 const status = ref('Draft')
 const visibility = ref('publik')
@@ -155,6 +158,23 @@ const visibilityLabel = computed(() => (
       : 'Privat'
 ))
 
+const selectedCategoryLabel = computed(() => (
+  categoryOptions.value.find(option => option.checked)?.label || 'Berita Desa'
+))
+
+const previewDateLabel = computed(() => {
+  const d = publishDate.value instanceof Date ? publishDate.value : new Date(publishDate.value || Date.now())
+  if (isNaN(d.getTime())) return new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+  return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+})
+
+const previewAuthorLabel = computed(() => (
+  authorOptions.value.find(option => option.value === author.value)?.label
+    || authStore.user?.full_name
+    || authStore.user?.username
+    || 'Admin Desa'
+))
+
 onMounted(async () => {
   newsCategories.value = await newsCategoryService.list()
   categoryOptions.value = newsCategories.value.map(item => ({
@@ -172,6 +192,7 @@ onMounted(async () => {
   const existing = await newsService.get(newsId.value)
   title.value = existing.title ?? ''
   content.value = existing.content ?? ''
+  slug.value = existing.slug ?? ''
   imagePreview.value = mediaUrl(existing.thumbnail)
   status.value = existing.status ?? 'Draft'
   categoryOptions.value.forEach(option => {
@@ -839,7 +860,11 @@ function removeTag(tag) {
 }
 
 function previewNews() {
-  window.open(`/news/preview/${newsId.value ?? ''}`, '_blank')
+  if (!title.value.trim() && !content.value.trim() && !imagePreview.value) {
+    toast.add({ severity: 'warn', summary: 'Belum ada isi untuk dipratinjau', detail: 'Isi judul atau konten berita terlebih dahulu.', life: 3000 })
+    return
+  }
+  previewVisible.value = true
 }
 
 function goBack() {
@@ -1467,6 +1492,18 @@ function moveToTrash() {
 
       </aside>
     </div>
+
+    <PublicContentPreviewDialog
+      v-model="previewVisible"
+      kind="Berita"
+      :category="selectedCategoryLabel"
+      :title="title"
+      :date="previewDateLabel"
+      :author="previewAuthorLabel"
+      :image="imagePreview"
+      :content="content"
+      :slug="slug"
+    />
   </div>
 </template>
 
@@ -1482,4 +1519,5 @@ function moveToTrash() {
 .ql-editor .ql-align-justify {
   text-align: justify;
 }
+
 </style>

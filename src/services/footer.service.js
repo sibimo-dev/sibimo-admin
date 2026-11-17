@@ -12,6 +12,8 @@ export function saveFooterSettings({ id, payload, logo = null, stamp = null }) {
   formData.append('phone', payload.phone ?? '')
   formData.append('email', payload.email ?? '')
   formData.append('social_media', JSON.stringify(payload.social_media ?? []))
+  formData.append('remove_logo', payload.removeLogo ? '1' : '0')
+  formData.append('remove_stamp', payload.removeStamp ? '1' : '0')
 
   if (logo) formData.append('logo', logo)
   if (stamp) formData.append('stamp', stamp)

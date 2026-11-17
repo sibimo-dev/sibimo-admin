@@ -74,6 +74,7 @@ import { potentialService, potentialCategoryService } from '@/services/content.s
 import { useAuthStore } from '@/stores/auth.store'
 import { updateListCache } from '@/services/list-cache'
 import { mediaUrl } from '@/services/media'
+import PublicContentPreviewDialog from '@/components/content/PublicContentPreviewDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -96,7 +97,9 @@ const photoPreview = ref(null)
 const photoFile = ref(null)
 const fileUploadRef = ref(null)
 const saving = ref(false)
+const previewVisible = ref(false)
 const title = ref('')
+const slug = ref('')
 const content = ref('')
 const shortDesc = ref('')
 const location = ref('')
@@ -212,6 +215,27 @@ const visibilityLabel = computed(() => (
       : 'Privat'
 ))
 
+const previewCategoryLabel = computed(() => (
+  categoryOptions.value.find(option => option.value === selectedCategory.value)?.label || 'Potensi Desa'
+))
+
+const previewDateLabel = computed(() => {
+  if (!(publishDate.value instanceof Date) || Number.isNaN(publishDate.value.getTime())) return ''
+  return publishDate.value.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+})
+
+const previewAuthorLabel = computed(() => (
+  authorOptions.value.find(option => option.value === author.value)?.label
+    || authStore.user?.full_name
+    || authStore.user?.username
+    || 'Admin Desa'
+))
+
+const previewDetails = computed(() => [
+  { label: 'Lokasi', value: location.value },
+  { label: 'Kontak', value: contact.value },
+])
+
 onMounted(async () => {
   await fetchCategories()
 
@@ -224,6 +248,7 @@ onMounted(async () => {
   try {
     const existing = await potentialService.get(potentialId.value)
     title.value = existing.title ?? ''
+    slug.value = existing.slug ?? ''
     content.value = existing.description ?? ''
     photoPreview.value = mediaUrl(existing.image)
 
@@ -280,7 +305,11 @@ function removePhoto(removeFileCallback) {
 }
 
 function previewPotential() {
-  window.open(`/village-potential/preview/${potentialId.value ?? ''}`, '_blank')
+  if (!title.value.trim() && !content.value.trim() && !photoPreview.value) {
+    toast.add({ severity: 'warn', summary: 'Belum ada isi untuk dipratinjau', detail: 'Isi judul atau konten potensi terlebih dahulu.', life: 3000 })
+    return
+  }
+  previewVisible.value = true
 }
 
 function goBack() {
@@ -1415,5 +1444,21 @@ async function onImageSelect(event) {
         />
       </aside>
     </div>
+
+    <PublicContentPreviewDialog
+      v-model="previewVisible"
+      kind="Potensi Desa"
+      :category="previewCategoryLabel"
+      :title="title"
+      :date="previewDateLabel"
+      :author="previewAuthorLabel"
+      :image="photoPreview"
+      :summary="shortDesc"
+      :content="content"
+      :details="previewDetails"
+      :location="location"
+      :contact="contact"
+      :slug="slug"
+    />
   </div>
 </template>

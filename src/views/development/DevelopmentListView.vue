@@ -125,7 +125,12 @@ function formatCurrency(value) {
 
 // The highest percentage among the progress photos is treated as current progress.
 function latestProgress(item) {
-  return Math.max(0, ...(item.progress ?? []).map((entry) => Number(entry.percentage) || 0))
+  return Math.max(
+    0,
+    ...(item.progress ?? [])
+      .filter((entry) => entry?.image)
+      .map((entry) => Number(entry.percentage) || 0),
+  )
 }
 
 function goCreate() {

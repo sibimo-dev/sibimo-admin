@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
@@ -7,12 +7,13 @@ import { useToast } from 'primevue/usetoast'
 import InputText from 'primevue/inputtext'
 import DatePicker from 'primevue/datepicker'
 import Button from 'primevue/button'
-import FileUpload from 'primevue/fileupload'
 import RadioButton from 'primevue/radiobutton'
 import Card from 'primevue/card'
+import api from '@/services/api'
 import { agendaService } from '@/services/content.service'
 import { updateListCache } from '@/services/list-cache'
 import { agendaPeriod, setAgendaPeriod } from '@/services/agenda.period'
+import PublicContentPreviewDialog from '@/components/content/PublicContentPreviewDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -55,10 +56,76 @@ const eventDate = ref(defaultEventDate())
 const startTime = ref(new Date())
 const endTime = ref(new Date())
 
-const attachmentPreview = ref(null)
+/* ---------- Lampiran ---------- */
+const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024 // 5 MB
+
+const attachmentInput = ref(null)
+const attachmentPreview = ref(null) // blob: (file baru) atau URL (lampiran lama)
 const attachmentName = ref(null)
 const attachmentFile = ref(null)
+const removeExisting = ref(false) // lampiran lama dihapus saat edit
 const saving = ref(false)
+const previewVisible = ref(false)
+
+const isImageName = name => /\.(png|jpe?g|gif|webp|avif)(\?.*)?$/i.test(name ?? '')
+
+// Jika backend mengembalikan path relatif (/storage/...), tambahkan origin API
+function resolveFileUrl(url) {
+  if (!url) return null
+  if (/^(https?:)?\/\//i.test(url) || url.startsWith('data:')) return url
+  try {
+    const origin = new URL(api.defaults.baseURL, window.location.origin).origin
+    return origin + (url.startsWith('/') ? url : `/${url}`)
+  } catch {
+    return url
+  }
+}
+
+function revokePreview() {
+  if (attachmentPreview.value?.startsWith('blob:')) {
+    URL.revokeObjectURL(attachmentPreview.value)
+  }
+}
+
+function pickAttachment() {
+  attachmentInput.value?.click()
+}
+
+function handleAttachmentSelect(event) {
+  const file = event.target.files?.[0]
+  event.target.value = '' // supaya file yang sama bisa dipilih ulang
+  if (!file) return
+
+  if (file.size > MAX_ATTACHMENT_SIZE) {
+    toast.add({
+      severity: 'warn',
+      summary: 'File terlalu besar',
+      detail: 'Ukuran lampiran maksimal 5 MB.',
+      life: 3500,
+    })
+    return
+  }
+
+  revokePreview()
+
+  attachmentFile.value = file
+  attachmentName.value = file.name
+  removeExisting.value = false
+  attachmentPreview.value = file.type.startsWith('image/')
+    ? URL.createObjectURL(file)
+    : null
+}
+
+function removeAttachment() {
+  revokePreview()
+
+  attachmentPreview.value = null
+  attachmentName.value = null
+  attachmentFile.value = null
+  removeExisting.value = true
+}
+
+onBeforeUnmount(revokePreview)
 
 const visibility = ref('publik')
 
@@ -67,6 +134,30 @@ const visibilityOptions = [
   { label: 'Dilindungi kata sandi', value: 'password' },
   { label: 'Privat', value: 'privat' },
 ]
+
+const previewDateLabel = computed(() => {
+  if (!eventDate.value) return ''
+  const d = eventDate.value instanceof Date ? eventDate.value : new Date(eventDate.value)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  })
+})
+
+const previewTimeLabel = computed(() => {
+  const start = startTime.value?.toTimeString?.().slice(0, 5) || ''
+  const end = endTime.value?.toTimeString?.().slice(0, 5) || ''
+  return start && end ? `${start}–${end} WIB` : start || end
+})
+
+const previewDetails = computed(() => [
+  { label: 'Tempat', value: place.value },
+  { label: 'Waktu', value: previewTimeLabel.value },
+  { label: 'Yang menghadiri/keterangan', value: attendees.value },
+])
 
 onMounted(async () => {
   if (!isEditMode.value) return
@@ -79,6 +170,12 @@ onMounted(async () => {
     eventDate.value = parseDateValue(existing.event_date)
     startTime.value = createTime(existing.start_time)
     endTime.value = createTime(existing.end_time)
+
+    if (existing.attachment_url) {
+      const url = resolveFileUrl(existing.attachment_url)
+      attachmentName.value = existing.attachment_name ?? existing.attachment_url.split('/').pop()
+      attachmentPreview.value = isImageName(existing.attachment_url) ? url : null
+    }
   } catch (error) {
     toast.add({
       severity: 'error',
@@ -109,36 +206,17 @@ function goBack() {
   router.push({ name: 'agenda-list' })
 }
 
-function handleAttachmentSelect(event) {
-  const file = event.files?.[0]
-  if (!file) return
-
-  attachmentFile.value = file
-  attachmentName.value = file.name
-
-  if (file.type.startsWith('image/')) {
-    attachmentPreview.value = URL.createObjectURL(file)
-  } else {
-    attachmentPreview.value = null
-  }
-}
-
-function removeAttachment() {
-  if (attachmentPreview.value) {
-    URL.revokeObjectURL(attachmentPreview.value)
-  }
-
-  attachmentPreview.value = null
-  attachmentName.value = null
-  attachmentFile.value = null
-}
-
 function previewAgenda() {
-  window.open(`/agenda/preview/${agendaId.value ?? ''}`, '_blank')
+  if (!eventName.value.trim() && !place.value.trim() && !attendees.value.trim()) {
+    toast.add({ severity: 'warn', summary: 'Belum ada isi untuk dipratinjau', detail: 'Isi nama acara atau detail agenda terlebih dahulu.', life: 3000 })
+    return
+  }
+  previewVisible.value = true
 }
 
 async function persistAgenda(targetStatus) {
   if (saving.value) return
+
   const payload = {
     title: eventName.value,
     attendee: attendees.value,
@@ -148,6 +226,12 @@ async function persistAgenda(targetStatus) {
     location: place.value,
     status: targetStatus,
   }
+
+  // Tambahkan letter_origin hanya jika tabel backend punya kolomnya:
+  // payload.letter_origin = letterOrigin.value
+
+  if (attachmentFile.value) payload.attachment = attachmentFile.value
+  else if (removeExisting.value) payload.remove_attachment = true
 
   saving.value = true
   try {
@@ -353,7 +437,17 @@ function moveToTrash() {
                 Gambar/Lampiran
               </span>
 
+              <!-- Input file asli disembunyikan; dibuka lewat tombol -->
+              <input
+                ref="attachmentInput"
+                type="file"
+                accept="image/*,.pdf,.doc,.docx"
+                class="hidden"
+                @change="handleAttachmentSelect"
+              />
+
               <div class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4">
+                <!-- Preview gambar -->
                 <div
                   v-if="attachmentPreview"
                   class="relative overflow-hidden rounded-lg"
@@ -364,17 +458,29 @@ function moveToTrash() {
                     class="h-48 w-full object-cover"
                   />
 
-                  <Button
-                    icon="pi pi-trash"
-                    severity="danger"
-                    text
-                    rounded
-                    class="absolute right-2 top-2 bg-white/90"
-                    aria-label="Hapus lampiran"
-                    @click="removeAttachment"
-                  />
+                  <div class="absolute right-2 top-2 flex gap-1">
+                    <Button
+                      icon="pi pi-refresh"
+                      severity="secondary"
+                      text
+                      rounded
+                      class="bg-white/90"
+                      aria-label="Ganti lampiran"
+                      @click="pickAttachment"
+                    />
+                    <Button
+                      icon="pi pi-trash"
+                      severity="danger"
+                      text
+                      rounded
+                      class="bg-white/90"
+                      aria-label="Hapus lampiran"
+                      @click="removeAttachment"
+                    />
+                  </div>
                 </div>
 
+                <!-- File non-gambar (PDF / Word) -->
                 <div
                   v-else-if="attachmentName"
                   class="flex items-center justify-between gap-3 rounded-lg bg-white p-4"
@@ -386,33 +492,43 @@ function moveToTrash() {
                     </span>
                   </div>
 
-                  <Button
-                    icon="pi pi-trash"
-                    severity="danger"
-                    text
-                    rounded
-                    aria-label="Hapus lampiran"
-                    @click="removeAttachment"
-                  />
+                  <div class="flex shrink-0 gap-1">
+                    <Button
+                      icon="pi pi-refresh"
+                      severity="secondary"
+                      text
+                      rounded
+                      aria-label="Ganti lampiran"
+                      @click="pickAttachment"
+                    />
+                    <Button
+                      icon="pi pi-trash"
+                      severity="danger"
+                      text
+                      rounded
+                      aria-label="Hapus lampiran"
+                      @click="removeAttachment"
+                    />
+                  </div>
                 </div>
 
+                <!-- Belum ada lampiran -->
                 <div v-else class="flex flex-col items-center gap-3 py-5 text-center">
                   <i class="pi pi-cloud-upload text-3xl text-gray-400" />
                   <span class="text-[13px] text-gray-400">
                     Pilih gambar atau lampiran untuk agenda
                   </span>
 
-                  <FileUpload
-                    mode="basic"
-                    name="attachment"
-                    accept="image/*,.pdf,.doc,.docx"
-                    chooseLabel="Pilih Lampiran"
-                    chooseIcon="pi pi-upload"
-                    :auto="false"
-                    :customUpload="true"
-                    class="[&_input[type='file']]:hidden"
-                    @select="handleAttachmentSelect"
+                  <Button
+                    type="button"
+                    label="Pilih Lampiran"
+                    icon="pi pi-upload"
+                    @click="pickAttachment"
                   />
+
+                  <span class="text-xs text-gray-400">
+                    Gambar, PDF, atau Word. Maksimal 5 MB.
+                  </span>
                 </div>
               </div>
             </div>
@@ -504,5 +620,20 @@ function moveToTrash() {
         />
       </aside>
     </div>
+
+    <PublicContentPreviewDialog
+      v-model="previewVisible"
+      kind="Agenda"
+      category="Kegiatan Desa"
+      :title="eventName"
+      :date="previewDateLabel"
+      author="Admin Desa"
+      :image="attachmentPreview"
+      :content="attendees ? `<p>${attendees}</p>` : ''"
+      :details="previewDetails"
+      :location="place"
+      :time="previewTimeLabel"
+      :attendees="attendees"
+    />
   </div>
 </template>
