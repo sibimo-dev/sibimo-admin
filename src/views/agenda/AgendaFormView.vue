@@ -13,6 +13,7 @@ import Card from 'primevue/card'
 import { agendaService } from '@/services/content.service'
 import { updateListCache } from '@/services/list-cache'
 import { agendaPeriod, setAgendaPeriod } from '@/services/agenda.period'
+import PublicContentPreviewDialog from '@/components/content/PublicContentPreviewDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -59,6 +60,7 @@ const attachmentPreview = ref(null)
 const attachmentName = ref(null)
 const attachmentFile = ref(null)
 const saving = ref(false)
+const previewVisible = ref(false)
 
 const visibility = ref('publik')
 
@@ -67,6 +69,30 @@ const visibilityOptions = [
   { label: 'Dilindungi kata sandi', value: 'password' },
   { label: 'Privat', value: 'privat' },
 ]
+
+const previewDateLabel = computed(() => {
+  if (!eventDate.value) return ''
+  const d = eventDate.value instanceof Date ? eventDate.value : new Date(eventDate.value)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  })
+})
+
+const previewTimeLabel = computed(() => {
+  const start = startTime.value?.toTimeString?.().slice(0, 5) || ''
+  const end = endTime.value?.toTimeString?.().slice(0, 5) || ''
+  return start && end ? `${start}–${end} WIB` : start || end
+})
+
+const previewDetails = computed(() => [
+  { label: 'Tempat', value: place.value },
+  { label: 'Waktu', value: previewTimeLabel.value },
+  { label: 'Yang menghadiri/keterangan', value: attendees.value },
+])
 
 onMounted(async () => {
   if (!isEditMode.value) return
@@ -134,7 +160,11 @@ function removeAttachment() {
 }
 
 function previewAgenda() {
-  window.open(`/agenda/preview/${agendaId.value ?? ''}`, '_blank')
+  if (!eventName.value.trim() && !place.value.trim() && !attendees.value.trim()) {
+    toast.add({ severity: 'warn', summary: 'Belum ada isi untuk dipratinjau', detail: 'Isi nama acara atau detail agenda terlebih dahulu.', life: 3000 })
+    return
+  }
+  previewVisible.value = true
 }
 
 async function persistAgenda(targetStatus) {
@@ -504,5 +534,20 @@ function moveToTrash() {
         />
       </aside>
     </div>
+
+    <PublicContentPreviewDialog
+      v-model="previewVisible"
+      kind="Agenda"
+      category="Kegiatan Desa"
+      :title="eventName"
+      :date="previewDateLabel"
+      author="Admin Desa"
+      :image="attachmentPreview"
+      :content="attendees ? `<p>${attendees}</p>` : ''"
+      :details="previewDetails"
+      :location="place"
+      :time="previewTimeLabel"
+      :attendees="attendees"
+    />
   </div>
 </template>
