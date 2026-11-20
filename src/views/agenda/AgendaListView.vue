@@ -18,6 +18,7 @@ import Card from 'primevue/card'
 import { agendaService } from '@/services/content.service'
 import { getListCache, setListCache } from '@/services/list-cache'
 import { agendaPeriod } from '@/services/agenda.period'
+import { mediaUrl } from '@/services/media'
 
 const router = useRouter()
 const confirm = useConfirm()
@@ -104,6 +105,7 @@ function mapAgendaItem(item) {
   return {
     id: item.agenda_id,
     name: item.title,
+    image: mediaUrl(item.image),
     date: formatDate(rawDate),
     dateIso: toIso(parsedDate), // dipakai untuk sorting yang benar
     month: valid ? parsedDate.getMonth() : null,
@@ -755,6 +757,19 @@ async function handleImportSelect(event) {
             sortable
             class="min-w-64"
           />
+
+          <Column header="Gambar" headerStyle="width: 4rem">
+            <template #body="{ data }">
+              <div class="flex h-7 w-10 items-center justify-center overflow-hidden rounded bg-neutral-200">
+                <img
+                  v-if="data.image"
+                  :src="data.image"
+                  :alt="data.name"
+                  class="h-full w-full object-cover"
+                />
+              </div>
+            </template>
+          </Column>
 
           <Column
             field="day"
