@@ -18,6 +18,7 @@ import Card from 'primevue/card'
 import { agendaService } from '@/services/content.service'
 import { getListCache, setListCache } from '@/services/list-cache'
 import { agendaPeriod } from '@/services/agenda.period'
+import { mediaUrl } from '@/services/media'
 
 const router = useRouter()
 const confirm = useConfirm()
@@ -104,6 +105,12 @@ function mapAgendaItem(item) {
   return {
     id: item.agenda_id,
     name: item.title,
+    image: mediaUrl(item.image ?? item.attachment_url),
+    eventDate: String(rawDate ?? '').slice(0, 10),
+    startTime: formatTime(item.start_time),
+    endTime: formatTime(item.end_time),
+    place: item.location ?? '',
+    attendee: item.attendee ?? '',
     date: formatDate(rawDate),
     dateIso: toIso(parsedDate), // dipakai untuk sorting yang benar
     month: valid ? parsedDate.getMonth() : null,
@@ -266,13 +273,8 @@ function toggleExportMenu(event) {
 
 // Ambil data terbaru dari server agar benar-benar lengkap
 async function fetchAllAgendas() {
-  try {
-    const data = await agendaService.list()
-    return (Array.isArray(data) ? data : []).map(mapAgendaItem)
-  } catch (error) {
-    console.error('Gagal mengambil semua agenda untuk export:', error)
-    return agendas.value // cadangan: data yang sudah tampil di halaman
-  }
+  const data = await agendaService.list()
+  return (Array.isArray(data) ? data : []).map(mapAgendaItem)
 }
 
 function sortByDate(rows) {
@@ -293,17 +295,17 @@ async function exportData(scope = 'month') {
   try {
     if (scope === 'selected') {
       rows = sortByDate(selected.value)
-      fileName = 'agenda-terpilih.csv'
+      fileName = 'agenda-terpilih.xlsx'
     } else if (scope === 'month') {
       rows = sortByDate(filteredAgendas.value)
-      fileName = `agenda-${selectedYear.value}-${monthStr}.csv`
+      fileName = `agenda-${selectedYear.value}-${monthStr}.xlsx`
     } else if (scope === 'year') {
       const all = await fetchAllAgendas()
       rows = sortByDate(all.filter(item => item.year === selectedYear.value))
-      fileName = `agenda-${selectedYear.value}.csv`
+      fileName = `agenda-${selectedYear.value}.xlsx`
     } else {
       rows = sortByDate(await fetchAllAgendas())
-      fileName = `agenda-semua-${today}.csv`
+      fileName = `agenda-semua-${today}.xlsx`
     }
 
     if (rows.length === 0) {
@@ -316,52 +318,53 @@ async function exportData(scope = 'month') {
       return
     }
 
-    downloadCsv(rows, fileName)
+    downloadExcel(rows, fileName)
+  } catch (error) {
+    console.error('Gagal export agenda:', error)
+    toast.add({
+      severity: 'error',
+      summary: 'Gagal mengekspor agenda',
+      detail: 'Data lengkap gagal diambil dari server. Coba lagi setelah koneksi pulih.',
+      life: 4500,
+    })
   } finally {
     exporting.value = false
   }
 }
 
-function downloadCsv(rows, fileName) {
-  const headers = ['Nama Agenda', 'Hari', 'Tanggal', 'Jam', 'Lokasi', 'Status']
-
-  const escapeCsv = (value) => {
-    const stringValue = String(value ?? '')
-
-    return /[",\n]/.test(stringValue)
-      ? `"${stringValue.replace(/"/g, '""')}"`
-      : stringValue
-  }
-
-  const csvLines = [
-    headers.join(','),
-    ...rows.map(agendaItem =>
-      [
+function downloadExcel(rows, fileName) {
+  const headers = TEMPLATE_HEADERS
+  const sheetData = [
+    headers,
+    ...rows.map(agendaItem => [
         agendaItem.name,
-        agendaItem.day,
-        agendaItem.date,
-        agendaItem.time,
-        agendaItem.location,
-        agendaItem.status,
-      ]
-        .map(escapeCsv)
-        .join(',')
-    ),
+        agendaItem.eventDate,
+        agendaItem.startTime,
+        agendaItem.endTime,
+        agendaItem.place,
+        agendaItem.attendee,
+        agendaItem.status
+          ? `${agendaItem.status.charAt(0)}${agendaItem.status.slice(1).toLowerCase()}`
+          : 'Draft',
+    ]),
   ]
 
-  const csvContent = '\ufeff' + csvLines.join('\n')
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
+  const sheet = XLSX.utils.aoa_to_sheet(sheetData)
+  sheet['!cols'] = [
+    { wch: 38 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 30 },
+    { wch: 40 },
+    { wch: 16 },
+  ]
+  sheet['!rows'] = [{ hpt: 26 }, ...rows.map(() => ({ hpt: 22 }))]
+  sheet['!autofilter'] = { ref: `A1:G${sheetData.length}` }
 
-  link.href = url
-  link.download = fileName
-
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-
-  URL.revokeObjectURL(url)
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Agenda')
+  XLSX.writeFile(workbook, fileName, { bookType: 'xlsx' })
 }
 
 /* ---------- Template Excel ---------- */
@@ -372,17 +375,18 @@ const TEMPLATE_HEADERS = [
   'Jam Selesai',
   'Tempat',
   'Yang Menghadiri/Keterangan',
+  'Status',
 ]
 
 function downloadTemplate() {
   const sheetAgenda = XLSX.utils.aoa_to_sheet([
     TEMPLATE_HEADERS,
-    ['Rapat Koordinasi Kelurahan', '2026-11-05', '08:00', '10:00', 'Balai Kelurahan', 'Lurah dan seluruh ketua RW'],
-    ['Posyandu Balita', '2026-12-10', '09:00', '12:00', 'Pos RW 04', 'Kader Posyandu'],
-    ['Kerja Bakti Lingkungan', '2027-01-15', '06:30', '09:00', 'Seluruh wilayah', 'Warga'],
+    ['Rapat Koordinasi Kelurahan', '2026-12-05', '08:00', '10:00', 'Balai Kelurahan', 'Lurah dan seluruh ketua RW', 'Draft'],
+    ['Posyandu Balita', '2026-12-10', '09:00', '12:00', 'Pos RW 04', 'Kader Posyandu', 'Draft'],
+    ['Kerja Bakti Lingkungan', '2027-01-15', '06:30', '09:00', 'Seluruh wilayah', 'Warga', 'Draft'],
   ])
   sheetAgenda['!cols'] = [
-    { wch: 38 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 28 }, { wch: 36 },
+    { wch: 38 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 28 }, { wch: 36 }, { wch: 14 },
   ]
 
   const sheetGuide = XLSX.utils.aoa_to_sheet([
@@ -392,8 +396,9 @@ function downloadTemplate() {
     ['2. Nama Acara dan Tanggal WAJIB diisi.'],
     ['3. Tanggal ditulis YYYY-MM-DD (contoh 2026-11-05) atau DD/MM/YYYY (contoh 05/11/2026).'],
     ['4. Jam ditulis HH:mm, format 24 jam (contoh 08:00). Jika kosong, jam mulai dianggap 00:00.'],
-    ['5. Jangan mengubah / menghapus judul kolom di baris pertama.'],
-    ['6. Satu file boleh berisi agenda dari banyak bulan dan tahun; semuanya masuk dalam sekali unggah.'],
+    ['5. Status opsional; isi Draft, Published, atau Archived. Jika kosong, agenda disimpan sebagai Draft.'],
+    ['6. Jangan mengubah / menghapus judul kolom di baris pertama.'],
+    ['7. Satu file boleh berisi agenda dari banyak bulan dan tahun; semuanya masuk dalam sekali unggah.'],
   ])
   sheetGuide['!cols'] = [{ wch: 100 }]
 
@@ -406,6 +411,8 @@ function downloadTemplate() {
 /* ---------- Import Excel ---------- */
 const importInput = ref(null)
 const importing = ref(false)
+const MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024
+const MAX_IMPORT_ROWS = 1000
 
 function openImportPicker() {
   importInput.value?.click()
@@ -468,6 +475,15 @@ async function handleImportSelect(event) {
   event.target.value = ''
   if (!file || importing.value) return
 
+  if (!/\.(xlsx|xls|csv)$/i.test(file.name)) {
+    toast.add({ severity: 'warn', summary: 'Format file tidak didukung', detail: 'Pilih file .xlsx, .xls, atau .csv.', life: 4000 })
+    return
+  }
+  if (file.size > MAX_IMPORT_FILE_BYTES) {
+    toast.add({ severity: 'warn', summary: 'File terlalu besar', detail: 'Ukuran file maksimal 5 MB.', life: 4000 })
+    return
+  }
+
   importing.value = true
 
   try {
@@ -476,15 +492,31 @@ async function handleImportSelect(event) {
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
     const records = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true })
 
+    if (records.length > MAX_IMPORT_ROWS) {
+      toast.add({ severity: 'warn', summary: 'Data melebihi batas', detail: `Maksimal ${MAX_IMPORT_ROWS} baris agenda per file.`, life: 4500 })
+      return
+    }
+    const normalizeHeader = key => key.replace(/^\uFEFF/, '').trim().toLowerCase()
+    if (records.length && !['nama acara', 'tanggal'].every(required =>
+      Object.keys(records[0]).some(key => normalizeHeader(key) === required),
+    )) {
+      toast.add({ severity: 'warn', summary: 'Format kolom tidak sesuai', detail: 'Pastikan file memiliki kolom Nama Acara dan Tanggal.', life: 4500 })
+      return
+    }
+
     const validRows = []
     const errors = []
+    const existingRecords = await agendaService.list()
+    const knownAgendaKeys = new Set((Array.isArray(existingRecords) ? existingRecords : []).map(item =>
+      `${String(item.title ?? '').trim().toLocaleLowerCase('id-ID')}|${String(item.event_date ?? '').slice(0, 10)}`,
+    ))
 
     records.forEach((record, index) => {
       const rowNumber = index + 2 // baris 1 = judul kolom
 
       // Samakan nama kolom: huruf kecil & tanpa spasi berlebih
       const row = Object.fromEntries(
-        Object.entries(record).map(([key, val]) => [key.trim().toLowerCase(), val]),
+        Object.entries(record).map(([key, val]) => [normalizeHeader(key), val]),
       )
 
       const isEmpty = Object.values(row).every(val => String(val).trim() === '')
@@ -494,6 +526,10 @@ async function handleImportSelect(event) {
       const eventDate = normalizeDate(row['tanggal'])
       const startTime = normalizeTime(row['jam mulai']) ?? '00:00'
       const endTime = normalizeTime(row['jam selesai']) ?? startTime
+      const statusText = String(row.status ?? '').trim().toLowerCase()
+      const status = statusText
+        ? ({ draft: 'Draft', published: 'Published', archived: 'Archived' })[statusText]
+        : 'Draft'
 
       if (!title) {
         errors.push(`Baris ${rowNumber}: Nama Acara kosong`)
@@ -503,6 +539,17 @@ async function handleImportSelect(event) {
         errors.push(`Baris ${rowNumber}: Tanggal tidak valid`)
         return
       }
+      if (!status) {
+        errors.push(`Baris ${rowNumber}: Status harus Draft, Published, atau Archived`)
+        return
+      }
+
+      const duplicateKey = `${title.toLocaleLowerCase('id-ID')}|${eventDate}`
+      if (knownAgendaKeys.has(duplicateKey)) {
+        errors.push(`Baris ${rowNumber}: agenda dengan nama dan tanggal yang sama sudah ada/berulang`)
+        return
+      }
+      knownAgendaKeys.add(duplicateKey)
 
       validRows.push({
         rowNumber,
@@ -513,6 +560,7 @@ async function handleImportSelect(event) {
           end_time: endTime,
           location: String(row['tempat'] ?? '').trim(),
           attendee: String(row['yang menghadiri/keterangan'] ?? '').trim(),
+          status,
         },
       })
     })
@@ -617,7 +665,7 @@ async function handleImportSelect(event) {
             <input
               ref="importInput"
               type="file"
-              accept=".xlsx,.xls"
+              accept=".xlsx,.xls,.csv"
               class="hidden"
               @change="handleImportSelect"
             />
@@ -755,6 +803,19 @@ async function handleImportSelect(event) {
             sortable
             class="min-w-64"
           />
+
+          <Column header="Gambar" headerStyle="width: 4rem">
+            <template #body="{ data }">
+              <div class="flex h-7 w-10 items-center justify-center overflow-hidden rounded bg-neutral-200">
+                <img
+                  v-if="data.image"
+                  :src="data.image"
+                  :alt="data.name"
+                  class="h-full w-full object-cover"
+                />
+              </div>
+            </template>
+          </Column>
 
           <Column
             field="day"
