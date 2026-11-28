@@ -15,6 +15,7 @@ import {
   getLetterPdf,
 } from '@/services/letter-request.service'
 import { mediaUrl } from '@/services/media'
+import { getPublicFooterSettings } from '@/services/footer.service'
 import { BUNDLES } from '@/data/letterBundles'
 
 const route = useRoute()
@@ -37,6 +38,9 @@ const verifying = ref(false)
 const selectedSignerId = ref(null)
 const signatureType = ref('manual')
 const authorizing = ref(false)
+const withStamp = ref(true) // pilihan: TTE + stempel atau TTE saja
+const stampUrl = ref('') // stempel desa (Pengaturan Footer) - otomatis ditumpuk di atas TTD saat TTE
+const stampAvailability = ref('loading') // loading | available | missing | error
 
 // Preview & unduhan
 const selectedLetterId = ref(null) // id pengajuan (surat) yang sedang dipilih di dropdown
@@ -179,6 +183,28 @@ const selectedSigner = computed(
 const signatureImageUrl = computed(() =>
   selectedSigner.value?.signature_image ? mediaUrl(selectedSigner.value.signature_image) : '',
 )
+
+// Stempel hanya dibubuhkan otomatis pada TTD digital (TTE). TTD manual = cap basah setelah dicetak.
+const missingStamp = computed(
+  () => signatureType.value === 'digital' && withStamp.value && stampAvailability.value === 'missing',
+)
+const availableStamp = computed(
+  () => signatureType.value === 'digital' && withStamp.value && stampAvailability.value === 'available',
+)
+const stampCheckFailed = computed(
+  () => signatureType.value === 'digital' && withStamp.value && stampAvailability.value === 'error',
+)
+
+async function loadStamp() {
+  try {
+    const data = await getPublicFooterSettings()
+    stampUrl.value = data?.stamp ? mediaUrl(data.stamp) : ''
+    stampAvailability.value = stampUrl.value ? 'available' : 'missing'
+  } catch {
+    stampUrl.value = ''
+    stampAvailability.value = 'error'
+  }
+}
 
 // TTD digital butuh gambar TTD milik penandatangan; TTD manual dikosongkan untuk tanda tangan basah.
 const missingSignatureImage = computed(
@@ -517,6 +543,7 @@ function applyRecord(data) {
   notes.value = data?.notes ?? ''
   selectedSignerId.value = data?.authorized_by_signer_id ?? data?.letter_type?.signer_id ?? null
   signatureType.value = data?.signature_type ?? 'manual'
+  withStamp.value = data?.with_stamp ?? true
   selectedLetterId.value = data?.id ?? null
 }
 
@@ -528,6 +555,7 @@ onMounted(async () => {
     loading.value = false
   }
   loadBundle() // dropdown paket muncul secepatnya (pakai cache bila ada)
+  loadStamp()
 
   try {
     const [fresh] = await Promise.all([
@@ -608,6 +636,7 @@ async function authorize() {
       status: 'authorized',
       authorized_by_signer_id: selectedSignerId.value,
       signature_type: signatureType.value,
+      with_stamp: signatureType.value === 'digital' ? withStamp.value : false,
     })
     syncBundleRecord(record.value)
     toast.add({ severity: 'success', summary: 'Surat berhasil diotorisasi', life: 2200 })
@@ -854,12 +883,23 @@ function sendNotification() {
                 class="mb-4 h-24 rounded-lg border border-dashed flex items-center justify-center overflow-hidden px-3 text-center"
                 :class="missingSignatureImage ? 'border-red-300 bg-red-50' : 'border-slate-300 bg-slate-50'"
               >
-                <img
+                <div
                   v-if="signatureType === 'digital' && signatureImageUrl"
-                  :src="signatureImageUrl"
-                  alt="TTD digital"
-                  class="max-w-full max-h-full object-contain"
-                />
+                  class="relative h-full w-full flex items-center justify-center"
+                >
+                  <img
+                    :src="signatureImageUrl"
+                    alt="TTD digital"
+                    class="max-w-full max-h-full object-contain"
+                  />
+                  <!-- Stempel menumpuk di atas TTD, sama seperti hasil PDF -->
+                  <img
+                    v-if="stampUrl && withStamp"
+                    :src="stampUrl"
+                    alt="Stempel"
+                    class="absolute left-[16%] top-1/2 h-24 -translate-x-1/2 -translate-y-1/2 object-contain opacity-80 pointer-events-none"
+                  />
+                </div>
                 <span v-else-if="missingSignatureImage" class="text-sm text-red-600">
                   Penandatangan ini belum punya gambar TTD digital. Unggah di menu Penandatangan.
                 </span>
@@ -868,6 +908,27 @@ function sendNotification() {
                 </span>
                 <span v-else class="text-sm text-slate-400">Pilih penandatangan untuk melihat TTD.</span>
               </div>
+
+              <label
+                v-if="signatureType === 'digital'"
+                class="mb-3 flex cursor-pointer items-center gap-2 text-sm text-slate-600"
+              >
+                <input v-model="withStamp" type="checkbox" class="h-4 w-4" />
+                Bubuhkan stempel desa di atas TTD
+              </label>
+
+              <p v-if="availableStamp" class="mb-3 text-xs text-amber-600">
+                Stempel desa sudah tersedia di Pengaturan Footer dan akan dibubuhkan di atas TTD.
+              </p>
+
+              <p v-else-if="missingStamp" class="mb-3 text-xs text-amber-600">
+                Stempel desa belum diunggah, jadi TTE akan terbit tanpa stempel.
+                <router-link to="/footer" class="underline">Unggah di Pengaturan Footer</router-link>
+              </p>
+
+              <p v-else-if="stampCheckFailed" class="mb-3 text-xs text-amber-600">
+                Status stempel belum dapat diperiksa. Pastikan koneksi tersedia atau cek Pengaturan Footer.
+              </p>
 
               <AppButton
                 label="Otorisasi Surat"

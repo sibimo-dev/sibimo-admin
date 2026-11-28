@@ -3,8 +3,16 @@ import api from './api'
 const unwrap = (request) => request.then((response) => response.data?.data ?? null)
 
 export const getFooterSettings = () => unwrap(api.get('/footer-settings'))
+export const getPublicFooterSettings = () => unwrap(api.get('/public/footer'))
 
-export function saveFooterSettings({ id, payload, logo = null, stamp = null }) {
+export function saveFooterSettings({
+  id,
+  payload,
+  logo = null,
+  stamp = null,
+  removeLogo = false,
+  removeStamp = false,
+}) {
   const formData = new FormData()
   formData.append('village_name', payload.village_name ?? '')
   formData.append('description', payload.description ?? '')
@@ -12,8 +20,8 @@ export function saveFooterSettings({ id, payload, logo = null, stamp = null }) {
   formData.append('phone', payload.phone ?? '')
   formData.append('email', payload.email ?? '')
   formData.append('social_media', JSON.stringify(payload.social_media ?? []))
-  formData.append('remove_logo', payload.removeLogo ? '1' : '0')
-  formData.append('remove_stamp', payload.removeStamp ? '1' : '0')
+  formData.append('remove_logo', removeLogo ? '1' : '0')
+  formData.append('remove_stamp', removeStamp ? '1' : '0')
 
   if (logo) formData.append('logo', logo)
   if (stamp) formData.append('stamp', stamp)

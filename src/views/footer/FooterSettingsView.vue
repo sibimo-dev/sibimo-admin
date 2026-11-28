@@ -233,7 +233,8 @@ onMounted(load)
             <div class="flex flex-col gap-3">
               <h2 class="text-sm font-bold text-slate-800">Stempel</h2>
               <img v-if="stampPreview" :src="stampPreview" alt="Pratinjau stempel" class="mx-auto h-24 max-w-full object-contain" />
-              <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" @change="selectFile($event, 'stamp')" />
+              <input type="file" accept="image/png,image/jpeg,image/webp" @change="selectFile($event, 'stamp')" />
+              <p class="mt-2 text-xs text-slate-500">Stempel disimpan sebagai PNG transparan 600 × 600 px; latar putih dan abu muda dihapus otomatis.</p>
               <Button v-if="stampPreview" label="Hapus pilihan" severity="secondary" text size="small" @click="clearFile('stamp')" />
             </div>
           </template>
