@@ -15,6 +15,7 @@ import {
   getLetterPdf,
 } from '@/services/letter-request.service'
 import { mediaUrl } from '@/services/media'
+import { getPublicFooterSettings } from '@/services/footer.service'
 import { BUNDLES } from '@/data/letterBundles'
 
 const route = useRoute()
@@ -37,6 +38,9 @@ const verifying = ref(false)
 const selectedSignerId = ref(null)
 const signatureType = ref('manual')
 const authorizing = ref(false)
+const withStamp = ref(true) // pilihan: TTE + stempel atau TTE saja
+const stampUrl = ref('') // stempel desa (Pengaturan Footer) - otomatis ditumpuk di atas TTD saat TTE
+const stampAvailability = ref('loading') // loading | available | missing | error
 
 // Preview & unduhan
 const selectedLetterId = ref(null) // id pengajuan (surat) yang sedang dipilih di dropdown
@@ -179,6 +183,28 @@ const selectedSigner = computed(
 const signatureImageUrl = computed(() =>
   selectedSigner.value?.signature_image ? mediaUrl(selectedSigner.value.signature_image) : '',
 )
+
+// Stempel hanya dibubuhkan otomatis pada TTD digital (TTE). TTD manual = cap basah setelah dicetak.
+const missingStamp = computed(
+  () => signatureType.value === 'digital' && withStamp.value && stampAvailability.value === 'missing',
+)
+const availableStamp = computed(
+  () => signatureType.value === 'digital' && withStamp.value && stampAvailability.value === 'available',
+)
+const stampCheckFailed = computed(
+  () => signatureType.value === 'digital' && withStamp.value && stampAvailability.value === 'error',
+)
+
+async function loadStamp() {
+  try {
+    const data = await getPublicFooterSettings()
+    stampUrl.value = data?.stamp ? mediaUrl(data.stamp) : ''
+    stampAvailability.value = stampUrl.value ? 'available' : 'missing'
+  } catch {
+    stampUrl.value = ''
+    stampAvailability.value = 'error'
+  }
+}
 
 // TTD digital butuh gambar TTD milik penandatangan; TTD manual dikosongkan untuk tanda tangan basah.
 const missingSignatureImage = computed(
@@ -517,6 +543,7 @@ function applyRecord(data) {
   notes.value = data?.notes ?? ''
   selectedSignerId.value = data?.authorized_by_signer_id ?? data?.letter_type?.signer_id ?? null
   signatureType.value = data?.signature_type ?? 'manual'
+  withStamp.value = data?.with_stamp ?? true
   selectedLetterId.value = data?.id ?? null
 }
 
@@ -528,6 +555,7 @@ onMounted(async () => {
     loading.value = false
   }
   loadBundle() // dropdown paket muncul secepatnya (pakai cache bila ada)
+  loadStamp()
 
   try {
     const [fresh] = await Promise.all([
@@ -608,6 +636,7 @@ async function authorize() {
       status: 'authorized',
       authorized_by_signer_id: selectedSignerId.value,
       signature_type: signatureType.value,
+      with_stamp: signatureType.value === 'digital' ? withStamp.value : false,
     })
     syncBundleRecord(record.value)
     toast.add({ severity: 'success', summary: 'Surat berhasil diotorisasi', life: 2200 })
@@ -671,19 +700,21 @@ function sendNotification() {
 </script>
 
 <template>
-  <div ref="pageRoot">
+  <div ref="pageRoot" class="min-w-0 max-w-full overflow-x-hidden">
     <div v-if="loading" class="p-6 text-base text-slate-500">Memuat detail...</div>
 
-    <div v-else-if="!record" class="max-w-md mx-auto text-center py-20">
+    <div v-else-if="!record" class="max-w-md mx-auto text-center py-20 px-4">
       <p class="text-slate-500 text-base mb-4">Data surat tidak ditemukan.</p>
       <AppButton label="Kembali" variant="outline" @click="router.push('/letter')" />
     </div>
 
-    <div v-else>
+    <div v-else class="min-w-0">
       <!-- Header -->
       <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 class="text-3xl font-bold text-slate-800">Detail Surat #{{ record.requestId }}</h1>
+        <div class="min-w-0">
+          <h1 class="text-2xl sm:text-3xl font-bold text-slate-800 break-words">
+            Detail Surat #{{ record.requestId }}
+          </h1>
           <span
             class="mt-2 inline-block text-sm font-semibold rounded px-2 py-0.5"
             :class="status.class"
@@ -695,35 +726,35 @@ function sendNotification() {
       </div>
 
       <!-- Informasi pemohon: kartu selebar halaman (landscape) -->
-      <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-5">
+      <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5 mb-5 min-w-0">
         <h2 class="font-semibold text-slate-800 mb-3 text-lg">Informasi Pemohon</h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           <div
             v-for="cell in infoCells"
             :key="cell.label"
-            class="border border-slate-200 rounded-lg px-4 py-3 flex flex-col gap-0.5"
+            class="border border-slate-200 rounded-lg px-4 py-3 flex flex-col gap-0.5 min-w-0"
           >
             <p class="text-sm font-semibold text-slate-800">{{ cell.label }}</p>
             <p class="text-base text-slate-600 break-words">{{ cell.value || '-' }}</p>
           </div>
-          <div class="border border-slate-200 rounded-lg px-4 py-3 flex flex-col gap-0.5">
+          <div class="border border-slate-200 rounded-lg px-4 py-3 flex flex-col gap-0.5 min-w-0">
             <p class="text-sm font-semibold text-slate-800">Alamat Lengkap</p>
             <p class="text-base text-slate-600 break-words">{{ record.citizenAddress || '-' }}</p>
           </div>
         </div>
       </section>
 
-      <div class="grid grid-cols-1 lg:grid-cols-[420px_minmax(0,1fr)] gap-5 items-start">
+      <div class="grid grid-cols-1 lg:grid-cols-[420px_minmax(0,1fr)] gap-5 items-start min-w-0">
         <!-- ===================== Kolom kiri: data & tindakan ===================== -->
         <div class="flex flex-col gap-4 min-w-0">
           <!-- Dokumen terlampir -->
-          <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+          <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5 min-w-0">
             <h2 class="font-semibold text-slate-800 mb-3 text-lg">Dokumen Terlampir</h2>
             <div v-if="attachments.length" class="flex flex-col gap-2">
               <div
                 v-for="item in attachments"
                 :key="item.attachment_id"
-                class="flex items-center justify-between border border-slate-200 rounded-lg px-3 py-2"
+                class="flex items-center justify-between gap-2 border border-slate-200 rounded-lg px-3 py-2"
               >
                 <div class="flex items-center gap-3 min-w-0">
                   <div
@@ -750,7 +781,7 @@ function sendNotification() {
           </section>
 
           <!-- Langkah 1: Verifikasi -->
-          <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+          <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5 min-w-0">
             <h2 class="flex items-center gap-2 font-semibold text-slate-800 mb-3 text-lg">
               <i class="pi pi-check-circle text-slate-600" />
               Verifikasi
@@ -798,7 +829,7 @@ function sendNotification() {
             <template v-else>
               <div class="mb-3">
                 <p class="text-sm text-slate-500">Diverifikasi Oleh</p>
-                <p class="text-base font-semibold text-slate-800">{{ verifierName }}</p>
+                <p class="text-base font-semibold text-slate-800 break-words">{{ verifierName }}</p>
                 <p v-if="verifierRole" class="text-sm text-slate-500">{{ verifierRole }}</p>
               </div>
               <div class="mb-3">
@@ -810,7 +841,7 @@ function sendNotification() {
                   {{ isRejected ? 'Alasan Penolakan' : 'Catatan Verifikator' }}
                 </p>
                 <div
-                  class="bg-slate-100 border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-600"
+                  class="bg-slate-100 border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-600 break-words"
                 >
                   {{ record.notes || '-' }}
                 </div>
@@ -821,7 +852,7 @@ function sendNotification() {
           <!-- Langkah 2: Otorisasi -->
           <section
             v-if="showAuthorizationCard"
-            class="bg-white rounded-xl border border-slate-200 shadow-sm p-5"
+            class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5 min-w-0"
           >
             <h2 class="flex items-center gap-2 font-semibold text-slate-800 mb-3 text-lg">
               <i class="pi pi-key text-slate-600" />
@@ -836,7 +867,7 @@ function sendNotification() {
                 v-model="selectedSignerId"
                 :options="signerOptions"
                 placeholder="Pilih penandatangan"
-                class="mb-3"
+                class="app-select-responsive w-full min-w-0 mb-3"
               />
 
               <label class="block text-sm font-semibold text-slate-500 mb-1">
@@ -846,18 +877,29 @@ function sendNotification() {
                 v-model="signatureType"
                 :options="signatureOptions"
                 placeholder="Pilih jenis tanda tangan"
-                class="mb-2"
+                class="app-select-responsive w-full min-w-0 mb-2"
               />
               <div
                 class="mb-4 h-24 rounded-lg border border-dashed flex items-center justify-center overflow-hidden px-3 text-center"
                 :class="missingSignatureImage ? 'border-red-300 bg-red-50' : 'border-slate-300 bg-slate-50'"
               >
-                <img
+                <div
                   v-if="signatureType === 'digital' && signatureImageUrl"
-                  :src="signatureImageUrl"
-                  alt="TTD digital"
-                  class="max-w-full max-h-full object-contain"
-                />
+                  class="relative h-full w-full flex items-center justify-center"
+                >
+                  <img
+                    :src="signatureImageUrl"
+                    alt="TTD digital"
+                    class="max-w-full max-h-full object-contain"
+                  />
+                  <!-- Stempel menumpuk di atas TTD, sama seperti hasil PDF -->
+                  <img
+                    v-if="stampUrl && withStamp"
+                    :src="stampUrl"
+                    alt="Stempel"
+                    class="absolute left-[16%] top-1/2 h-24 -translate-x-1/2 -translate-y-1/2 object-contain opacity-80 pointer-events-none"
+                  />
+                </div>
                 <span v-else-if="missingSignatureImage" class="text-sm text-red-600">
                   Penandatangan ini belum punya gambar TTD digital. Unggah di menu Penandatangan.
                 </span>
@@ -866,6 +908,27 @@ function sendNotification() {
                 </span>
                 <span v-else class="text-sm text-slate-400">Pilih penandatangan untuk melihat TTD.</span>
               </div>
+
+              <label
+                v-if="signatureType === 'digital'"
+                class="mb-3 flex cursor-pointer items-center gap-2 text-sm text-slate-600"
+              >
+                <input v-model="withStamp" type="checkbox" class="h-4 w-4" />
+                Bubuhkan stempel desa di atas TTD
+              </label>
+
+              <p v-if="availableStamp" class="mb-3 text-xs text-amber-600">
+                Stempel desa sudah tersedia di Pengaturan Footer dan akan dibubuhkan di atas TTD.
+              </p>
+
+              <p v-else-if="missingStamp" class="mb-3 text-xs text-amber-600">
+                Stempel desa belum diunggah, jadi TTE akan terbit tanpa stempel.
+                <router-link to="/footer" class="underline">Unggah di Pengaturan Footer</router-link>
+              </p>
+
+              <p v-else-if="stampCheckFailed" class="mb-3 text-xs text-amber-600">
+                Status stempel belum dapat diperiksa. Pastikan koneksi tersedia atau cek Pengaturan Footer.
+              </p>
 
               <AppButton
                 label="Otorisasi Surat"
@@ -881,8 +944,8 @@ function sendNotification() {
               <div class="bg-slate-700 text-slate-50 rounded-lg p-4 mb-3">
                 <div class="mb-3">
                   <p class="text-sm text-slate-300">Otorisator</p>
-                  <p class="text-base font-semibold">{{ signerName || '-' }}</p>
-                  <p v-if="signerPosition" class="text-sm text-slate-300">{{ signerPosition }}</p>
+                  <p class="text-base font-semibold break-words">{{ signerName || '-' }}</p>
+                  <p v-if="signerPosition" class="text-sm text-slate-300 break-words">{{ signerPosition }}</p>
                 </div>
                 <div>
                   <p class="text-sm text-slate-300 mb-1">Tipe Tanda Tangan</p>
@@ -912,14 +975,14 @@ function sendNotification() {
 
         <!-- ===================== Kolom kanan: preview surat ===================== -->
         <section
-          class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 min-w-0 flex flex-col lg:sticky lg:top-4 lg:h-[calc(100vh-7rem)]"
+          class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5 min-w-0 flex flex-col lg:sticky lg:top-4 lg:h-[calc(100vh-7rem)]"
         >
           <div class="flex flex-wrap items-center justify-between gap-3 mb-4 shrink-0">
             <h2 class="flex items-center gap-2 text-lg font-semibold text-slate-800">
               <i class="pi pi-file text-slate-500" />
               Pratinjau Surat
             </h2>
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
               <AppButton
                 label="Cetak"
                 icon="pi pi-print"
@@ -940,7 +1003,7 @@ function sendNotification() {
 
           <!-- Dropdown hanya muncul untuk paket (lebih dari satu surat). Pratinjau, cetak, unduh, dan aksi
                verifikasi/otorisasi di halaman ini mengikuti surat yang dipilih. -->
-          <div v-if="hasMultipleLetters" class="mb-3">
+          <div v-if="hasMultipleLetters" class="mb-3 min-w-0">
             <label class="block text-sm font-semibold text-slate-500 mb-1">
               Pilih Surat ({{ letterOptions.length }} surat dalam paket)
             </label>
@@ -948,6 +1011,7 @@ function sendNotification() {
               :model-value="selectedLetterId"
               :options="letterOptions"
               placeholder="Pilih surat untuk dipratinjau"
+              class="app-select-responsive w-full min-w-0"
               @update:model-value="onLetterChange"
             />
           </div>
@@ -995,7 +1059,7 @@ function sendNotification() {
     <AppModal
       v-model="actionModalVisible"
       :title="actionModalType === 'print' ? 'Pilih Opsi Cetak' : 'Pilih Opsi Unduh'"
-      width="28rem"
+      width="min(28rem, calc(100vw - 2rem))"
       hide-footer
     >
       <p class="text-sm text-slate-500 -mt-2 mb-2">
@@ -1013,7 +1077,7 @@ function sendNotification() {
             <i :class="actionModalType === 'print' ? 'pi pi-print' : 'pi pi-file'" class="text-lg" />
           </div>
           <div class="flex-1 min-w-0">
-            <p class="font-semibold text-slate-800 text-sm group-hover:text-slate-900">
+            <p class="font-semibold text-slate-800 text-sm group-hover:text-slate-900 break-words">
               {{ actionModalType === 'print' ? 'Cetak Surat Ini Saja' : 'Unduh Surat Ini Saja' }}
             </p>
             <p class="text-xs text-slate-500 truncate mt-0.5">
@@ -1034,11 +1098,11 @@ function sendNotification() {
             <i v-else class="pi pi-copy text-lg" />
           </div>
           <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2">
-              <p class="font-semibold text-slate-800 text-sm group-hover:text-slate-900">
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <p class="font-semibold text-slate-800 text-sm group-hover:text-slate-900 break-words min-w-0">
                 {{ actionModalType === 'print' ? `Cetak Semua Surat (${bundleTitle})` : `Unduh ${bundleTitle}` }}
               </p>
-              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-800">
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 shrink-0">
                 {{ letterOptions.length }} Surat
               </span>
             </div>
@@ -1051,3 +1115,39 @@ function sendNotification() {
     </AppModal>
   </div>
 </template>
+
+<!--
+  Style GLOBAL (tanpa `scoped`) karena panel dropdown PrimeVue di-append ke <body>,
+  di luar komponen ini, sehingga style scoped tidak akan menjangkaunya.
+  Berlaku untuk PrimeVue v4 (Select) dan v3 (Dropdown).
+-->
+<style>
+/* Trigger: teks terpilih dipotong dengan ellipsis, tidak melebarkan kolom */
+.app-select-responsive,
+.app-select-responsive .p-select,
+.app-select-responsive .p-dropdown {
+  min-width: 0;
+  max-width: 100%;
+}
+.app-select-responsive .p-select-label,
+.app-select-responsive .p-dropdown-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Panel overlay: tidak boleh lebih lebar dari layar */
+.p-select-overlay,
+.p-dropdown-panel {
+  max-width: calc(100vw - 1rem) !important;
+  box-sizing: border-box;
+}
+
+/* Opsi panjang membungkus ke baris berikutnya */
+.p-select-overlay .p-select-list .p-select-option,
+.p-dropdown-panel .p-dropdown-items .p-dropdown-item {
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+</style>
